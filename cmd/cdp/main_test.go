@@ -2088,3 +2088,169 @@ func TestRun_Intercept_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Block_Enable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Enable blocking
+	code := run([]string{"block", "*.js"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to enable block: %d, stderr: %s", code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["enabled"] != true {
+		t.Error("expected enabled to be true")
+	}
+	patterns := result["patterns"].([]interface{})
+	if len(patterns) != 1 || patterns[0] != "*.js" {
+		t.Errorf("expected patterns [*.js], got %v", patterns)
+	}
+}
+
+func TestRun_Block_Disable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Disable blocking
+	code := run([]string{"block", "--disable"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to disable block: %d, stderr: %s", code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["enabled"] != false {
+		t.Error("expected enabled to be false")
+	}
+}
+
+func TestRun_Block_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"block", "*.js"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Metrics_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Navigate first
+	run([]string{"goto", "https://example.com"}, cfg)
+	time.Sleep(500 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"metrics"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v, output: %s", err, stdout)
+	}
+
+	// Should have metrics
+	metrics, ok := result["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected metrics in result")
+	}
+
+	// Check for some common metrics
+	if _, ok := metrics["Timestamp"]; !ok {
+		t.Error("expected Timestamp metric")
+	}
+}
+
+func TestRun_Metrics_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"metrics"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_A11y_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Navigate to a page with content
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.innerHTML = '<button>Click me</button><input type="text" placeholder="Name">'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"a11y"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v, output: %s", err, stdout)
+	}
+
+	// Should have nodes
+	nodes, ok := result["nodes"].([]interface{})
+	if !ok {
+		t.Fatal("expected nodes in result")
+	}
+
+	if len(nodes) == 0 {
+		t.Error("expected at least one accessibility node")
+	}
+}
+
+func TestRun_A11y_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"a11y"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

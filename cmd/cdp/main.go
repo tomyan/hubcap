@@ -337,6 +337,12 @@ func run(args []string, cfg *Config) int {
 		return cmdLayout(cfg, remaining[1:])
 	case "intercept":
 		return cmdIntercept(cfg, remaining[1:])
+	case "block":
+		return cmdBlock(cfg, remaining[1:])
+	case "metrics":
+		return cmdMetrics(cfg)
+	case "a11y":
+		return cmdA11y(cfg)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1475,6 +1481,19 @@ type InterceptResult struct {
 	Replacement string `json:"replacement,omitempty"`
 }
 
+type BlockResult struct {
+	Enabled  bool     `json:"enabled"`
+	Patterns []string `json:"patterns,omitempty"`
+}
+
+type MetricsResult struct {
+	Metrics map[string]float64 `json:"metrics"`
+}
+
+type A11yResult struct {
+	Nodes []cdp.AccessibilityNode `json:"nodes"`
+}
+
 type StylesResult struct {
 	Selector string            `json:"selector"`
 	Styles   map[string]string `json:"styles"`
@@ -1571,6 +1590,68 @@ func cmdIntercept(cfg *Config, args []string) int {
 			Pattern:     *pattern,
 			Response:    *response,
 			Replacement: *replace,
+		}, nil
+	})
+}
+
+func cmdMetrics(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		metrics, err := client.GetPerformanceMetrics(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return MetricsResult{Metrics: metrics}, nil
+	})
+}
+
+func cmdA11y(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		nodes, err := client.GetAccessibilityTree(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return A11yResult{Nodes: nodes}, nil
+	})
+}
+
+func cmdBlock(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("block", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	disable := fs.Bool("disable", false, "Disable URL blocking")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	// Disable blocking
+	if *disable {
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.UnblockURLs(ctx, target.ID)
+			if err != nil {
+				return nil, err
+			}
+			return BlockResult{Enabled: false}, nil
+		})
+	}
+
+	// Get URL patterns from remaining args
+	patterns := fs.Args()
+	if len(patterns) == 0 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp block <pattern>... [--disable]")
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.BlockURLs(ctx, target.ID, patterns)
+		if err != nil {
+			return nil, err
+		}
+		return BlockResult{
+			Enabled:  true,
+			Patterns: patterns,
 		}, nil
 	})
 }

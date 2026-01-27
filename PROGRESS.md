@@ -192,6 +192,19 @@
 - Uses CDP Fetch domain for network interception
 - Note: Interception requires persistent connection; works within single CDP session
 
+### Slice 59: URL blocking ✅
+- `cdp block <pattern>...` - block URLs matching patterns
+- `cdp block --disable` - disable URL blocking
+- Uses Network.setBlockedURLs CDP method
+
+### Slice 60: Performance metrics ✅
+- `cdp metrics` - get page performance metrics
+- Returns timing metrics like Timestamp, Documents, Frames, JSEventListeners, etc.
+
+### Slice 61: Accessibility tree ✅
+- `cdp a11y` - get accessibility tree for the page
+- Returns nodes with role, name, description, value, and properties
+
 ## Next Slices
 
 ## Test Command
@@ -204,7 +217,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (55 commands)
+## Commands Implemented (58 commands)
 ```
 # Browser info
 cdp version
@@ -295,6 +308,11 @@ cdp offline <true|false>
 
 # Network interception
 cdp intercept [--response] [--pattern <url>] [--replace old:new] [--disable]
+cdp block <pattern>... [--disable]
+
+# Performance & debugging
+cdp metrics
+cdp a11y
 ```
 
 ## Known Issues / Deferred Items

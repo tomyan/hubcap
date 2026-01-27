@@ -2595,3 +2595,38 @@ func TestClient_InterceptModifyResponse(t *testing.T) {
 	// Cleanup - disable interception
 	client.DisableIntercept(ctx, targetID)
 }
+
+func TestClient_BlockURLs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Block URLs
+	err = client.BlockURLs(ctx, pages[0].ID, []string{"*.js", "*.css"})
+	if err != nil {
+		t.Fatalf("failed to block URLs: %v", err)
+	}
+
+	// Unblock URLs
+	err = client.UnblockURLs(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to unblock URLs: %v", err)
+	}
+}

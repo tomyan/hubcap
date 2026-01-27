@@ -2912,6 +2912,171 @@ func (c *Client) DisableIntercept(ctx context.Context, targetID string) error {
 	return nil
 }
 
+// BlockURLs blocks network requests matching the specified URL patterns.
+// Uses the Network.setBlockedURLs CDP method.
+func (c *Client) BlockURLs(ctx context.Context, targetID string, patterns []string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Network domain first
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling network: %w", err)
+	}
+
+	// Set blocked URLs
+	_, err = c.CallSession(ctx, sessionID, "Network.setBlockedURLs", map[string]interface{}{
+		"urls": patterns,
+	})
+	if err != nil {
+		return fmt.Errorf("setting blocked URLs: %w", err)
+	}
+
+	return nil
+}
+
+// UnblockURLs clears all URL blocking patterns.
+func (c *Client) UnblockURLs(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Clear blocked URLs by setting empty array
+	_, err = c.CallSession(ctx, sessionID, "Network.setBlockedURLs", map[string]interface{}{
+		"urls": []string{},
+	})
+	if err != nil {
+		return fmt.Errorf("clearing blocked URLs: %w", err)
+	}
+
+	return nil
+}
+
+// AccessibilityNode represents a node in the accessibility tree.
+type AccessibilityNode struct {
+	NodeID      string                 `json:"nodeId"`
+	Role        string                 `json:"role"`
+	Name        string                 `json:"name,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Value       string                 `json:"value,omitempty"`
+	Properties  map[string]interface{} `json:"properties,omitempty"`
+	Children    []AccessibilityNode    `json:"children,omitempty"`
+}
+
+// GetAccessibilityTree returns the accessibility tree for the page.
+func (c *Client) GetAccessibilityTree(ctx context.Context, targetID string) ([]AccessibilityNode, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Accessibility domain
+	_, err = c.CallSession(ctx, sessionID, "Accessibility.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling accessibility: %w", err)
+	}
+
+	// Get the full accessibility tree
+	result, err := c.CallSession(ctx, sessionID, "Accessibility.getFullAXTree", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting accessibility tree: %w", err)
+	}
+
+	var treeResult struct {
+		Nodes []struct {
+			NodeID     string `json:"nodeId"`
+			Role       struct {
+				Value string `json:"value"`
+			} `json:"role"`
+			Name struct {
+				Value string `json:"value"`
+			} `json:"name"`
+			Description struct {
+				Value string `json:"value"`
+			} `json:"description"`
+			Value struct {
+				Value string `json:"value"`
+			} `json:"value"`
+			Properties []struct {
+				Name  string      `json:"name"`
+				Value interface{} `json:"value"`
+			} `json:"properties"`
+			ChildIds []string `json:"childIds"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(result, &treeResult); err != nil {
+		return nil, fmt.Errorf("parsing accessibility tree: %w", err)
+	}
+
+	// Convert to simpler format
+	nodes := make([]AccessibilityNode, 0, len(treeResult.Nodes))
+	for _, n := range treeResult.Nodes {
+		// Skip ignored nodes
+		if n.Role.Value == "none" || n.Role.Value == "ignored" {
+			continue
+		}
+
+		node := AccessibilityNode{
+			NodeID:      n.NodeID,
+			Role:        n.Role.Value,
+			Name:        n.Name.Value,
+			Description: n.Description.Value,
+			Value:       n.Value.Value,
+		}
+
+		if len(n.Properties) > 0 {
+			node.Properties = make(map[string]interface{})
+			for _, p := range n.Properties {
+				node.Properties[p.Name] = p.Value
+			}
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
+}
+
+// GetPerformanceMetrics returns performance metrics from the page.
+func (c *Client) GetPerformanceMetrics(ctx context.Context, targetID string) (map[string]float64, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Performance domain
+	_, err = c.CallSession(ctx, sessionID, "Performance.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling performance: %w", err)
+	}
+
+	// Get metrics
+	result, err := c.CallSession(ctx, sessionID, "Performance.getMetrics", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting metrics: %w", err)
+	}
+
+	var metricsResult struct {
+		Metrics []struct {
+			Name  string  `json:"name"`
+			Value float64 `json:"value"`
+		} `json:"metrics"`
+	}
+	if err := json.Unmarshal(result, &metricsResult); err != nil {
+		return nil, fmt.Errorf("parsing metrics: %w", err)
+	}
+
+	metrics := make(map[string]float64)
+	for _, m := range metricsResult.Metrics {
+		metrics[m.Name] = m.Value
+	}
+
+	return metrics, nil
+}
+
 // SetOfflineMode enables or disables offline mode for network emulation.
 func (c *Client) SetOfflineMode(ctx context.Context, targetID string, offline bool) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
