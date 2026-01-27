@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto <url>")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -99,6 +99,12 @@ func run(args []string, cfg *Config) int {
 		return cmdVersion(cfg)
 	case "tabs":
 		return cmdTabs(cfg)
+	case "goto":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp goto <url>")
+			return ExitError
+		}
+		return cmdGoto(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -139,6 +145,21 @@ func cmdVersion(cfg *Config) int {
 func cmdTabs(cfg *Config) int {
 	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
 		return client.Pages(ctx)
+	})
+}
+
+func cmdGoto(cfg *Config, url string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		// Get first page to navigate
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		return client.Navigate(ctx, pages[0].ID, url)
 	})
 }
 

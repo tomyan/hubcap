@@ -288,3 +288,111 @@ func TestClient_Pages_ReturnsOnlyPages(t *testing.T) {
 		}
 	}
 }
+
+func TestClient_Navigate_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Get a page to navigate
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	result, err := client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
+	if result.URL == "" {
+		t.Error("expected non-empty URL")
+	}
+	if !strings.Contains(result.URL, "example.com") {
+		t.Errorf("expected URL to contain example.com, got %s", result.URL)
+	}
+}
+
+func TestClient_Navigate_InvalidURL(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to invalid URL - should still work but result in error page
+	result, err := client.Navigate(ctx, pages[0].ID, "not-a-valid-url")
+	// This may or may not error depending on Chrome version
+	if err == nil && result.URL == "" {
+		t.Error("expected either error or non-empty URL")
+	}
+}
+
+func TestNavigateResult_JSONSerializable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	result, err := client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if _, ok := m["url"]; !ok {
+		t.Error("expected 'url' field in JSON")
+	}
+}

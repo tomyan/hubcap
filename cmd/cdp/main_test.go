@@ -198,3 +198,44 @@ func TestRun_Tabs_OutputContainsPageInfo(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_Goto_MissingURL(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"goto"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Goto_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	code := run([]string{"goto", "https://example.com"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["url"] == nil {
+		t.Error("expected 'url' field in output")
+	}
+}
+
+func TestRun_Goto_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1
+
+	code := run([]string{"goto", "https://example.com"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

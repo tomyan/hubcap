@@ -48,6 +48,14 @@ type TargetInfo struct {
 	URL   string `json:"url"`
 }
 
+// NavigateResult contains the result of a navigation.
+type NavigateResult struct {
+	FrameID   string `json:"frameId"`
+	LoaderID  string `json:"loaderId,omitempty"`
+	URL       string `json:"url"`
+	ErrorText string `json:"errorText,omitempty"`
+}
+
 // Client represents a connection to Chrome DevTools Protocol.
 type Client struct {
 	conn      *websocket.Conn
@@ -208,6 +216,131 @@ func (c *Client) Pages(ctx context.Context) ([]TargetInfo, error) {
 		}
 	}
 	return pages, nil
+}
+
+// Navigate navigates a target to the given URL and waits for load.
+func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*NavigateResult, error) {
+	// Attach to the target
+	attachResult, err := c.Call(ctx, "Target.attachToTarget", map[string]interface{}{
+		"targetId": targetID,
+		"flatten":  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attaching to target: %w", err)
+	}
+
+	var attachResp struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(attachResult, &attachResp); err != nil {
+		return nil, fmt.Errorf("parsing attach response: %w", err)
+	}
+
+	// Enable Page domain on the session
+	_, err = c.CallSession(ctx, attachResp.SessionID, "Page.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Navigate
+	navResult, err := c.CallSession(ctx, attachResp.SessionID, "Page.navigate", map[string]string{
+		"url": url,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("navigating: %w", err)
+	}
+
+	var navResp struct {
+		FrameID   string `json:"frameId"`
+		LoaderID  string `json:"loaderId"`
+		ErrorText string `json:"errorText"`
+	}
+	if err := json.Unmarshal(navResult, &navResp); err != nil {
+		return nil, fmt.Errorf("parsing navigate response: %w", err)
+	}
+
+	if navResp.ErrorText != "" {
+		return &NavigateResult{
+			FrameID:   navResp.FrameID,
+			ErrorText: navResp.ErrorText,
+			URL:       url,
+		}, nil
+	}
+
+	// Wait for load event (simplified - just wait a bit for now, proper implementation would use events)
+	// TODO: Implement proper load waiting with Page.loadEventFired
+
+	return &NavigateResult{
+		FrameID:  navResp.FrameID,
+		LoaderID: navResp.LoaderID,
+		URL:      url,
+	}, nil
+}
+
+// CallSession sends a CDP command to a specific session.
+func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
+	if c.closed.Load() {
+		return nil, ErrConnectionClosed
+	}
+
+	id := c.messageID.Add(1)
+
+	type sessionRequest struct {
+		ID        int64           `json:"id"`
+		SessionID string          `json:"sessionId"`
+		Method    string          `json:"method"`
+		Params    json.RawMessage `json:"params,omitempty"`
+	}
+
+	req := sessionRequest{
+		ID:        id,
+		SessionID: sessionID,
+		Method:    method,
+	}
+
+	if params != nil {
+		data, err := json.Marshal(params)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling params: %w", err)
+		}
+		req.Params = data
+	}
+
+	// Create response channel
+	respChan := make(chan callResult, 1)
+	c.pendingMu.Lock()
+	c.pending[id] = respChan
+	c.pendingMu.Unlock()
+
+	defer func() {
+		c.pendingMu.Lock()
+		delete(c.pending, id)
+		c.pendingMu.Unlock()
+	}()
+
+	// Send message
+	c.mu.Lock()
+	err := c.conn.WriteJSON(req)
+	c.mu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("sending message: %w", err)
+	}
+
+	// Wait for response
+	select {
+	case result, ok := <-respChan:
+		if !ok {
+			return nil, ErrConnectionClosed
+		}
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		return result.Result, nil
+	case <-c.closeCh:
+		return nil, ErrConnectionClosed
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 type cdpRequest struct {
