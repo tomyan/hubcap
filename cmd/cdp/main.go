@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -155,6 +155,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdType(cfg, remaining[1])
+	case "console":
+		return cmdConsole(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -419,6 +421,66 @@ func cmdType(cfg *Config, text string) int {
 
 		return TypeResult{Typed: true, Text: text}, nil
 	})
+}
+
+func cmdConsole(cfg *Config, args []string) int {
+	// Parse console-specific flags
+	fs := flag.NewFlagSet("console", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	ctx := context.Background()
+	if *duration > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *duration)
+		defer cancel()
+	}
+
+	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+	if len(pages) == 0 {
+		fmt.Fprintln(cfg.Stderr, "error: no pages available")
+		return ExitError
+	}
+
+	messages, err := client.CaptureConsole(ctx, pages[0].ID)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	enc := json.NewEncoder(cfg.Stdout)
+	for {
+		select {
+		case msg, ok := <-messages:
+			if !ok {
+				return ExitSuccess
+			}
+			if err := enc.Encode(msg); err != nil {
+				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+				return ExitError
+			}
+		case <-ctx.Done():
+			return ExitSuccess
+		}
+	}
 }
 
 func cmdWait(cfg *Config, args []string) int {

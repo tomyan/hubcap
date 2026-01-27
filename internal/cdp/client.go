@@ -76,6 +76,12 @@ type EvalResult struct {
 	Type  string      `json:"type,omitempty"`
 }
 
+// ConsoleMessage represents a console message from the browser.
+type ConsoleMessage struct {
+	Type string `json:"type"` // "log", "warn", "error", "info", "debug"
+	Text string `json:"text"`
+}
+
 // QueryResult contains the result of querying for a DOM element.
 type QueryResult struct {
 	NodeID     int               `json:"nodeId"`
@@ -85,15 +91,17 @@ type QueryResult struct {
 
 // Client represents a connection to Chrome DevTools Protocol.
 type Client struct {
-	conn      *websocket.Conn
-	wsURL     string
-	mu        sync.Mutex
-	messageID atomic.Int64
-	pending   map[int64]chan callResult
-	pendingMu sync.Mutex
-	closed    atomic.Bool
-	closeOnce sync.Once
-	closeCh   chan struct{}
+	conn            *websocket.Conn
+	wsURL           string
+	mu              sync.Mutex
+	messageID       atomic.Int64
+	pending         map[int64]chan callResult
+	pendingMu       sync.Mutex
+	eventHandlers   map[string][]chan json.RawMessage // key: "sessionID:method"
+	eventHandlersMu sync.Mutex
+	closed          atomic.Bool
+	closeOnce       sync.Once
+	closeCh         chan struct{}
 }
 
 type callResult struct {
@@ -136,10 +144,11 @@ func Connect(ctx context.Context, host string, port int) (*Client, error) {
 	}
 
 	client := &Client{
-		conn:    conn,
-		wsURL:   versionResp.WebSocketDebuggerURL,
-		pending: make(map[int64]chan callResult),
-		closeCh: make(chan struct{}),
+		conn:          conn,
+		wsURL:         versionResp.WebSocketDebuggerURL,
+		pending:       make(map[int64]chan callResult),
+		eventHandlers: make(map[string][]chan json.RawMessage),
+		closeCh:       make(chan struct{}),
 	}
 
 	// Start message reader
@@ -876,6 +885,73 @@ func (c *Client) Type(ctx context.Context, targetID string, text string) error {
 	return nil
 }
 
+// CaptureConsole starts capturing console messages from a page.
+// Returns a channel that receives messages. The channel is buffered.
+// The caller should read from the channel to receive messages.
+func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan ConsoleMessage, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Runtime domain to receive console events
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	// Subscribe to console API events
+	eventCh := c.subscribeEvent(sessionID, "Runtime.consoleAPICalled")
+
+	// Create output channel
+	output := make(chan ConsoleMessage, 100)
+
+	// Start goroutine to translate events to ConsoleMessages
+	go func() {
+		defer close(output)
+		for {
+			select {
+			case params, ok := <-eventCh:
+				if !ok {
+					return
+				}
+				// Parse the event
+				var event struct {
+					Type string `json:"type"`
+					Args []struct {
+						Type  string      `json:"type"`
+						Value interface{} `json:"value"`
+					} `json:"args"`
+				}
+				if err := json.Unmarshal(params, &event); err != nil {
+					continue
+				}
+
+				// Build message text from args
+				var text string
+				for i, arg := range event.Args {
+					if i > 0 {
+						text += " "
+					}
+					if arg.Value != nil {
+						text += fmt.Sprintf("%v", arg.Value)
+					}
+				}
+
+				select {
+				case output <- ConsoleMessage{Type: event.Type, Text: text}:
+				default:
+					// Drop if channel is full
+				}
+			case <-c.closeCh:
+				return
+			}
+		}
+	}()
+
+	return output, nil
+}
+
 // CallSession sends a CDP command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {
@@ -949,9 +1025,12 @@ type cdpRequest struct {
 }
 
 type cdpResponse struct {
-	ID     int64           `json:"id"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *CDPError       `json:"error,omitempty"`
+	ID        int64           `json:"id"`
+	Result    json.RawMessage `json:"result,omitempty"`
+	Error     *CDPError       `json:"error,omitempty"`
+	Method    string          `json:"method,omitempty"`    // For events
+	Params    json.RawMessage `json:"params,omitempty"`    // For events
+	SessionID string          `json:"sessionId,omitempty"` // For session events
 }
 
 // Call sends a CDP command and waits for the response.
@@ -1031,6 +1110,50 @@ func (c *Client) readMessages() {
 				}
 			}
 			c.pendingMu.Unlock()
+		}
+
+		// Route events to handlers
+		if resp.Method != "" {
+			key := resp.SessionID + ":" + resp.Method
+			c.eventHandlersMu.Lock()
+			handlers := c.eventHandlers[key]
+			for _, h := range handlers {
+				select {
+				case h <- resp.Params:
+				default:
+					// Drop if channel is full
+				}
+			}
+			c.eventHandlersMu.Unlock()
+		}
+	}
+}
+
+// subscribeEvent registers a handler for CDP events.
+func (c *Client) subscribeEvent(sessionID, method string) chan json.RawMessage {
+	ch := make(chan json.RawMessage, 100)
+	key := sessionID + ":" + method
+
+	c.eventHandlersMu.Lock()
+	c.eventHandlers[key] = append(c.eventHandlers[key], ch)
+	c.eventHandlersMu.Unlock()
+
+	return ch
+}
+
+// unsubscribeEvent removes an event handler.
+func (c *Client) unsubscribeEvent(sessionID, method string, ch chan json.RawMessage) {
+	key := sessionID + ":" + method
+
+	c.eventHandlersMu.Lock()
+	defer c.eventHandlersMu.Unlock()
+
+	handlers := c.eventHandlers[key]
+	for i, h := range handlers {
+		if h == ch {
+			c.eventHandlers[key] = append(handlers[:i], handlers[i+1:]...)
+			close(ch)
+			return
 		}
 	}
 }

@@ -545,8 +545,13 @@ func TestRun_Fill_Success(t *testing.T) {
 	cfg := testConfig()
 	cfg.Timeout = 15 * time.Second
 
+	// Navigate to blank page to reset state
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
 	// Create a page with an input
 	run([]string{"eval", `document.body.innerHTML = '<input id="test-input" type="text" />'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
 
 	// Reset buffers
 	cfg.Stdout = &bytes.Buffer{}
@@ -594,8 +599,13 @@ func TestRun_HTML_Success(t *testing.T) {
 
 	cfg := testConfig()
 
+	// Navigate to blank page to reset state
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
 	// Create a test element
 	run([]string{"eval", `document.body.innerHTML = '<div id="test">Content</div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
@@ -633,8 +643,13 @@ func TestRun_Wait_Success(t *testing.T) {
 
 	cfg := testConfig()
 
+	// Navigate to blank page to reset state
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
 	// Create element that exists
 	run([]string{"eval", `document.body.innerHTML = '<div id="exists">Test</div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
@@ -671,8 +686,13 @@ func TestRun_Type_Success(t *testing.T) {
 
 	cfg := testConfig()
 
+	// Navigate to blank page to reset state
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
 	// Create an input field and focus it
 	run([]string{"eval", `document.body.innerHTML = '<input id="test-input" type="text" />'; document.querySelector('#test-input').focus();`}, cfg)
+	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
@@ -701,6 +721,32 @@ func TestRun_Type_NoChrome(t *testing.T) {
 	cfg := testConfig()
 	cfg.Port = 1 // Invalid port
 	code := run([]string{"type", "test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Console_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Run console with short duration - should exit cleanly after timeout
+	code := run([]string{"console", "--duration", "100ms"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+}
+
+func TestRun_Console_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"console", "--duration", "100ms"}, cfg)
 	if code != ExitConnFailed {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
