@@ -168,6 +168,9 @@
 ### Slice 52: User agent ✅
 - `cdp useragent <string>` - set custom user agent
 
+### Slice 53: Geolocation ✅
+- `cdp geolocation <lat> <lon>` - set geolocation override
+
 ## Next Slices
 
 ## Test Command
@@ -180,7 +183,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (50 commands)
+## Commands Implemented (51 commands)
 ```
 # Browser info
 cdp version
@@ -264,6 +267,7 @@ cdp run <file.js>
 # Device emulation
 cdp emulate <device>
 cdp useragent <string>
+cdp geolocation <latitude> <longitude>
 ```
 
 ## Known Issues / Deferred Items

@@ -310,6 +310,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdUserAgent(cfg, remaining[1])
+	case "geolocation":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp geolocation <latitude> <longitude>")
+			return ExitError
+		}
+		return cmdGeolocation(cfg, remaining[1], remaining[2])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1398,6 +1404,33 @@ type EmulateResult struct {
 
 type UserAgentResult struct {
 	UserAgent string `json:"userAgent"`
+}
+
+type GeolocationResult struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Accuracy  float64 `json:"accuracy"`
+}
+
+func cmdGeolocation(cfg *Config, latStr, lonStr string) int {
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: invalid latitude: %v\n", err)
+		return ExitError
+	}
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: invalid longitude: %v\n", err)
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetGeolocation(ctx, target.ID, lat, lon, 1.0) // accuracy of 1 meter
+		if err != nil {
+			return nil, err
+		}
+		return GeolocationResult{Latitude: lat, Longitude: lon, Accuracy: 1.0}, nil
+	})
 }
 
 func cmdUserAgent(cfg *Config, userAgent string) int {

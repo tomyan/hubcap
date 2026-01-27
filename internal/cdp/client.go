@@ -2557,6 +2557,25 @@ func (c *Client) unsubscribeEvent(sessionID, method string, ch chan json.RawMess
 	}
 }
 
+// SetGeolocation overrides the geolocation for the specified target.
+func (c *Client) SetGeolocation(ctx context.Context, targetID string, latitude, longitude, accuracy float64) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Emulation.setGeolocationOverride", map[string]interface{}{
+		"latitude":  latitude,
+		"longitude": longitude,
+		"accuracy":  accuracy,
+	})
+	if err != nil {
+		return fmt.Errorf("setting geolocation: %w", err)
+	}
+
+	return nil
+}
+
 // SetUserAgent sets a custom user agent for the specified target.
 func (c *Client) SetUserAgent(ctx context.Context, targetID string, userAgent string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
