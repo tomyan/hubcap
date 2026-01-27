@@ -1,7 +1,7 @@
 # CDP CLI Progress Tracker
 
 ## Current State
-- **Last Commit**: 4c83585 - Slice 15 (PDF export)
+- **Last Commit**: b5de90a - Slices 27-28 (Title and URL)
 - **Chrome Status**: Running headless on port 9222
 
 ## Completed Slices
@@ -55,21 +55,111 @@
 ### Slice 15: PDF export ✅
 - `cdp pdf --output <file> [--landscape] [--background]` - export page as PDF
 
-## Next Slices
+### Slice 16: Delete cookie ✅
+- `cdp cookies --delete <name>` - delete a cookie by name
 
-### Slice 16: Delete cookie
-- `cdp cookies --delete <name>` - delete a cookie
-
-### Slice 17: Network monitoring
-- `cdp network` - capture network requests/responses
-- Useful for debugging and testing
-
-### Slice 18: Clear cookies
+### Slice 17: Clear cookies ✅
 - `cdp cookies --clear` - clear all cookies
 
-### Slice 19: Target selection
-- `--target <id|index>` flag for all commands
-- Select which page/tab to operate on
+### Slice 18: Focus element ✅
+- `cdp focus <selector>` - focus on an element
+
+### Slice 19: Network monitoring ✅
+- `cdp network [--duration <d>]` - capture network requests/responses
+- Streams NDJSON output with request/response events
+- Includes URL, method, status, mimeType
+
+### Slice 20: (Skipped - reserved for target selection)
+
+### Slice 21: Press key ✅
+- `cdp press <key>` - press a special key
+- Supports: Enter, Tab, Escape, Backspace, Delete, Arrow keys, Home, End, PageUp, PageDown, Space
+
+### Slice 22: Hover ✅
+- `cdp hover <selector>` - hover over an element
+
+### Slice 23: Get attribute ✅
+- `cdp attr <selector> <name>` - get attribute value of an element
+
+### Slice 24: Reload page ✅
+- `cdp reload [--bypass-cache]` - reload the current page
+
+### Slice 25: (Reserved for target selection)
+
+### Slice 26: Back/Forward navigation ✅
+- `cdp back` - navigate back in history
+- `cdp forward` - navigate forward in history
+
+### Slice 27: Get page title ✅
+- `cdp title` - get the current page title
+
+### Slice 28: Get page URL ✅
+- `cdp url` - get the current page URL
+
+## Next Slices
+
+### Slice 29: New tab
+- `cdp new [url]` - create a new tab, optionally navigate to URL
+
+### Slice 30: Close tab
+- `cdp close` - close the current tab
+
+### Slice 31: Double-click
+- `cdp dblclick <selector>` - double-click an element
+
+### Slice 32: Right-click
+- `cdp rightclick <selector>` - right-click (context menu) an element
+
+### Slice 33: Clear input
+- `cdp clear <selector>` - clear a text input field
+
+### Slice 34: Select dropdown
+- `cdp select <selector> <value>` - select option by value
+
+### Slice 35: Check checkbox
+- `cdp check <selector>` - check a checkbox
+
+### Slice 36: Uncheck checkbox
+- `cdp uncheck <selector>` - uncheck a checkbox
+
+### Slice 37: Scroll into view
+- `cdp scrollto <selector>` - scroll element into view
+
+### Slice 38: Scroll by
+- `cdp scroll <x> <y>` - scroll by x,y pixels
+
+### Slice 39: Count elements
+- `cdp count <selector>` - count matching elements
+
+### Slice 40: Is visible
+- `cdp visible <selector>` - check if element is visible
+
+### Slice 41: Bounding box
+- `cdp bounds <selector>` - get element position and size
+
+### Slice 42: Wait for navigation
+- `cdp waitload [--timeout]` - wait for page load event
+
+### Slice 43: Set viewport
+- `cdp viewport <width> <height>` - set browser viewport size
+
+### Slice 44: Handle dialog
+- `cdp dialog [accept|dismiss]` - handle alert/confirm/prompt dialogs
+
+### Slice 45: Local storage get
+- `cdp storage <key>` - get localStorage value
+
+### Slice 46: Local storage set
+- `cdp storage <key> <value>` - set localStorage value
+
+### Slice 47: Local storage clear
+- `cdp storage --clear` - clear localStorage
+
+### Slice 48: Execute script file
+- `cdp run <file.js>` - execute JavaScript from file
+
+### Slice 49: Target selection
+- `--target <id|index>` global flag for page selection
 
 ## Test Command
 ```bash
@@ -96,8 +186,18 @@ cdp wait <selector> [--timeout <duration>]
 cdp text <selector>
 cdp type <text>
 cdp console [--duration <duration>]
-cdp cookies [--set name=value] [--domain <domain>]
+cdp cookies [--set name=value] [--domain <domain>] [--delete <name>] [--clear]
 cdp pdf --output <file> [--landscape] [--background]
+cdp focus <selector>
+cdp network [--duration <duration>]
+cdp press <key>
+cdp hover <selector>
+cdp attr <selector> <attribute>
+cdp reload [--bypass-cache]
+cdp back
+cdp forward
+cdp title
+cdp url
 ```
 
 ## Known Issues / Deferred Items

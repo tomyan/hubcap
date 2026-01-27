@@ -2085,3 +2085,295 @@ func TestClient_GetURL_Success(t *testing.T) {
 		t.Errorf("expected URL to contain 'example.com', got %s", url)
 	}
 }
+
+func TestClient_NewTab_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Get initial tab count
+	initialPages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	initialCount := len(initialPages)
+
+	// Create new tab
+	targetID, err := client.NewTab(ctx, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to create new tab: %v", err)
+	}
+
+	if targetID == "" {
+		t.Error("expected non-empty target ID")
+	}
+
+	// Verify tab count increased
+	newPages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages after: %v", err)
+	}
+
+	if len(newPages) != initialCount+1 {
+		t.Errorf("expected %d pages, got %d", initialCount+1, len(newPages))
+	}
+
+	// Clean up - close the new tab
+	client.CloseTab(ctx, targetID)
+}
+
+func TestClient_DoubleClick_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	_, err = client.Eval(ctx, pages[0].ID, `
+		document.body.innerHTML = '<button id="dbl-btn">Double Click Me</button>';
+		window.dblClicked = false;
+		document.getElementById('dbl-btn').addEventListener('dblclick', () => {
+			window.dblClicked = true;
+		});
+	`)
+	if err != nil {
+		t.Fatalf("failed to setup: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	err = client.DoubleClick(ctx, pages[0].ID, "#dbl-btn")
+	if err != nil {
+		t.Fatalf("failed to double-click: %v", err)
+	}
+
+	result, err := client.Eval(ctx, pages[0].ID, `window.dblClicked`)
+	if err != nil {
+		t.Fatalf("failed to verify: %v", err)
+	}
+
+	if result.Value != true {
+		t.Errorf("expected dblClicked true, got %v", result.Value)
+	}
+}
+
+func TestClient_Check_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<input type="checkbox" id="cb" />'`)
+	if err != nil {
+		t.Fatalf("failed to setup: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	err = client.Check(ctx, pages[0].ID, "#cb")
+	if err != nil {
+		t.Fatalf("failed to check: %v", err)
+	}
+
+	result, err := client.Eval(ctx, pages[0].ID, `document.querySelector('#cb').checked`)
+	if err != nil {
+		t.Fatalf("failed to verify: %v", err)
+	}
+
+	if result.Value != true {
+		t.Errorf("expected checked true, got %v", result.Value)
+	}
+}
+
+func TestClient_CountElements_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<div class="item">1</div><div class="item">2</div><div class="item">3</div>'`)
+	if err != nil {
+		t.Fatalf("failed to setup: %v", err)
+	}
+
+	count, err := client.CountElements(ctx, pages[0].ID, ".item")
+	if err != nil {
+		t.Fatalf("failed to count: %v", err)
+	}
+
+	if count != 3 {
+		t.Errorf("expected 3 elements, got %d", count)
+	}
+}
+
+func TestClient_SetViewport_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	err = client.SetViewport(ctx, pages[0].ID, 1024, 768)
+	if err != nil {
+		t.Fatalf("failed to set viewport: %v", err)
+	}
+
+	// Verify viewport via JS
+	result, err := client.Eval(ctx, pages[0].ID, `window.innerWidth`)
+	if err != nil {
+		t.Fatalf("failed to get width: %v", err)
+	}
+
+	if result.Value != float64(1024) {
+		t.Errorf("expected width 1024, got %v", result.Value)
+	}
+}
+
+func TestClient_LocalStorage_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// localStorage requires a real origin (not about:blank)
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Set a value
+	err = client.SetLocalStorage(ctx, pages[0].ID, "testKey", "testValue")
+	if err != nil {
+		t.Fatalf("failed to set storage: %v", err)
+	}
+
+	// Get the value
+	value, err := client.GetLocalStorage(ctx, pages[0].ID, "testKey")
+	if err != nil {
+		t.Fatalf("failed to get storage: %v", err)
+	}
+
+	if value != "testValue" {
+		t.Errorf("expected 'testValue', got '%s'", value)
+	}
+
+	// Clear storage
+	err = client.ClearLocalStorage(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to clear storage: %v", err)
+	}
+
+	// Verify cleared
+	value, err = client.GetLocalStorage(ctx, pages[0].ID, "testKey")
+	if err != nil {
+		t.Fatalf("failed to get storage after clear: %v", err)
+	}
+
+	if value != "" {
+		t.Errorf("expected empty after clear, got '%s'", value)
+	}
+}

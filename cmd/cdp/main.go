@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -198,6 +198,90 @@ func run(args []string, cfg *Config) int {
 		return cmdTitle(cfg)
 	case "url":
 		return cmdURL(cfg)
+	case "new":
+		url := ""
+		if len(remaining) > 1 {
+			url = remaining[1]
+		}
+		return cmdNew(cfg, url)
+	case "close":
+		return cmdClose(cfg)
+	case "dblclick":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp dblclick <selector>")
+			return ExitError
+		}
+		return cmdDblClick(cfg, remaining[1])
+	case "rightclick":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp rightclick <selector>")
+			return ExitError
+		}
+		return cmdRightClick(cfg, remaining[1])
+	case "clear":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp clear <selector>")
+			return ExitError
+		}
+		return cmdClear(cfg, remaining[1])
+	case "select":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp select <selector> <value>")
+			return ExitError
+		}
+		return cmdSelect(cfg, remaining[1], remaining[2])
+	case "check":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp check <selector>")
+			return ExitError
+		}
+		return cmdCheck(cfg, remaining[1])
+	case "uncheck":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp uncheck <selector>")
+			return ExitError
+		}
+		return cmdUncheck(cfg, remaining[1])
+	case "scrollto":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp scrollto <selector>")
+			return ExitError
+		}
+		return cmdScrollTo(cfg, remaining[1])
+	case "scroll":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp scroll <x> <y>")
+			return ExitError
+		}
+		return cmdScroll(cfg, remaining[1], remaining[2])
+	case "count":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp count <selector>")
+			return ExitError
+		}
+		return cmdCount(cfg, remaining[1])
+	case "visible":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp visible <selector>")
+			return ExitError
+		}
+		return cmdVisible(cfg, remaining[1])
+	case "bounds":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp bounds <selector>")
+			return ExitError
+		}
+		return cmdBounds(cfg, remaining[1])
+	case "viewport":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp viewport <width> <height>")
+			return ExitError
+		}
+		return cmdViewport(cfg, remaining[1], remaining[2])
+	case "waitload":
+		return cmdWaitLoad(cfg, remaining[1:])
+	case "storage":
+		return cmdStorage(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -991,6 +1075,486 @@ func cmdURL(cfg *Config) int {
 		}
 
 		return URLResult{URL: url}, nil
+	})
+}
+
+// NewTabResult is returned by the new command.
+type NewTabResult struct {
+	TargetID string `json:"targetId"`
+	URL      string `json:"url"`
+}
+
+func cmdNew(cfg *Config, url string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		targetID, err := client.NewTab(ctx, url)
+		if err != nil {
+			return nil, err
+		}
+		if url == "" {
+			url = "about:blank"
+		}
+		return NewTabResult{TargetID: targetID, URL: url}, nil
+	})
+}
+
+// CloseTabResult is returned by the close command.
+type CloseTabResult struct {
+	Closed   bool   `json:"closed"`
+	TargetID string `json:"targetId"`
+}
+
+func cmdClose(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		targetID := pages[0].ID
+		err = client.CloseTab(ctx, targetID)
+		if err != nil {
+			return nil, err
+		}
+
+		return CloseTabResult{Closed: true, TargetID: targetID}, nil
+	})
+}
+
+// DblClickResult is returned by the dblclick command.
+type DblClickResult struct {
+	Clicked  bool   `json:"clicked"`
+	Selector string `json:"selector"`
+}
+
+func cmdDblClick(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.DoubleClick(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return DblClickResult{Clicked: true, Selector: selector}, nil
+	})
+}
+
+// RightClickResult is returned by the rightclick command.
+type RightClickResult struct {
+	Clicked  bool   `json:"clicked"`
+	Selector string `json:"selector"`
+}
+
+func cmdRightClick(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.RightClick(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return RightClickResult{Clicked: true, Selector: selector}, nil
+	})
+}
+
+// ClearResult is returned by the clear command.
+type ClearResult struct {
+	Cleared  bool   `json:"cleared"`
+	Selector string `json:"selector"`
+}
+
+func cmdClear(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.Clear(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return ClearResult{Cleared: true, Selector: selector}, nil
+	})
+}
+
+// SelectResult is returned by the select command.
+type SelectResult struct {
+	Selected bool   `json:"selected"`
+	Selector string `json:"selector"`
+	Value    string `json:"value"`
+}
+
+func cmdSelect(cfg *Config, selector, value string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.SelectOption(ctx, pages[0].ID, selector, value)
+		if err != nil {
+			return nil, err
+		}
+		return SelectResult{Selected: true, Selector: selector, Value: value}, nil
+	})
+}
+
+// CheckResult is returned by the check command.
+type CheckResult struct {
+	Checked  bool   `json:"checked"`
+	Selector string `json:"selector"`
+}
+
+func cmdCheck(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.Check(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return CheckResult{Checked: true, Selector: selector}, nil
+	})
+}
+
+// UncheckResult is returned by the uncheck command.
+type UncheckResult struct {
+	Unchecked bool   `json:"unchecked"`
+	Selector  string `json:"selector"`
+}
+
+func cmdUncheck(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.Uncheck(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return UncheckResult{Unchecked: true, Selector: selector}, nil
+	})
+}
+
+// ScrollToResult is returned by the scrollto command.
+type ScrollToResult struct {
+	Scrolled bool   `json:"scrolled"`
+	Selector string `json:"selector"`
+}
+
+func cmdScrollTo(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.ScrollIntoView(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return ScrollToResult{Scrolled: true, Selector: selector}, nil
+	})
+}
+
+// ScrollResult is returned by the scroll command.
+type ScrollResult struct {
+	Scrolled bool `json:"scrolled"`
+	X        int  `json:"x"`
+	Y        int  `json:"y"`
+}
+
+func cmdScroll(cfg *Config, xStr, yStr string) int {
+	x, err := strconv.Atoi(xStr)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "invalid x value: %s\n", xStr)
+		return ExitError
+	}
+	y, err := strconv.Atoi(yStr)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "invalid y value: %s\n", yStr)
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.ScrollBy(ctx, pages[0].ID, x, y)
+		if err != nil {
+			return nil, err
+		}
+		return ScrollResult{Scrolled: true, X: x, Y: y}, nil
+	})
+}
+
+// CountResult is returned by the count command.
+type CountResult struct {
+	Count    int    `json:"count"`
+	Selector string `json:"selector"`
+}
+
+func cmdCount(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		count, err := client.CountElements(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return CountResult{Count: count, Selector: selector}, nil
+	})
+}
+
+// VisibleResult is returned by the visible command.
+type VisibleResult struct {
+	Visible  bool   `json:"visible"`
+	Selector string `json:"selector"`
+}
+
+func cmdVisible(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		visible, err := client.IsVisible(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return VisibleResult{Visible: visible, Selector: selector}, nil
+	})
+}
+
+func cmdBounds(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		bounds, err := client.GetBoundingBox(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return bounds, nil
+	})
+}
+
+// ViewportResult is returned by the viewport command.
+type ViewportResult struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+func cmdViewport(cfg *Config, widthStr, heightStr string) int {
+	width, err := strconv.Atoi(widthStr)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "invalid width: %s\n", widthStr)
+		return ExitError
+	}
+	height, err := strconv.Atoi(heightStr)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "invalid height: %s\n", heightStr)
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.SetViewport(ctx, pages[0].ID, width, height)
+		if err != nil {
+			return nil, err
+		}
+		return ViewportResult{Width: width, Height: height}, nil
+	})
+}
+
+// WaitLoadResult is returned by the waitload command.
+type WaitLoadResult struct {
+	Loaded bool `json:"loaded"`
+}
+
+func cmdWaitLoad(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("waitload", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+	if len(pages) == 0 {
+		fmt.Fprintln(cfg.Stderr, "error: no pages available")
+		return ExitError
+	}
+
+	err = client.WaitForLoad(ctx, pages[0].ID)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	result := WaitLoadResult{Loaded: true}
+	enc := json.NewEncoder(cfg.Stdout)
+	enc.Encode(result)
+	return ExitSuccess
+}
+
+// StorageResult is returned by storage get command.
+type StorageResult struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// StorageSetResult is returned by storage set command.
+type StorageSetResult struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Set   bool   `json:"set"`
+}
+
+// StorageClearResult is returned by storage clear command.
+type StorageClearResult struct {
+	Cleared bool `json:"cleared"`
+}
+
+func cmdStorage(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("storage", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	clear := fs.Bool("clear", false, "Clear all localStorage")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+
+	if *clear {
+		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+			pages, err := client.Pages(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(pages) == 0 {
+				return nil, fmt.Errorf("no pages available")
+			}
+			err = client.ClearLocalStorage(ctx, pages[0].ID)
+			if err != nil {
+				return nil, err
+			}
+			return StorageClearResult{Cleared: true}, nil
+		})
+	}
+
+	if len(remaining) == 0 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp storage <key> [value] | --clear")
+		return ExitError
+	}
+
+	key := remaining[0]
+
+	if len(remaining) == 1 {
+		// Get
+		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+			pages, err := client.Pages(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(pages) == 0 {
+				return nil, fmt.Errorf("no pages available")
+			}
+			value, err := client.GetLocalStorage(ctx, pages[0].ID, key)
+			if err != nil {
+				return nil, err
+			}
+			return StorageResult{Key: key, Value: value}, nil
+		})
+	}
+
+	// Set
+	value := remaining[1]
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+		err = client.SetLocalStorage(ctx, pages[0].ID, key, value)
+		if err != nil {
+			return nil, err
+		}
+		return StorageSetResult{Key: key, Value: value, Set: true}, nil
 	})
 }
 

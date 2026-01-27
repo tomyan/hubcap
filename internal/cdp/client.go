@@ -1405,6 +1405,209 @@ func (c *Client) Focus(ctx context.Context, targetID string, selector string) er
 	return nil
 }
 
+// NewTab creates a new browser tab and returns its target ID.
+func (c *Client) NewTab(ctx context.Context, url string) (string, error) {
+	if url == "" {
+		url = "about:blank"
+	}
+
+	result, err := c.Call(ctx, "Target.createTarget", map[string]interface{}{
+		"url": url,
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating target: %w", err)
+	}
+
+	var resp struct {
+		TargetID string `json:"targetId"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return "", fmt.Errorf("parsing response: %w", err)
+	}
+
+	return resp.TargetID, nil
+}
+
+// ScrollIntoView scrolls an element into view.
+func (c *Client) ScrollIntoView(ctx context.Context, targetID string, selector string) error {
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) throw new Error('Element not found');
+			el.scrollIntoView({ behavior: 'instant', block: 'center' });
+			return true;
+		})()
+	`, selector)
+
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// ScrollBy scrolls the page by x and y pixels.
+func (c *Client) ScrollBy(ctx context.Context, targetID string, x, y int) error {
+	js := fmt.Sprintf(`window.scrollBy(%d, %d); true`, x, y)
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// CountElements returns the number of elements matching the selector.
+func (c *Client) CountElements(ctx context.Context, targetID string, selector string) (int, error) {
+	js := fmt.Sprintf(`document.querySelectorAll(%q).length`, selector)
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return 0, err
+	}
+	if result.Value == nil {
+		return 0, nil
+	}
+	// JSON numbers are float64
+	if f, ok := result.Value.(float64); ok {
+		return int(f), nil
+	}
+	return 0, fmt.Errorf("unexpected type: %T", result.Value)
+}
+
+// IsVisible checks if an element is visible.
+func (c *Client) IsVisible(ctx context.Context, targetID string, selector string) (bool, error) {
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) return false;
+			const style = window.getComputedStyle(el);
+			const rect = el.getBoundingClientRect();
+			return style.display !== 'none' &&
+			       style.visibility !== 'hidden' &&
+			       style.opacity !== '0' &&
+			       rect.width > 0 && rect.height > 0;
+		})()
+	`, selector)
+
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return false, err
+	}
+	if b, ok := result.Value.(bool); ok {
+		return b, nil
+	}
+	return false, nil
+}
+
+// BoundingBox represents an element's position and size.
+type BoundingBox struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+// GetBoundingBox returns the bounding box of an element.
+func (c *Client) GetBoundingBox(ctx context.Context, targetID string, selector string) (*BoundingBox, error) {
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) return null;
+			const rect = el.getBoundingClientRect();
+			return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+		})()
+	`, selector)
+
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return nil, err
+	}
+	if result.Value == nil {
+		return nil, fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Convert the map to BoundingBox
+	m, ok := result.Value.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type")
+	}
+
+	return &BoundingBox{
+		X:      m["x"].(float64),
+		Y:      m["y"].(float64),
+		Width:  m["width"].(float64),
+		Height: m["height"].(float64),
+	}, nil
+}
+
+// SetViewport sets the browser viewport size.
+func (c *Client) SetViewport(ctx context.Context, targetID string, width, height int) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Emulation.setDeviceMetricsOverride", map[string]interface{}{
+		"width":             width,
+		"height":            height,
+		"deviceScaleFactor": 1,
+		"mobile":            false,
+	})
+	if err != nil {
+		return fmt.Errorf("setting viewport: %w", err)
+	}
+
+	return nil
+}
+
+// WaitForLoad waits for the page load event.
+func (c *Client) WaitForLoad(ctx context.Context, targetID string) error {
+	js := `
+		new Promise((resolve) => {
+			if (document.readyState === 'complete') {
+				resolve(true);
+			} else {
+				window.addEventListener('load', () => resolve(true));
+			}
+		})
+	`
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// GetLocalStorage gets a value from localStorage.
+func (c *Client) GetLocalStorage(ctx context.Context, targetID string, key string) (string, error) {
+	js := fmt.Sprintf(`localStorage.getItem(%q)`, key)
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return "", err
+	}
+	if result.Value == nil {
+		return "", nil
+	}
+	if s, ok := result.Value.(string); ok {
+		return s, nil
+	}
+	return fmt.Sprintf("%v", result.Value), nil
+}
+
+// SetLocalStorage sets a value in localStorage.
+func (c *Client) SetLocalStorage(ctx context.Context, targetID string, key, value string) error {
+	js := fmt.Sprintf(`localStorage.setItem(%q, %q); true`, key, value)
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// ClearLocalStorage clears all localStorage.
+func (c *Client) ClearLocalStorage(ctx context.Context, targetID string) error {
+	_, err := c.Eval(ctx, targetID, `localStorage.clear(); true`)
+	return err
+}
+
+// CloseTab closes a browser tab by its target ID.
+func (c *Client) CloseTab(ctx context.Context, targetID string) error {
+	_, err := c.Call(ctx, "Target.closeTarget", map[string]interface{}{
+		"targetId": targetID,
+	})
+	if err != nil {
+		return fmt.Errorf("closing target: %w", err)
+	}
+	return nil
+}
+
 // GetTitle returns the page title.
 func (c *Client) GetTitle(ctx context.Context, targetID string) (string, error) {
 	result, err := c.Eval(ctx, targetID, "document.title")
@@ -1506,6 +1709,349 @@ func (c *Client) GetAttribute(ctx context.Context, targetID string, selector str
 	}
 
 	return "", nil // Attribute not found, return empty string
+}
+
+// DoubleClick double-clicks on an element specified by selector.
+func (c *Client) DoubleClick(ctx context.Context, targetID string, selector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int64 `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query for element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int64 `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get box model for coordinates
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return fmt.Errorf("invalid box model")
+	}
+	x := (content[0] + content[2] + content[4] + content[6]) / 4
+	y := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Double-click: move, press, release, press, release with clickCount=2
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseMoved: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 2,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed (2): %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 2,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased (2): %w", err)
+	}
+
+	return nil
+}
+
+// RightClick right-clicks on an element specified by selector.
+func (c *Client) RightClick(ctx context.Context, targetID string, selector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int64 `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int64 `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return fmt.Errorf("invalid box model")
+	}
+	x := (content[0] + content[2] + content[4] + content[6]) / 4
+	y := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Right-click: move, press right, release right
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseMoved: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "right",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "right",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased: %w", err)
+	}
+
+	return nil
+}
+
+// Clear clears a text input field.
+func (c *Client) Clear(ctx context.Context, targetID string, selector string) error {
+	// Focus the element first
+	err := c.Focus(ctx, targetID, selector)
+	if err != nil {
+		return err
+	}
+
+	// Select all and delete
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Ctrl+A to select all
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type":                  "keyDown",
+		"key":                   "a",
+		"modifiers":             2, // Ctrl
+		"windowsVirtualKeyCode": 65,
+	})
+	if err != nil {
+		return fmt.Errorf("selecting all: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type":                  "keyUp",
+		"key":                   "a",
+		"modifiers":             2,
+		"windowsVirtualKeyCode": 65,
+	})
+	if err != nil {
+		return fmt.Errorf("selecting all (keyUp): %w", err)
+	}
+
+	// Delete key to clear
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type":                  "keyDown",
+		"key":                   "Delete",
+		"windowsVirtualKeyCode": 46,
+	})
+	if err != nil {
+		return fmt.Errorf("deleting: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type":                  "keyUp",
+		"key":                   "Delete",
+		"windowsVirtualKeyCode": 46,
+	})
+	if err != nil {
+		return fmt.Errorf("deleting (keyUp): %w", err)
+	}
+
+	return nil
+}
+
+// SelectOption selects an option in a <select> element by value.
+func (c *Client) SelectOption(ctx context.Context, targetID string, selector string, value string) error {
+	// Use JavaScript to select the option
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) throw new Error('Element not found');
+			if (el.tagName !== 'SELECT') throw new Error('Element is not a select');
+			el.value = %q;
+			el.dispatchEvent(new Event('change', { bubbles: true }));
+			return el.value;
+		})()
+	`, selector, value)
+
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// Check checks a checkbox or radio button.
+func (c *Client) Check(ctx context.Context, targetID string, selector string) error {
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) throw new Error('Element not found');
+			if (!el.checked) {
+				el.checked = true;
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+			return el.checked;
+		})()
+	`, selector)
+
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// Uncheck unchecks a checkbox.
+func (c *Client) Uncheck(ctx context.Context, targetID string, selector string) error {
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) throw new Error('Element not found');
+			if (el.checked) {
+				el.checked = false;
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+			return !el.checked;
+		})()
+	`, selector)
+
+	_, err := c.Eval(ctx, targetID, js)
+	return err
 }
 
 // Hover moves the mouse over an element specified by selector.
