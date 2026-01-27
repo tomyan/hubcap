@@ -304,6 +304,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdEmulate(cfg, remaining[1])
+	case "useragent":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp useragent <string>")
+			return ExitError
+		}
+		return cmdUserAgent(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1388,6 +1394,20 @@ type EmulateResult struct {
 	Height            int     `json:"height"`
 	DeviceScaleFactor float64 `json:"deviceScaleFactor"`
 	Mobile            bool    `json:"mobile"`
+}
+
+type UserAgentResult struct {
+	UserAgent string `json:"userAgent"`
+}
+
+func cmdUserAgent(cfg *Config, userAgent string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetUserAgent(ctx, target.ID, userAgent)
+		if err != nil {
+			return nil, err
+		}
+		return UserAgentResult{UserAgent: userAgent}, nil
+	})
 }
 
 func cmdEmulate(cfg *Config, deviceName string) int {

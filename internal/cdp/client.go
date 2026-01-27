@@ -2557,6 +2557,23 @@ func (c *Client) unsubscribeEvent(sessionID, method string, ch chan json.RawMess
 	}
 }
 
+// SetUserAgent sets a custom user agent for the specified target.
+func (c *Client) SetUserAgent(ctx context.Context, targetID string, userAgent string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Emulation.setUserAgentOverride", map[string]interface{}{
+		"userAgent": userAgent,
+	})
+	if err != nil {
+		return fmt.Errorf("setting user agent: %w", err)
+	}
+
+	return nil
+}
+
 // Emulate sets device emulation for the specified target.
 func (c *Client) Emulate(ctx context.Context, targetID string, device DeviceInfo) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

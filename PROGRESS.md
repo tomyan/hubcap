@@ -165,10 +165,10 @@
 - `cdp emulate <device>` - emulate mobile devices
 - Preset devices: iPhone 12, iPhone 12 Pro, iPhone 12 Pro Max, iPhone SE, Pixel 5, Galaxy S21, iPad, iPad Pro
 
-## Next Slices
-
-### Slice 52: User agent
+### Slice 52: User agent ✅
 - `cdp useragent <string>` - set custom user agent
+
+## Next Slices
 
 ## Test Command
 ```bash
@@ -180,7 +180,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (49 commands)
+## Commands Implemented (50 commands)
 ```
 # Browser info
 cdp version
@@ -263,6 +263,7 @@ cdp run <file.js>
 
 # Device emulation
 cdp emulate <device>
+cdp useragent <string>
 ```
 
 ## Known Issues / Deferred Items

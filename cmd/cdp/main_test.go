@@ -1695,3 +1695,47 @@ func TestRun_Emulate_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_UserAgent_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"useragent", "TestBot/1.0"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["userAgent"] != "TestBot/1.0" {
+		t.Errorf("expected userAgent 'TestBot/1.0', got %v", result["userAgent"])
+	}
+}
+
+func TestRun_UserAgent_MissingArg(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"useragent"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_UserAgent_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"useragent", "TestBot/1.0"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
