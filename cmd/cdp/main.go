@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tomyan/cdp-cli/internal/cdp"
@@ -334,6 +335,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdLayout(cfg, remaining[1:])
+	case "intercept":
+		return cmdIntercept(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1465,6 +1468,13 @@ type OfflineResult struct {
 	Offline bool `json:"offline"`
 }
 
+type InterceptResult struct {
+	Enabled     bool   `json:"enabled"`
+	Pattern     string `json:"pattern,omitempty"`
+	Response    bool   `json:"response,omitempty"`
+	Replacement string `json:"replacement,omitempty"`
+}
+
 type StylesResult struct {
 	Selector string            `json:"selector"`
 	Styles   map[string]string `json:"styles"`
@@ -1506,6 +1516,62 @@ func cmdLayout(cfg *Config, args []string) int {
 			return nil, err
 		}
 		return layout, nil
+	})
+}
+
+func cmdIntercept(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("intercept", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	response := fs.Bool("response", false, "Intercept responses (default: requests)")
+	pattern := fs.String("pattern", "*", "URL pattern to match")
+	replace := fs.String("replace", "", "Text replacement in format old:new")
+	disable := fs.Bool("disable", false, "Disable interception")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	// Disable interception
+	if *disable {
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.DisableIntercept(ctx, target.ID)
+			if err != nil {
+				return nil, err
+			}
+			return InterceptResult{Enabled: false}, nil
+		})
+	}
+
+	// Parse replacement
+	replacements := make(map[string]string)
+	if *replace != "" {
+		parts := strings.SplitN(*replace, ":", 2)
+		if len(parts) != 2 {
+			fmt.Fprintln(cfg.Stderr, "error: replacement must be in format 'old:new'")
+			return ExitError
+		}
+		replacements[parts[0]] = parts[1]
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		config := cdp.InterceptConfig{
+			URLPattern:        *pattern,
+			InterceptResponse: *response,
+			Replacements:      replacements,
+		}
+		err := client.EnableIntercept(ctx, target.ID, config)
+		if err != nil {
+			return nil, err
+		}
+		return InterceptResult{
+			Enabled:     true,
+			Pattern:     *pattern,
+			Response:    *response,
+			Replacement: *replace,
+		}, nil
 	})
 }
 

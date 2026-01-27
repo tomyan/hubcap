@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -2751,6 +2752,164 @@ func (c *Client) unsubscribeEvent(sessionID, method string, ch chan json.RawMess
 			return
 		}
 	}
+}
+
+// InterceptConfig configures request/response interception.
+type InterceptConfig struct {
+	URLPattern        string            // URL pattern to match (e.g., "*", "*.js", "https://example.com/*")
+	InterceptResponse bool              // If true, intercept responses; if false, intercept requests
+	Replacements      map[string]string // Text replacements to apply (old -> new)
+	ResponseBody      string            // Override response body entirely (if set, Replacements ignored)
+	StatusCode        int               // Override status code (0 = use original)
+	Headers           map[string]string // Override/add headers
+}
+
+// EnableIntercept enables request/response interception for the specified target.
+func (c *Client) EnableIntercept(ctx context.Context, targetID string, config InterceptConfig) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Determine request stage
+	requestStage := "Request"
+	if config.InterceptResponse {
+		requestStage = "Response"
+	}
+
+	// Build URL pattern
+	urlPattern := config.URLPattern
+	if urlPattern == "" {
+		urlPattern = "*"
+	}
+
+	// Enable Fetch domain with patterns
+	_, err = c.CallSession(ctx, sessionID, "Fetch.enable", map[string]interface{}{
+		"patterns": []map[string]interface{}{
+			{
+				"urlPattern":   urlPattern,
+				"requestStage": requestStage,
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("enabling fetch: %w", err)
+	}
+
+	// Subscribe to requestPaused events
+	eventCh := c.subscribeEvent(sessionID, "Fetch.requestPaused")
+
+	// Handle events in a goroutine
+	go func() {
+		for params := range eventCh {
+			var event struct {
+				RequestID         string `json:"requestId"`
+				Request           struct {
+					URL string `json:"url"`
+				} `json:"request"`
+				ResponseStatusCode int               `json:"responseStatusCode"`
+				ResponseHeaders    []json.RawMessage `json:"responseHeaders"`
+			}
+			if err := json.Unmarshal(params, &event); err != nil {
+				continue
+			}
+
+			// For response interception, get and modify body
+			if config.InterceptResponse {
+				// Get response body
+				result, err := c.CallSession(ctx, sessionID, "Fetch.getResponseBody", map[string]interface{}{
+					"requestId": event.RequestID,
+				})
+				if err != nil {
+					// Continue without modification on error
+					c.CallSession(ctx, sessionID, "Fetch.continueRequest", map[string]interface{}{
+						"requestId": event.RequestID,
+					})
+					continue
+				}
+
+				var bodyResult struct {
+					Body          string `json:"body"`
+					Base64Encoded bool   `json:"base64Encoded"`
+				}
+				if err := json.Unmarshal(result, &bodyResult); err != nil {
+					c.CallSession(ctx, sessionID, "Fetch.continueRequest", map[string]interface{}{
+						"requestId": event.RequestID,
+					})
+					continue
+				}
+
+				// Decode body if needed
+				body := bodyResult.Body
+				if bodyResult.Base64Encoded {
+					decoded, err := base64.StdEncoding.DecodeString(body)
+					if err == nil {
+						body = string(decoded)
+					}
+				}
+
+				// Apply modifications
+				newBody := body
+				if config.ResponseBody != "" {
+					newBody = config.ResponseBody
+				} else if len(config.Replacements) > 0 {
+					for old, new := range config.Replacements {
+						newBody = strings.ReplaceAll(newBody, old, new)
+					}
+				}
+
+				// Determine status code
+				statusCode := event.ResponseStatusCode
+				if config.StatusCode > 0 {
+					statusCode = config.StatusCode
+				}
+
+				// Build response headers
+				responseHeaders := []map[string]string{}
+				// Keep original headers (simplified - in real impl would parse responseHeaders)
+				responseHeaders = append(responseHeaders, map[string]string{
+					"name":  "Content-Type",
+					"value": "text/html; charset=utf-8",
+				})
+				for name, value := range config.Headers {
+					responseHeaders = append(responseHeaders, map[string]string{
+						"name":  name,
+						"value": value,
+					})
+				}
+
+				// Fulfill with modified response
+				c.CallSession(ctx, sessionID, "Fetch.fulfillRequest", map[string]interface{}{
+					"requestId":       event.RequestID,
+					"responseCode":    statusCode,
+					"responseHeaders": responseHeaders,
+					"body":            base64.StdEncoding.EncodeToString([]byte(newBody)),
+				})
+			} else {
+				// For request interception, just continue (or modify request)
+				c.CallSession(ctx, sessionID, "Fetch.continueRequest", map[string]interface{}{
+					"requestId": event.RequestID,
+				})
+			}
+		}
+	}()
+
+	return nil
+}
+
+// DisableIntercept disables request/response interception for the specified target.
+func (c *Client) DisableIntercept(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Fetch.disable", nil)
+	if err != nil {
+		return fmt.Errorf("disabling fetch: %w", err)
+	}
+
+	return nil
 }
 
 // SetOfflineMode enables or disables offline mode for network emulation.

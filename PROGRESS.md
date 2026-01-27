@@ -186,6 +186,12 @@
 - `cdp layout <selector> [--depth <n>]` - get comprehensive layout info
 - Includes bounds, styles, and children with their layouts
 
+### Slice 58: Response interception ✅
+- `cdp intercept [--response] [--pattern <url>] [--replace old:new]` - intercept and modify responses
+- `cdp intercept --disable` - disable interception
+- Uses CDP Fetch domain for network interception
+- Note: Interception requires persistent connection; works within single CDP session
+
 ## Next Slices
 
 ## Test Command
@@ -198,7 +204,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (54 commands)
+## Commands Implemented (55 commands)
 ```
 # Browser info
 cdp version
@@ -286,6 +292,9 @@ cdp emulate <device>
 cdp useragent <string>
 cdp geolocation <latitude> <longitude>
 cdp offline <true|false>
+
+# Network interception
+cdp intercept [--response] [--pattern <url>] [--replace old:new] [--disable]
 ```
 
 ## Known Issues / Deferred Items

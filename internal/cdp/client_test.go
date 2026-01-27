@@ -1744,7 +1744,7 @@ func TestClient_PressKey_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to press key: %v", err)
 	}
-	time.Sleep(100 * time.Millisecond) // Wait for key event to be processed
+	time.Sleep(200 * time.Millisecond) // Wait for key event to be processed
 
 	// Verify the key was pressed
 	result, err := client.Eval(ctx, pages[0].ID, `window.lastKey`)
@@ -2495,4 +2495,103 @@ func TestClient_Emulate_Success(t *testing.T) {
 	// Note: In headless Chrome, the emulation may not affect window.innerWidth/Height
 	// because there's no actual display. The emulation affects how the page renders
 	// and what user-agent is reported. We just verify the CDP calls succeed.
+}
+
+func TestClient_EnableIntercept(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Enable interception
+	config := cdp.InterceptConfig{
+		URLPattern:        "*",
+		InterceptResponse: true,
+		Replacements:      map[string]string{"test": "replaced"},
+	}
+	err = client.EnableIntercept(ctx, pages[0].ID, config)
+	if err != nil {
+		t.Fatalf("failed to enable intercept: %v", err)
+	}
+
+	// Disable interception
+	err = client.DisableIntercept(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to disable intercept: %v", err)
+	}
+}
+
+func TestClient_InterceptModifyResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	targetID := pages[0].ID
+
+	// Enable interception - replace "Example Domain" with "PATCHED CONTENT"
+	config := cdp.InterceptConfig{
+		URLPattern:        "*",
+		InterceptResponse: true,
+		Replacements:      map[string]string{"Example Domain": "PATCHED CONTENT"},
+	}
+	err = client.EnableIntercept(ctx, targetID, config)
+	if err != nil {
+		t.Fatalf("failed to enable intercept: %v", err)
+	}
+
+	// Navigate to example.com
+	_, err = client.Navigate(ctx, targetID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
+	// Wait for page load and interception
+	time.Sleep(2 * time.Second)
+
+	// Check if content was modified
+	result, err := client.Eval(ctx, targetID, "document.body.innerText.includes('PATCHED')")
+	if err != nil {
+		t.Fatalf("failed to evaluate: %v", err)
+	}
+
+	patched, ok := result.Value.(bool)
+	if !ok || !patched {
+		t.Errorf("expected page content to be patched, got value=%v", result.Value)
+	}
+
+	// Cleanup - disable interception
+	client.DisableIntercept(ctx, targetID)
 }

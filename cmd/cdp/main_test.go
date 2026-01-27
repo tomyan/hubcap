@@ -2017,3 +2017,74 @@ func TestRun_Layout_MissingSelector(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitError, code)
 	}
 }
+
+func TestRun_Intercept_Enable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Enable interception
+	code := run([]string{"intercept", "--response", "--pattern", "*", "--replace", "foo:bar"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to enable intercept: %d, stderr: %s", code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["enabled"] != true {
+		t.Error("expected enabled to be true")
+	}
+	if result["pattern"] != "*" {
+		t.Errorf("expected pattern *, got %v", result["pattern"])
+	}
+	if result["response"] != true {
+		t.Error("expected response to be true")
+	}
+}
+
+func TestRun_Intercept_Disable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Disable interception
+	code := run([]string{"intercept", "--disable"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to disable intercept: %d, stderr: %s", code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["enabled"] != false {
+		t.Error("expected enabled to be false")
+	}
+}
+
+func TestRun_Intercept_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"intercept", "--pattern", "*"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
