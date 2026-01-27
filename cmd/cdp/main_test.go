@@ -1276,3 +1276,60 @@ func TestRun_Reload_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Back_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Navigate to first page
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate to blank: %d", code)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Navigate to second page
+	code = run([]string{"goto", "https://example.com"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate to example: %d", code)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Go back
+	code = run([]string{"back"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["success"] != true {
+		t.Errorf("expected success: true, got %v", result["success"])
+	}
+}
+
+func TestRun_Back_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"back"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Forward_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"forward"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

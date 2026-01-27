@@ -1951,3 +1951,57 @@ func TestClient_Reload_Success(t *testing.T) {
 		t.Errorf("expected hostname 'example.com', got %v", result.Value)
 	}
 }
+
+func TestClient_GoBack_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to first page
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate to blank: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Navigate to second page
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate to example: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Go back
+	err = client.GoBack(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to go back: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify we're back on about:blank
+	result, err := client.Eval(ctx, pages[0].ID, `document.location.href`)
+	if err != nil {
+		t.Fatalf("failed to get href: %v", err)
+	}
+
+	if result.Value != "about:blank" {
+		t.Errorf("expected href 'about:blank', got %v", result.Value)
+	}
+}

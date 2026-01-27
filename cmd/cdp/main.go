@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -190,6 +190,10 @@ func run(args []string, cfg *Config) int {
 		return cmdAttr(cfg, remaining[1], remaining[2])
 	case "reload":
 		return cmdReload(cfg, remaining[1:])
+	case "back":
+		return cmdBack(cfg)
+	case "forward":
+		return cmdForward(cfg)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -887,6 +891,54 @@ func cmdReload(cfg *Config, args []string) int {
 		}
 
 		return ReloadResult{Reloaded: true, IgnoreCache: *ignoreCache}, nil
+	})
+}
+
+// BackResult is returned by the back command.
+type BackResult struct {
+	Success bool `json:"success"`
+}
+
+func cmdBack(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.GoBack(ctx, pages[0].ID)
+		if err != nil {
+			return nil, err
+		}
+
+		return BackResult{Success: true}, nil
+	})
+}
+
+// ForwardResult is returned by the forward command.
+type ForwardResult struct {
+	Success bool `json:"success"`
+}
+
+func cmdForward(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.GoForward(ctx, pages[0].ID)
+		if err != nil {
+			return nil, err
+		}
+
+		return ForwardResult{Success: true}, nil
 	})
 }
 

@@ -359,6 +359,98 @@ func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*Na
 	}, nil
 }
 
+// GoBack navigates back in history.
+func (c *Client) GoBack(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Page domain
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Get navigation history to check if we can go back
+	histResult, err := c.CallSession(ctx, sessionID, "Page.getNavigationHistory", nil)
+	if err != nil {
+		return fmt.Errorf("getting navigation history: %w", err)
+	}
+
+	var histResp struct {
+		CurrentIndex int `json:"currentIndex"`
+		Entries      []struct {
+			ID  int    `json:"id"`
+			URL string `json:"url"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(histResult, &histResp); err != nil {
+		return fmt.Errorf("parsing navigation history: %w", err)
+	}
+
+	if histResp.CurrentIndex == 0 {
+		return fmt.Errorf("no history to go back to")
+	}
+
+	// Navigate to previous entry
+	prevEntry := histResp.Entries[histResp.CurrentIndex-1]
+	_, err = c.CallSession(ctx, sessionID, "Page.navigateToHistoryEntry", map[string]interface{}{
+		"entryId": prevEntry.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("navigating to history entry: %w", err)
+	}
+
+	return nil
+}
+
+// GoForward navigates forward in history.
+func (c *Client) GoForward(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Page domain
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Get navigation history
+	histResult, err := c.CallSession(ctx, sessionID, "Page.getNavigationHistory", nil)
+	if err != nil {
+		return fmt.Errorf("getting navigation history: %w", err)
+	}
+
+	var histResp struct {
+		CurrentIndex int `json:"currentIndex"`
+		Entries      []struct {
+			ID  int    `json:"id"`
+			URL string `json:"url"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(histResult, &histResp); err != nil {
+		return fmt.Errorf("parsing navigation history: %w", err)
+	}
+
+	if histResp.CurrentIndex >= len(histResp.Entries)-1 {
+		return fmt.Errorf("no history to go forward to")
+	}
+
+	// Navigate to next entry
+	nextEntry := histResp.Entries[histResp.CurrentIndex+1]
+	_, err = c.CallSession(ctx, sessionID, "Page.navigateToHistoryEntry", map[string]interface{}{
+		"entryId": nextEntry.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("navigating to history entry: %w", err)
+	}
+
+	return nil
+}
+
 // Reload reloads the page. If ignoreCache is true, the browser cache is bypassed.
 func (c *Client) Reload(ctx context.Context, targetID string, ignoreCache bool) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
