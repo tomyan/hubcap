@@ -1091,3 +1091,57 @@ func TestRun_Press_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Hover_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"hover"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Hover_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to blank page and create a button
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	code = run([]string{"eval", `document.body.innerHTML = '<button id="hover-btn" style="width:100px;height:50px;">Hover</button>'`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create button: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"hover", "#hover-btn"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["hovered"] != true {
+		t.Errorf("expected hovered: true, got %v", result["hovered"])
+	}
+}
+
+func TestRun_Hover_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"hover", "#test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

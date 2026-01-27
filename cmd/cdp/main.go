@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -176,6 +176,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdPress(cfg, remaining[1])
+	case "hover":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp hover <selector>")
+			return ExitError
+		}
+		return cmdHover(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -785,6 +791,31 @@ func cmdPress(cfg *Config, key string) int {
 		}
 
 		return PressResult{Pressed: true, Key: key}, nil
+	})
+}
+
+// HoverResult is returned by the hover command.
+type HoverResult struct {
+	Hovered  bool   `json:"hovered"`
+	Selector string `json:"selector"`
+}
+
+func cmdHover(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.Hover(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+
+		return HoverResult{Hovered: true, Selector: selector}, nil
 	})
 }
 

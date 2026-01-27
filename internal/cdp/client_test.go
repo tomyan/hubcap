@@ -1754,3 +1754,61 @@ func TestClient_PressKey_Success(t *testing.T) {
 		t.Errorf("expected lastKey 'Enter', got %v", result.Value)
 	}
 }
+
+func TestClient_Hover_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page and create a button that tracks hover
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	_, err = client.Eval(ctx, pages[0].ID, `
+		document.body.innerHTML = '<button id="hover-btn" style="width:100px;height:50px;">Hover me</button>';
+		window.hovered = false;
+		document.getElementById('hover-btn').addEventListener('mouseenter', () => {
+			window.hovered = true;
+		});
+	`)
+	if err != nil {
+		t.Fatalf("failed to create button: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Hover over the button
+	err = client.Hover(ctx, pages[0].ID, "#hover-btn")
+	if err != nil {
+		t.Fatalf("failed to hover: %v", err)
+	}
+
+	// Verify hover event was fired
+	result, err := client.Eval(ctx, pages[0].ID, `window.hovered`)
+	if err != nil {
+		t.Fatalf("failed to verify hover: %v", err)
+	}
+
+	if result.Value != true {
+		t.Errorf("expected hovered: true, got %v", result.Value)
+	}
+}
