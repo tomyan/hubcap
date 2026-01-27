@@ -82,6 +82,16 @@ type ConsoleMessage struct {
 	Text string `json:"text"`
 }
 
+// NetworkEvent represents a network request or response event.
+type NetworkEvent struct {
+	Type      string `json:"type"`      // "request" or "response"
+	RequestID string `json:"requestId"` // unique identifier for matching request/response
+	URL       string `json:"url"`
+	Method    string `json:"method,omitempty"`    // HTTP method (requests only)
+	Status    int    `json:"status,omitempty"`    // HTTP status code (responses only)
+	MimeType  string `json:"mimeType,omitempty"`  // MIME type (responses only)
+}
+
 // Cookie represents a browser cookie.
 type Cookie struct {
 	Name     string  `json:"name"`
@@ -969,6 +979,89 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 				case output <- ConsoleMessage{Type: event.Type, Text: text}:
 				default:
 					// Drop if channel is full
+				}
+			case <-c.closeCh:
+				return
+			}
+		}
+	}()
+
+	return output, nil
+}
+
+// CaptureNetwork starts capturing network events from a page.
+// Returns a channel that receives NetworkEvent. The channel is buffered.
+func (c *Client) CaptureNetwork(ctx context.Context, targetID string) (<-chan NetworkEvent, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Network domain to receive events
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Network domain: %w", err)
+	}
+
+	// Subscribe to network events
+	requestCh := c.subscribeEvent(sessionID, "Network.requestWillBeSent")
+	responseCh := c.subscribeEvent(sessionID, "Network.responseReceived")
+
+	// Create output channel
+	output := make(chan NetworkEvent, 100)
+
+	// Start goroutine to translate events
+	go func() {
+		defer close(output)
+		for {
+			select {
+			case params, ok := <-requestCh:
+				if !ok {
+					return
+				}
+				var event struct {
+					RequestID string `json:"requestId"`
+					Request   struct {
+						URL    string `json:"url"`
+						Method string `json:"method"`
+					} `json:"request"`
+				}
+				if err := json.Unmarshal(params, &event); err != nil {
+					continue
+				}
+				select {
+				case output <- NetworkEvent{
+					Type:      "request",
+					RequestID: event.RequestID,
+					URL:       event.Request.URL,
+					Method:    event.Request.Method,
+				}:
+				default:
+				}
+			case params, ok := <-responseCh:
+				if !ok {
+					return
+				}
+				var event struct {
+					RequestID string `json:"requestId"`
+					Response  struct {
+						URL      string `json:"url"`
+						Status   int    `json:"status"`
+						MimeType string `json:"mimeType"`
+					} `json:"response"`
+				}
+				if err := json.Unmarshal(params, &event); err != nil {
+					continue
+				}
+				select {
+				case output <- NetworkEvent{
+					Type:      "response",
+					RequestID: event.RequestID,
+					URL:       event.Response.URL,
+					Status:    event.Response.Status,
+					MimeType:  event.Response.MimeType,
+				}:
+				default:
 				}
 			case <-c.closeCh:
 				return

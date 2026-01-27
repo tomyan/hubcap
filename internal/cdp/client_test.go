@@ -1630,3 +1630,62 @@ func TestClient_Focus_Success(t *testing.T) {
 		t.Errorf("expected focused element id 'focus-test', got %v", result.Value)
 	}
 }
+
+func TestClient_CaptureNetwork_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page first
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate to blank: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Start capturing network events
+	events, err := client.CaptureNetwork(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to start network capture: %v", err)
+	}
+
+	// Navigate to a page to trigger network requests
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		client.Navigate(ctx, pages[0].ID, "https://example.com")
+	}()
+
+	// Wait for at least one request event
+	timeout := time.After(5 * time.Second)
+	gotRequest := false
+	for !gotRequest {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed unexpectedly")
+			}
+			if event.Type == "request" && strings.Contains(event.URL, "example.com") {
+				gotRequest = true
+			}
+		case <-timeout:
+			t.Fatal("timeout waiting for network events")
+		}
+	}
+}

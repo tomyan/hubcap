@@ -998,3 +998,34 @@ func TestRun_Focus_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Network_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// First navigate to about:blank
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate to blank: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Run network capture with short duration
+	code = run([]string{"network", "--duration", "500ms"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+}
+
+func TestRun_Network_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"network", "--duration", "100ms"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -167,6 +167,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdFocus(cfg, remaining[1])
+	case "network":
+		return cmdNetwork(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -484,6 +486,66 @@ func cmdConsole(cfg *Config, args []string) int {
 				return ExitSuccess
 			}
 			if err := enc.Encode(msg); err != nil {
+				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+				return ExitError
+			}
+		case <-ctx.Done():
+			return ExitSuccess
+		}
+	}
+}
+
+func cmdNetwork(cfg *Config, args []string) int {
+	// Parse network-specific flags
+	fs := flag.NewFlagSet("network", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	ctx := context.Background()
+	if *duration > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *duration)
+		defer cancel()
+	}
+
+	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+	if len(pages) == 0 {
+		fmt.Fprintln(cfg.Stderr, "error: no pages available")
+		return ExitError
+	}
+
+	events, err := client.CaptureNetwork(ctx, pages[0].ID)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	enc := json.NewEncoder(cfg.Stdout)
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return ExitSuccess
+			}
+			if err := enc.Encode(event); err != nil {
 				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 				return ExitError
 			}
