@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -125,6 +125,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdClick(cfg, remaining[1])
+	case "fill":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp fill <selector> <text>")
+			return ExitError
+		}
+		return cmdFill(cfg, remaining[1], remaining[2])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -281,6 +287,32 @@ func cmdClick(cfg *Config, selector string) int {
 		}
 
 		return ClickResult{Clicked: true, Selector: selector}, nil
+	})
+}
+
+// FillResult is returned by the fill command.
+type FillResult struct {
+	Filled   bool   `json:"filled"`
+	Selector string `json:"selector"`
+	Text     string `json:"text"`
+}
+
+func cmdFill(cfg *Config, selector, text string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.Fill(ctx, pages[0].ID, selector, text)
+		if err != nil {
+			return nil, err
+		}
+
+		return FillResult{Filled: true, Selector: selector, Text: text}, nil
 	})
 }
 

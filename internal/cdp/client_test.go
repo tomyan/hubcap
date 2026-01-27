@@ -810,3 +810,83 @@ func TestClient_Click_NotFound(t *testing.T) {
 		t.Errorf("expected 'not found' in error, got: %v", err)
 	}
 }
+
+func TestClient_Fill_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Create a page with an input via JS
+	_, err = client.Eval(ctx, pages[0].ID, `
+		document.body.innerHTML = '<input id="test-input" type="text" />';
+	`)
+	if err != nil {
+		t.Fatalf("failed to create input: %v", err)
+	}
+
+	// Fill the input
+	err = client.Fill(ctx, pages[0].ID, "#test-input", "hello world")
+	if err != nil {
+		t.Fatalf("failed to fill: %v", err)
+	}
+
+	// Verify the value
+	result, err := client.Eval(ctx, pages[0].ID, `document.querySelector('#test-input').value`)
+	if err != nil {
+		t.Fatalf("failed to verify: %v", err)
+	}
+
+	if result.Value != "hello world" {
+		t.Errorf("expected 'hello world', got %v", result.Value)
+	}
+}
+
+func TestClient_Fill_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Try to fill non-existent element
+	err = client.Fill(ctx, pages[0].ID, "#nonexistent-input-12345", "test")
+	if err == nil {
+		t.Error("expected error for non-existent element")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %v", err)
+	}
+}

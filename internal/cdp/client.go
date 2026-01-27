@@ -583,6 +583,87 @@ func (c *Client) Click(ctx context.Context, targetID string, selector string) er
 	return nil
 }
 
+// Fill fills an input element with text.
+func (c *Client) Fill(ctx context.Context, targetID string, selector string, text string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query selector
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Focus the element
+	_, err = c.CallSession(ctx, sessionID, "DOM.focus", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return fmt.Errorf("focusing element: %w", err)
+	}
+
+	// Enable Runtime to clear value via JS
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	// Clear the input value using JavaScript
+	_, err = c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression": fmt.Sprintf(`document.querySelector(%q).value = ''`, selector),
+	})
+	if err != nil {
+		return fmt.Errorf("clearing input value: %w", err)
+	}
+
+	// Insert the text
+	_, err = c.CallSession(ctx, sessionID, "Input.insertText", map[string]interface{}{
+		"text": text,
+	})
+	if err != nil {
+		return fmt.Errorf("inserting text: %w", err)
+	}
+
+	return nil
+}
+
 // CallSession sends a CDP command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {
