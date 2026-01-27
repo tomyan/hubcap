@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -159,6 +159,8 @@ func run(args []string, cfg *Config) int {
 		return cmdConsole(cfg, remaining[1:])
 	case "cookies":
 		return cmdCookies(cfg, remaining[1:])
+	case "pdf":
+		return cmdPDF(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -562,6 +564,55 @@ func splitCookieValue(s string) []string {
 		return []string{s}
 	}
 	return []string{s[:idx], s[idx+1:]}
+}
+
+func cmdPDF(cfg *Config, args []string) int {
+	// Parse pdf-specific flags
+	fs := flag.NewFlagSet("pdf", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	output := fs.String("output", "", "Output file path (required)")
+	landscape := fs.Bool("landscape", false, "Landscape orientation")
+	background := fs.Bool("background", false, "Print background graphics")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *output == "" {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp pdf --output <file> [--landscape] [--background]")
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		data, err := client.PrintToPDF(ctx, pages[0].ID, cdp.PDFOptions{
+			Landscape:       *landscape,
+			PrintBackground: *background,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if err := os.WriteFile(*output, data, 0644); err != nil {
+			return nil, fmt.Errorf("writing file: %w", err)
+		}
+
+		return map[string]interface{}{
+			"output":    *output,
+			"size":      len(data),
+			"landscape": *landscape,
+		}, nil
+	})
 }
 
 func cmdWait(cfg *Config, args []string) int {

@@ -1394,3 +1394,50 @@ func TestClient_SetCookie_Success(t *testing.T) {
 		t.Error("cookie was not set correctly")
 	}
 }
+
+func TestClient_PrintToPDF_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to a page with content
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Generate PDF
+	data, err := client.PrintToPDF(ctx, pages[0].ID, cdp.PDFOptions{})
+	if err != nil {
+		t.Fatalf("failed to print to PDF: %v", err)
+	}
+
+	// PDF magic bytes: %PDF-
+	if len(data) < 5 {
+		t.Fatal("PDF data too small")
+	}
+	pdfMagic := []byte{0x25, 0x50, 0x44, 0x46, 0x2D} // %PDF-
+	for i, b := range pdfMagic {
+		if data[i] != b {
+			t.Fatalf("not a valid PDF: byte %d is %x, expected %x", i, data[i], b)
+		}
+	}
+}

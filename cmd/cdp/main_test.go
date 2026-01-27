@@ -822,3 +822,58 @@ func TestRun_Cookies_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_PDF_MissingOutput(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"pdf"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_PDF_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Navigate to a page first
+	run([]string{"goto", "https://example.com"}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a temp file for output
+	tmpfile, err := os.CreateTemp("", "test*.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpfile.Close()
+	defer os.Remove(tmpfile.Name())
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"pdf", "--output", tmpfile.Name()}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify PDF was created and has PDF magic bytes
+	data, err := os.ReadFile(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if len(data) < 5 || string(data[:5]) != "%PDF-" {
+		t.Error("output file is not a valid PDF")
+	}
+}
+
+func TestRun_PDF_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"pdf", "--output", "/tmp/test.pdf"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

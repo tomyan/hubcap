@@ -94,6 +94,21 @@ type Cookie struct {
 	SameSite string  `json:"sameSite,omitempty"`
 }
 
+// PDFOptions configures PDF generation.
+type PDFOptions struct {
+	Landscape           bool    `json:"landscape,omitempty"`
+	PrintBackground     bool    `json:"printBackground,omitempty"`
+	Scale               float64 `json:"scale,omitempty"`
+	PaperWidth          float64 `json:"paperWidth,omitempty"`  // inches
+	PaperHeight         float64 `json:"paperHeight,omitempty"` // inches
+	MarginTop           float64 `json:"marginTop,omitempty"`   // inches
+	MarginBottom        float64 `json:"marginBottom,omitempty"`
+	MarginLeft          float64 `json:"marginLeft,omitempty"`
+	MarginRight         float64 `json:"marginRight,omitempty"`
+	PageRanges          string  `json:"pageRanges,omitempty"` // e.g. "1-5, 8"
+	PreferCSSPageSize   bool    `json:"preferCSSPageSize,omitempty"`
+}
+
 // QueryResult contains the result of querying for a DOM element.
 type QueryResult struct {
 	NodeID     int               `json:"nodeId"`
@@ -1023,6 +1038,69 @@ func (c *Client) SetCookie(ctx context.Context, targetID string, cookie Cookie) 
 	}
 
 	return nil
+}
+
+// PrintToPDF generates a PDF of the page.
+func (c *Client) PrintToPDF(ctx context.Context, targetID string, opts PDFOptions) ([]byte, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	params := make(map[string]interface{})
+	if opts.Landscape {
+		params["landscape"] = opts.Landscape
+	}
+	if opts.PrintBackground {
+		params["printBackground"] = opts.PrintBackground
+	}
+	if opts.Scale > 0 {
+		params["scale"] = opts.Scale
+	}
+	if opts.PaperWidth > 0 {
+		params["paperWidth"] = opts.PaperWidth
+	}
+	if opts.PaperHeight > 0 {
+		params["paperHeight"] = opts.PaperHeight
+	}
+	if opts.MarginTop > 0 {
+		params["marginTop"] = opts.MarginTop
+	}
+	if opts.MarginBottom > 0 {
+		params["marginBottom"] = opts.MarginBottom
+	}
+	if opts.MarginLeft > 0 {
+		params["marginLeft"] = opts.MarginLeft
+	}
+	if opts.MarginRight > 0 {
+		params["marginRight"] = opts.MarginRight
+	}
+	if opts.PageRanges != "" {
+		params["pageRanges"] = opts.PageRanges
+	}
+	if opts.PreferCSSPageSize {
+		params["preferCSSPageSize"] = opts.PreferCSSPageSize
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Page.printToPDF", params)
+	if err != nil {
+		return nil, fmt.Errorf("generating PDF: %w", err)
+	}
+
+	var pdfResp struct {
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal(result, &pdfResp); err != nil {
+		return nil, fmt.Errorf("parsing PDF response: %w", err)
+	}
+
+	// Decode base64
+	data, err := base64.StdEncoding.DecodeString(pdfResp.Data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding PDF data: %w", err)
+	}
+
+	return data, nil
 }
 
 // CallSession sends a CDP command to a specific session.
