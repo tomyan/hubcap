@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -182,6 +182,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdHover(cfg, remaining[1])
+	case "attr":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
+			return ExitError
+		}
+		return cmdAttr(cfg, remaining[1], remaining[2])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -816,6 +822,32 @@ func cmdHover(cfg *Config, selector string) int {
 		}
 
 		return HoverResult{Hovered: true, Selector: selector}, nil
+	})
+}
+
+// AttrResult is returned by the attr command.
+type AttrResult struct {
+	Selector  string `json:"selector"`
+	Attribute string `json:"attribute"`
+	Value     string `json:"value"`
+}
+
+func cmdAttr(cfg *Config, selector, attribute string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		value, err := client.GetAttribute(ctx, pages[0].ID, selector, attribute)
+		if err != nil {
+			return nil, err
+		}
+
+		return AttrResult{Selector: selector, Attribute: attribute, Value: value}, nil
 	})
 }
 

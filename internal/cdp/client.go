@@ -1286,6 +1286,79 @@ func (c *Client) Focus(ctx context.Context, targetID string, selector string) er
 	return nil
 }
 
+// GetAttribute returns the value of an attribute for an element.
+func (c *Client) GetAttribute(ctx context.Context, targetID string, selector string, name string) (string, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return "", err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return "", fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return "", fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int64 `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return "", fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query for element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return "", fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int64 `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return "", fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return "", fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get attributes using DOM.getAttributes
+	attrResult, err := c.CallSession(ctx, sessionID, "DOM.getAttributes", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting attributes: %w", err)
+	}
+
+	var attrResp struct {
+		Attributes []string `json:"attributes"` // [name, value, name, value, ...]
+	}
+	if err := json.Unmarshal(attrResult, &attrResp); err != nil {
+		return "", fmt.Errorf("parsing attributes response: %w", err)
+	}
+
+	// Find the attribute by name
+	for i := 0; i < len(attrResp.Attributes)-1; i += 2 {
+		if attrResp.Attributes[i] == name {
+			return attrResp.Attributes[i+1], nil
+		}
+	}
+
+	return "", nil // Attribute not found, return empty string
+}
+
 // Hover moves the mouse over an element specified by selector.
 func (c *Client) Hover(ctx context.Context, targetID string, selector string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

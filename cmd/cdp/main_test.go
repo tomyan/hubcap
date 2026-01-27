@@ -1145,3 +1145,63 @@ func TestRun_Hover_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Attr_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"attr"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	cfg = testConfig()
+	code = run([]string{"attr", "#test"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Attr_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to blank page and create a link
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	code = run([]string{"eval", `document.body.innerHTML = '<a id="link" href="https://test.com">Test</a>'`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create link: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"attr", "#link", "href"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["value"] != "https://test.com" {
+		t.Errorf("expected value 'https://test.com', got %v", result["value"])
+	}
+}
+
+func TestRun_Attr_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"attr", "#test", "href"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
