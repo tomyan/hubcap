@@ -922,6 +922,59 @@ func (c *Client) Type(ctx context.Context, targetID string, text string) error {
 	return nil
 }
 
+// keyCodeMap maps key names to their key codes.
+var keyCodeMap = map[string]int{
+	"Enter":      13,
+	"Tab":        9,
+	"Escape":     27,
+	"Backspace":  8,
+	"Delete":     46,
+	"ArrowUp":    38,
+	"ArrowDown":  40,
+	"ArrowLeft":  37,
+	"ArrowRight": 39,
+	"Home":       36,
+	"End":        35,
+	"PageUp":     33,
+	"PageDown":   34,
+	"Space":      32,
+}
+
+// PressKey presses a special key (Enter, Tab, Escape, etc.).
+func (c *Client) PressKey(ctx context.Context, targetID string, key string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Get key code if available
+	keyCode, hasKeyCode := keyCodeMap[key]
+
+	params := map[string]interface{}{
+		"type": "keyDown",
+		"key":  key,
+	}
+	if hasKeyCode {
+		params["windowsVirtualKeyCode"] = keyCode
+		params["nativeVirtualKeyCode"] = keyCode
+	}
+
+	// keyDown
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", params)
+	if err != nil {
+		return fmt.Errorf("keyDown for %q: %w", key, err)
+	}
+
+	// keyUp
+	params["type"] = "keyUp"
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", params)
+	if err != nil {
+		return fmt.Errorf("keyUp for %q: %w", key, err)
+	}
+
+	return nil
+}
+
 // CaptureConsole starts capturing console messages from a page.
 // Returns a channel that receives messages. The channel is buffered.
 // The caller should read from the channel to receive messages.

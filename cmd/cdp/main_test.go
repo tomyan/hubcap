@@ -1029,3 +1029,65 @@ func TestRun_Network_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Press_MissingKey(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"press"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Press_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to blank page and create an input
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	code = run([]string{"eval", `document.body.innerHTML = '<input id="press-input" type="text" />'`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create input: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	code = run([]string{"focus", "#press-input"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to focus: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"press", "Enter"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["pressed"] != true {
+		t.Errorf("expected pressed: true, got %v", result["pressed"])
+	}
+	if result["key"] != "Enter" {
+		t.Errorf("expected key: Enter, got %v", result["key"])
+	}
+}
+
+func TestRun_Press_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"press", "Enter"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -169,6 +169,13 @@ func run(args []string, cfg *Config) int {
 		return cmdFocus(cfg, remaining[1])
 	case "network":
 		return cmdNetwork(cfg, remaining[1:])
+	case "press":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp press <key>")
+			fmt.Fprintln(cfg.Stderr, "keys: Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown, Space")
+			return ExitError
+		}
+		return cmdPress(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -753,6 +760,31 @@ func cmdFocus(cfg *Config, selector string) int {
 		}
 
 		return FocusResult{Focused: true, Selector: selector}, nil
+	})
+}
+
+// PressResult is returned by the press command.
+type PressResult struct {
+	Pressed bool   `json:"pressed"`
+	Key     string `json:"key"`
+}
+
+func cmdPress(cfg *Config, key string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.PressKey(ctx, pages[0].ID, key)
+		if err != nil {
+			return nil, err
+		}
+
+		return PressResult{Pressed: true, Key: key}, nil
 	})
 }
 

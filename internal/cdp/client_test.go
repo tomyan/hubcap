@@ -1689,3 +1689,68 @@ func TestClient_CaptureNetwork_Success(t *testing.T) {
 		}
 	}
 }
+
+func TestClient_PressKey_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page and create a form with input
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Create a form with a text input that tracks key events
+	_, err = client.Eval(ctx, pages[0].ID, `
+		document.body.innerHTML = '<input id="test-input" type="text" />';
+		window.lastKey = '';
+		document.getElementById('test-input').addEventListener('keydown', (e) => {
+			window.lastKey = e.key;
+		});
+	`)
+	if err != nil {
+		t.Fatalf("failed to create input: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Focus the input
+	err = client.Focus(ctx, pages[0].ID, "#test-input")
+	if err != nil {
+		t.Fatalf("failed to focus: %v", err)
+	}
+
+	// Press the Enter key
+	err = client.PressKey(ctx, pages[0].ID, "Enter")
+	if err != nil {
+		t.Fatalf("failed to press key: %v", err)
+	}
+
+	// Verify the key was pressed
+	result, err := client.Eval(ctx, pages[0].ID, `window.lastKey`)
+	if err != nil {
+		t.Fatalf("failed to verify key: %v", err)
+	}
+
+	if result.Value != "Enter" {
+		t.Errorf("expected lastKey 'Enter', got %v", result.Value)
+	}
+}
