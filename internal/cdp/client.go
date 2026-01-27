@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -728,6 +729,76 @@ func (c *Client) GetHTML(ctx context.Context, targetID string, selector string) 
 	}
 
 	return htmlResp.OuterHTML, nil
+}
+
+// WaitFor waits for an element matching the selector to appear.
+func (c *Client) WaitFor(ctx context.Context, targetID string, selector string, timeout time.Duration) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	deadline := time.Now().Add(timeout)
+	pollInterval := 100 * time.Millisecond
+
+	for {
+		// Check if context is done
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Check timeout
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for selector: %s", selector)
+		}
+
+		// Get document root
+		docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+		if err != nil {
+			return fmt.Errorf("getting document: %w", err)
+		}
+
+		var docResp struct {
+			Root struct {
+				NodeID int `json:"nodeId"`
+			} `json:"root"`
+		}
+		if err := json.Unmarshal(docResult, &docResp); err != nil {
+			return fmt.Errorf("parsing document response: %w", err)
+		}
+
+		// Query selector
+		queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+			"nodeId":   docResp.Root.NodeID,
+			"selector": selector,
+		})
+		if err != nil {
+			return fmt.Errorf("querying selector: %w", err)
+		}
+
+		var queryResp struct {
+			NodeID int `json:"nodeId"`
+		}
+		if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+			return fmt.Errorf("parsing query response: %w", err)
+		}
+
+		// Found!
+		if queryResp.NodeID != 0 {
+			return nil
+		}
+
+		// Wait before polling again
+		time.Sleep(pollInterval)
+	}
 }
 
 // CallSession sends a CDP command to a specific session.

@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -137,6 +137,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdHTML(cfg, remaining[1])
+	case "wait":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp wait <selector> [--timeout <duration>]")
+			return ExitError
+		}
+		return cmdWait(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -344,6 +350,50 @@ func cmdHTML(cfg *Config, selector string) int {
 		}
 
 		return HTMLResult{Selector: selector, HTML: html}, nil
+	})
+}
+
+// WaitResult is returned by the wait command.
+type WaitResult struct {
+	Found    bool   `json:"found"`
+	Selector string `json:"selector"`
+}
+
+func cmdWait(cfg *Config, args []string) int {
+	// Parse wait-specific flags
+	fs := flag.NewFlagSet("wait", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp wait <selector> [--timeout <duration>]")
+		return ExitError
+	}
+	selector := remaining[0]
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.WaitFor(ctx, pages[0].ID, selector, *timeout)
+		if err != nil {
+			return nil, err
+		}
+
+		return WaitResult{Found: true, Selector: selector}, nil
 	})
 }
 

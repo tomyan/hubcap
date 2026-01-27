@@ -960,3 +960,111 @@ func TestClient_GetHTML_NotFound(t *testing.T) {
 		t.Error("expected error for non-existent element")
 	}
 }
+
+func TestClient_WaitFor_ImmediateMatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Create element immediately
+	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<div id="exists">Test</div>'`)
+	if err != nil {
+		t.Fatalf("failed to create element: %v", err)
+	}
+
+	// Wait should return immediately
+	err = client.WaitFor(ctx, pages[0].ID, "#exists", 5*time.Second)
+	if err != nil {
+		t.Fatalf("WaitFor failed: %v", err)
+	}
+}
+
+func TestClient_WaitFor_DelayedAppear(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Set up delayed element creation (500ms)
+	_, err = client.Eval(ctx, pages[0].ID, `
+		document.body.innerHTML = '';
+		setTimeout(() => {
+			document.body.innerHTML = '<div id="delayed">Appeared</div>';
+		}, 500);
+	`)
+	if err != nil {
+		t.Fatalf("failed to set up delayed element: %v", err)
+	}
+
+	// Wait should poll and find it
+	err = client.WaitFor(ctx, pages[0].ID, "#delayed", 5*time.Second)
+	if err != nil {
+		t.Fatalf("WaitFor failed: %v", err)
+	}
+}
+
+func TestClient_WaitFor_Timeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Wait for non-existent element with short timeout
+	err = client.WaitFor(ctx, pages[0].ID, "#never-exists", 500*time.Millisecond)
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Errorf("expected 'timeout' in error, got: %v", err)
+	}
+}
