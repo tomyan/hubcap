@@ -1638,6 +1638,35 @@ func (c *Client) ExecuteScriptFile(ctx context.Context, targetID string, content
 	return c.Eval(ctx, targetID, content)
 }
 
+// RawCall sends a raw CDP command at the browser level.
+// Returns the raw JSON response.
+func (c *Client) RawCall(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+	var p interface{}
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("invalid params JSON: %w", err)
+		}
+	}
+	return c.Call(ctx, method, p)
+}
+
+// RawCallSession sends a raw CDP command to a specific target/session.
+// Returns the raw JSON response.
+func (c *Client) RawCallSession(ctx context.Context, targetID string, method string, params json.RawMessage) (json.RawMessage, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	var p interface{}
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("invalid params JSON: %w", err)
+		}
+	}
+	return c.CallSession(ctx, sessionID, method, p)
+}
+
 // CloseTab closes a browser tab by its target ID.
 func (c *Client) CloseTab(ctx context.Context, targetID string) error {
 	_, err := c.Call(ctx, "Target.closeTarget", map[string]interface{}{

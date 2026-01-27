@@ -2378,3 +2378,79 @@ func TestClient_LocalStorage_Success(t *testing.T) {
 		t.Errorf("expected empty after clear, got '%s'", value)
 	}
 }
+
+func TestClient_RawCall_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Test browser-level command
+	result, err := client.RawCall(ctx, "Target.getTargets", nil)
+	if err != nil {
+		t.Fatalf("failed to call: %v", err)
+	}
+
+	if len(result) == 0 {
+		t.Error("expected non-empty result")
+	}
+
+	// Verify it's valid JSON with targetInfos
+	var resp struct {
+		TargetInfos []interface{} `json:"targetInfos"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		t.Errorf("failed to parse result: %v", err)
+	}
+}
+
+func TestClient_RawCallSession_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Test session-level command with params
+	params := json.RawMessage(`{"expression":"1+1"}`)
+	result, err := client.RawCallSession(ctx, pages[0].ID, "Runtime.evaluate", params)
+	if err != nil {
+		t.Fatalf("failed to call: %v", err)
+	}
+
+	// Verify result contains value: 2
+	var resp struct {
+		Result struct {
+			Value float64 `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		t.Errorf("failed to parse result: %v", err)
+	}
+	if resp.Result.Value != 2 {
+		t.Errorf("expected value 2, got %v", resp.Result.Value)
+	}
+}

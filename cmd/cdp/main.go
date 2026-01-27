@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -290,6 +290,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdRun(cfg, remaining[1])
+	case "raw":
+		return cmdRaw(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1643,6 +1645,84 @@ func cmdRun(cfg *Config, file string) int {
 
 		return RunResult{File: file, Value: result.Value}, nil
 	})
+}
+
+func cmdRaw(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("raw", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	browser := fs.Bool("browser", false, "Send command at browser level (not to a page target)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) == 0 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp raw [--browser] <method> [params-json]")
+		fmt.Fprintln(cfg.Stderr, "")
+		fmt.Fprintln(cfg.Stderr, "examples:")
+		fmt.Fprintln(cfg.Stderr, "  cdp raw Page.navigate '{\"url\":\"https://example.com\"}'")
+		fmt.Fprintln(cfg.Stderr, "  cdp raw Runtime.evaluate '{\"expression\":\"1+1\"}'")
+		fmt.Fprintln(cfg.Stderr, "  cdp raw --browser Target.getTargets")
+		fmt.Fprintln(cfg.Stderr, "  cdp raw DOM.getDocument")
+		return ExitError
+	}
+
+	method := remaining[0]
+	var params json.RawMessage
+	if len(remaining) > 1 {
+		params = json.RawMessage(remaining[1])
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer client.Close()
+
+	var result json.RawMessage
+
+	if *browser {
+		// Browser-level command
+		result, err = client.RawCall(ctx, method, params)
+	} else {
+		// Session-level command (to first page)
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+			return ExitError
+		}
+		if len(pages) == 0 {
+			fmt.Fprintln(cfg.Stderr, "error: no pages available")
+			return ExitError
+		}
+		result, err = client.RawCallSession(ctx, pages[0].ID, method, params)
+	}
+
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	// Pretty-print the result
+	var prettyResult interface{}
+	if err := json.Unmarshal(result, &prettyResult); err != nil {
+		// If we can't parse it, just output raw
+		fmt.Fprintln(cfg.Stdout, string(result))
+	} else {
+		enc := json.NewEncoder(cfg.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(prettyResult)
+	}
+
+	return ExitSuccess
 }
 
 func cmdWait(cfg *Config, args []string) int {

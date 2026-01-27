@@ -1,7 +1,7 @@
 # CDP CLI Progress Tracker
 
 ## Current State
-- **Last Commit**: c8b3d26 - Slices 29-48 (Major feature expansion)
+- **Last Commit**: adf5b16 - Slices 47-48 (Dialog and run)
 - **Chrome Status**: Running headless on port 9222
 
 ## Completed Slices
@@ -146,16 +146,22 @@
 - `cdp storage <key> <value>` - set localStorage value
 - `cdp storage --clear` - clear localStorage
 
-## Next Slices
+### Slice 47: Handle dialog ✅
+- `cdp dialog [accept|dismiss] [--text]` - handle alert/confirm/prompt dialogs
 
-### Slice 47: Handle dialog
-- `cdp dialog [accept|dismiss]` - handle alert/confirm/prompt dialogs
-
-### Slice 48: Execute script file
+### Slice 48: Execute script file ✅
 - `cdp run <file.js>` - execute JavaScript from file
+
+## Next Slices
 
 ### Slice 49: Target selection
 - `--target <id|index>` global flag for page selection
+
+### Slice 50: Device emulation
+- `cdp emulate <device>` - emulate mobile devices
+
+### Slice 51: User agent
+- `cdp useragent <string>` - set custom user agent
 
 ## Test Command
 ```bash
@@ -167,7 +173,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (45 commands)
+## Commands Implemented (47 commands)
 ```
 # Browser info
 cdp version
@@ -241,6 +247,12 @@ cdp storage <key> [value] [--clear]
 # Streaming/monitoring
 cdp console [--duration <duration>]
 cdp network [--duration <duration>]
+
+# Dialog handling
+cdp dialog [accept|dismiss] [--text <prompt>]
+
+# Script execution
+cdp run <file.js>
 ```
 
 ## Known Issues / Deferred Items
