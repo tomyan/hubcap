@@ -1205,3 +1205,74 @@ func TestRun_Attr_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Reload_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to a page first
+	code := run([]string{"goto", "https://example.com"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"reload"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["reloaded"] != true {
+		t.Errorf("expected reloaded: true, got %v", result["reloaded"])
+	}
+}
+
+func TestRun_Reload_BypassCache(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to a page first
+	code := run([]string{"goto", "https://example.com"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"reload", "--bypass-cache"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["ignoreCache"] != true {
+		t.Errorf("expected ignoreCache: true, got %v", result["ignoreCache"])
+	}
+}
+
+func TestRun_Reload_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"reload"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

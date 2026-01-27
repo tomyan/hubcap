@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -188,6 +188,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdAttr(cfg, remaining[1], remaining[2])
+	case "reload":
+		return cmdReload(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -848,6 +850,43 @@ func cmdAttr(cfg *Config, selector, attribute string) int {
 		}
 
 		return AttrResult{Selector: selector, Attribute: attribute, Value: value}, nil
+	})
+}
+
+// ReloadResult is returned by the reload command.
+type ReloadResult struct {
+	Reloaded    bool `json:"reloaded"`
+	IgnoreCache bool `json:"ignoreCache"`
+}
+
+func cmdReload(cfg *Config, args []string) int {
+	// Parse reload-specific flags
+	fs := flag.NewFlagSet("reload", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	ignoreCache := fs.Bool("bypass-cache", false, "Bypass browser cache")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.Reload(ctx, pages[0].ID, *ignoreCache)
+		if err != nil {
+			return nil, err
+		}
+
+		return ReloadResult{Reloaded: true, IgnoreCache: *ignoreCache}, nil
 	})
 }
 

@@ -359,6 +359,33 @@ func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*Na
 	}, nil
 }
 
+// Reload reloads the page. If ignoreCache is true, the browser cache is bypassed.
+func (c *Client) Reload(ctx context.Context, targetID string, ignoreCache bool) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Page domain on the session
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Reload
+	params := map[string]interface{}{}
+	if ignoreCache {
+		params["ignoreCache"] = true
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Page.reload", params)
+	if err != nil {
+		return fmt.Errorf("reloading: %w", err)
+	}
+
+	return nil
+}
+
 // Screenshot captures a screenshot of a target.
 func (c *Client) Screenshot(ctx context.Context, targetID string, opts ScreenshotOptions) ([]byte, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

@@ -1904,3 +1904,50 @@ func TestClient_GetAttribute_NotFound(t *testing.T) {
 		t.Error("expected error for non-existent element")
 	}
 }
+
+func TestClient_Reload_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to example.com first
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Reload the page
+	err = client.Reload(ctx, pages[0].ID, false)
+	if err != nil {
+		t.Fatalf("failed to reload: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify we're still on example.com by checking the title
+	result, err := client.Eval(ctx, pages[0].ID, `document.location.hostname`)
+	if err != nil {
+		t.Fatalf("failed to get hostname: %v", err)
+	}
+
+	if result.Value != "example.com" {
+		t.Errorf("expected hostname 'example.com', got %v", result.Value)
+	}
+}
