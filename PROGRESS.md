@@ -171,6 +171,9 @@
 ### Slice 53: Geolocation ✅
 - `cdp geolocation <lat> <lon>` - set geolocation override
 
+### Slice 54: Offline mode ✅
+- `cdp offline <true|false>` - enable/disable offline mode
+
 ## Next Slices
 
 ## Test Command
@@ -183,7 +186,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (51 commands)
+## Commands Implemented (52 commands)
 ```
 # Browser info
 cdp version
@@ -268,6 +271,7 @@ cdp run <file.js>
 cdp emulate <device>
 cdp useragent <string>
 cdp geolocation <latitude> <longitude>
+cdp offline <true|false>
 ```
 
 ## Known Issues / Deferred Items

@@ -316,6 +316,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdGeolocation(cfg, remaining[1], remaining[2])
+	case "offline":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp offline <true|false>")
+			return ExitError
+		}
+		return cmdOffline(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1410,6 +1416,26 @@ type GeolocationResult struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 	Accuracy  float64 `json:"accuracy"`
+}
+
+type OfflineResult struct {
+	Offline bool `json:"offline"`
+}
+
+func cmdOffline(cfg *Config, offlineStr string) int {
+	offline, err := strconv.ParseBool(offlineStr)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: invalid value, use 'true' or 'false'\n")
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetOfflineMode(ctx, target.ID, offline)
+		if err != nil {
+			return nil, err
+		}
+		return OfflineResult{Offline: offline}, nil
+	})
 }
 
 func cmdGeolocation(cfg *Config, latStr, lonStr string) int {

@@ -2557,6 +2557,33 @@ func (c *Client) unsubscribeEvent(sessionID, method string, ch chan json.RawMess
 	}
 }
 
+// SetOfflineMode enables or disables offline mode for network emulation.
+func (c *Client) SetOfflineMode(ctx context.Context, targetID string, offline bool) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Network domain
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling network: %w", err)
+	}
+
+	// Set network conditions
+	_, err = c.CallSession(ctx, sessionID, "Network.emulateNetworkConditions", map[string]interface{}{
+		"offline":            offline,
+		"latency":            0,
+		"downloadThroughput": -1,
+		"uploadThroughput":   -1,
+	})
+	if err != nil {
+		return fmt.Errorf("setting offline mode: %w", err)
+	}
+
+	return nil
+}
+
 // SetGeolocation overrides the geolocation for the specified target.
 func (c *Client) SetGeolocation(ctx context.Context, targetID string, latitude, longitude, accuracy float64) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
