@@ -849,6 +849,42 @@ func TestRun_Cookies_Delete(t *testing.T) {
 	}
 }
 
+func TestRun_Cookies_Clear(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Navigate to a page first
+	run([]string{"goto", "https://example.com"}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	// Set some cookies
+	run([]string{"cookies", "--set", "clear1=val1", "--domain", "example.com"}, cfg)
+	run([]string{"cookies", "--set", "clear2=val2", "--domain", "example.com"}, cfg)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Clear all cookies
+	code := run([]string{"cookies", "--clear"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["cleared"] != true {
+		t.Errorf("expected cleared: true, got %v", result["cleared"])
+	}
+}
+
 func TestRun_Cookies_NoChrome(t *testing.T) {
 	cfg := testConfig()
 	cfg.Port = 1 // Invalid port

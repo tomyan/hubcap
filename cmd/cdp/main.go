@@ -493,6 +493,7 @@ func cmdCookies(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	setName := fs.String("set", "", "Cookie name=value to set")
 	deleteName := fs.String("delete", "", "Cookie name to delete")
+	clearAll := fs.Bool("clear", false, "Clear all cookies")
 	domain := fs.String("domain", "", "Cookie domain (for set/delete)")
 
 	if err := fs.Parse(args); err != nil {
@@ -559,6 +560,28 @@ func cmdCookies(cfg *Config, args []string) int {
 				"deleted": true,
 				"name":    *deleteName,
 				"domain":  *domain,
+			}, nil
+		})
+	}
+
+	if *clearAll {
+		// Clear all cookies mode
+		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+			pages, err := client.Pages(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(pages) == 0 {
+				return nil, fmt.Errorf("no pages available")
+			}
+
+			err = client.ClearCookies(ctx, pages[0].ID)
+			if err != nil {
+				return nil, err
+			}
+
+			return map[string]interface{}{
+				"cleared": true,
 			}, nil
 		})
 	}

@@ -1514,3 +1514,67 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 		}
 	}
 }
+
+func TestClient_ClearCookies_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to a page first
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Set some cookies
+	err = client.SetCookie(ctx, pages[0].ID, cdp.Cookie{
+		Name:   "clear_test1",
+		Value:  "value1",
+		Domain: "example.com",
+	})
+	if err != nil {
+		t.Fatalf("failed to set cookie 1: %v", err)
+	}
+	err = client.SetCookie(ctx, pages[0].ID, cdp.Cookie{
+		Name:   "clear_test2",
+		Value:  "value2",
+		Domain: "example.com",
+	})
+	if err != nil {
+		t.Fatalf("failed to set cookie 2: %v", err)
+	}
+
+	// Clear all cookies
+	err = client.ClearCookies(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to clear cookies: %v", err)
+	}
+
+	// Verify cookies are gone
+	cookies, err := client.GetCookies(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get cookies: %v", err)
+	}
+
+	if len(cookies) > 0 {
+		t.Errorf("expected no cookies after clear, got %d", len(cookies))
+	}
+}

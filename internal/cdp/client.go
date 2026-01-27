@@ -1062,6 +1062,21 @@ func (c *Client) DeleteCookie(ctx context.Context, targetID string, name, domain
 	return nil
 }
 
+// ClearCookies clears all cookies.
+func (c *Client) ClearCookies(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Network.clearBrowserCookies", nil)
+	if err != nil {
+		return fmt.Errorf("clearing cookies: %w", err)
+	}
+
+	return nil
+}
+
 // PrintToPDF generates a PDF of the page.
 func (c *Client) PrintToPDF(ctx context.Context, targetID string, opts PDFOptions) ([]byte, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
