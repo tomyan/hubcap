@@ -1744,6 +1744,7 @@ func TestClient_PressKey_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to press key: %v", err)
 	}
+	time.Sleep(100 * time.Millisecond) // Wait for key event to be processed
 
 	// Verify the key was pressed
 	result, err := client.Eval(ctx, pages[0].ID, `window.lastKey`)

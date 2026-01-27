@@ -28,6 +28,7 @@ type Config struct {
 	Timeout time.Duration
 	Output  string // json, ndjson, text
 	Quiet   bool
+	Target  string // target index or ID
 
 	Stdout io.Writer
 	Stderr io.Writer
@@ -75,6 +76,7 @@ func run(args []string, cfg *Config) int {
 	fs.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Command timeout")
 	fs.StringVar(&cfg.Output, "output", cfg.Output, "Output format: json, ndjson, text")
 	fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "Suppress non-essential output")
+	fs.StringVar(&cfg.Target, "target", cfg.Target, "Target page (index or ID)")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -298,6 +300,42 @@ func run(args []string, cfg *Config) int {
 	}
 }
 
+// resolveTarget resolves the target page from cfg.Target.
+// If cfg.Target is empty, returns the first page.
+// If cfg.Target is a number, uses it as an index into the pages list.
+// Otherwise, treats cfg.Target as a target ID.
+func resolveTarget(ctx context.Context, client *cdp.Client, cfg *Config) (*cdp.TargetInfo, error) {
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(pages) == 0 {
+		return nil, fmt.Errorf("no pages available")
+	}
+
+	// Default: first page
+	if cfg.Target == "" {
+		return &pages[0], nil
+	}
+
+	// Try as index first
+	if idx, err := strconv.Atoi(cfg.Target); err == nil {
+		if idx < 0 || idx >= len(pages) {
+			return nil, fmt.Errorf("invalid target index: %d (have %d pages)", idx, len(pages))
+		}
+		return &pages[idx], nil
+	}
+
+	// Otherwise, treat as target ID
+	for i := range pages {
+		if pages[i].ID == cfg.Target {
+			return &pages[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid target: %s (not found)", cfg.Target)
+}
+
 // withClient executes a function with a connected CDP client.
 func withClient(cfg *Config, fn func(ctx context.Context, client *cdp.Client) (interface{}, error)) int {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
@@ -323,6 +361,37 @@ func withClient(cfg *Config, fn func(ctx context.Context, client *cdp.Client) (i
 	return outputResult(cfg, result)
 }
 
+// withClientTarget executes a function with a connected CDP client and resolved target.
+func withClientTarget(cfg *Config, fn func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error)) int {
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer client.Close()
+
+	target, err := resolveTarget(ctx, client, cfg)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	result, err := fn(ctx, client, target)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			fmt.Fprintln(cfg.Stderr, "error: timeout")
+			return ExitTimeout
+		}
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	return outputResult(cfg, result)
+}
+
 func cmdVersion(cfg *Config) int {
 	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
 		return client.Version(ctx)
@@ -336,17 +405,8 @@ func cmdTabs(cfg *Config) int {
 }
 
 func cmdGoto(cfg *Config, url string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		// Get first page to navigate
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		return client.Navigate(ctx, pages[0].ID, url)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.Navigate(ctx, target.ID, url)
 	})
 }
 
@@ -370,16 +430,8 @@ func cmdScreenshot(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		data, err := client.Screenshot(ctx, pages[0].ID, cdp.ScreenshotOptions{
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		data, err := client.Screenshot(ctx, target.ID, cdp.ScreenshotOptions{
 			Format:  *format,
 			Quality: *quality,
 		})
@@ -399,30 +451,14 @@ func cmdScreenshot(cfg *Config, args []string) int {
 }
 
 func cmdEval(cfg *Config, expression string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		return client.Eval(ctx, pages[0].ID, expression)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.Eval(ctx, target.ID, expression)
 	})
 }
 
 func cmdQuery(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		return client.Query(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.Query(ctx, target.ID, selector)
 	})
 }
 
@@ -433,20 +469,11 @@ type ClickResult struct {
 }
 
 func cmdClick(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Click(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.Click(ctx, pages[0].ID, selector)
-		if err != nil {
-			return nil, err
-		}
-
 		return ClickResult{Clicked: true, Selector: selector}, nil
 	})
 }
@@ -459,20 +486,11 @@ type FillResult struct {
 }
 
 func cmdFill(cfg *Config, selector, text string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Fill(ctx, target.ID, selector, text)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.Fill(ctx, pages[0].ID, selector, text)
-		if err != nil {
-			return nil, err
-		}
-
 		return FillResult{Filled: true, Selector: selector, Text: text}, nil
 	})
 }
@@ -484,20 +502,11 @@ type HTMLResult struct {
 }
 
 func cmdHTML(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		html, err := client.GetHTML(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		html, err := client.GetHTML(ctx, pages[0].ID, selector)
-		if err != nil {
-			return nil, err
-		}
-
 		return HTMLResult{Selector: selector, HTML: html}, nil
 	})
 }
@@ -515,20 +524,11 @@ type TextResult struct {
 }
 
 func cmdText(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		text, err := client.GetText(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		text, err := client.GetText(ctx, pages[0].ID, selector)
-		if err != nil {
-			return nil, err
-		}
-
 		return TextResult{Selector: selector, Text: text}, nil
 	})
 }
@@ -540,20 +540,11 @@ type TypeResult struct {
 }
 
 func cmdType(cfg *Config, text string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Type(ctx, target.ID, text)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.Type(ctx, pages[0].ID, text)
-		if err != nil {
-			return nil, err
-		}
-
 		return TypeResult{Typed: true, Text: text}, nil
 	})
 }
@@ -585,17 +576,13 @@ func cmdConsole(cfg *Config, args []string) int {
 	}
 	defer client.Close()
 
-	pages, err := client.Pages(ctx)
+	target, err := resolveTarget(ctx, client, cfg)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
 	}
-	if len(pages) == 0 {
-		fmt.Fprintln(cfg.Stderr, "error: no pages available")
-		return ExitError
-	}
 
-	messages, err := client.CaptureConsole(ctx, pages[0].ID)
+	messages, err := client.CaptureConsole(ctx, target.ID)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
@@ -645,17 +632,13 @@ func cmdNetwork(cfg *Config, args []string) int {
 	}
 	defer client.Close()
 
-	pages, err := client.Pages(ctx)
+	target, err := resolveTarget(ctx, client, cfg)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
 	}
-	if len(pages) == 0 {
-		fmt.Fprintln(cfg.Stderr, "error: no pages available")
-		return ExitError
-	}
 
-	events, err := client.CaptureNetwork(ctx, pages[0].ID)
+	events, err := client.CaptureNetwork(ctx, target.ID)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
@@ -696,15 +679,7 @@ func cmdCookies(cfg *Config, args []string) int {
 
 	if *setName != "" {
 		// Set mode
-		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-			pages, err := client.Pages(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if len(pages) == 0 {
-				return nil, fmt.Errorf("no pages available")
-			}
-
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 			// Parse name=value
 			parts := splitCookieValue(*setName)
 			if len(parts) != 2 {
@@ -717,7 +692,7 @@ func cmdCookies(cfg *Config, args []string) int {
 				Domain: *domain,
 			}
 
-			err = client.SetCookie(ctx, pages[0].ID, cookie)
+			err := client.SetCookie(ctx, target.ID, cookie)
 			if err != nil {
 				return nil, err
 			}
@@ -733,16 +708,8 @@ func cmdCookies(cfg *Config, args []string) int {
 
 	if *deleteName != "" {
 		// Delete mode
-		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-			pages, err := client.Pages(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if len(pages) == 0 {
-				return nil, fmt.Errorf("no pages available")
-			}
-
-			err = client.DeleteCookie(ctx, pages[0].ID, *deleteName, *domain)
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.DeleteCookie(ctx, target.ID, *deleteName, *domain)
 			if err != nil {
 				return nil, err
 			}
@@ -757,16 +724,8 @@ func cmdCookies(cfg *Config, args []string) int {
 
 	if *clearAll {
 		// Clear all cookies mode
-		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-			pages, err := client.Pages(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if len(pages) == 0 {
-				return nil, fmt.Errorf("no pages available")
-			}
-
-			err = client.ClearCookies(ctx, pages[0].ID)
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.ClearCookies(ctx, target.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -778,16 +737,8 @@ func cmdCookies(cfg *Config, args []string) int {
 	}
 
 	// List mode (default)
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		return client.GetCookies(ctx, pages[0].ID)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetCookies(ctx, target.ID)
 	})
 }
 
@@ -825,16 +776,8 @@ func cmdPDF(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		data, err := client.PrintToPDF(ctx, pages[0].ID, cdp.PDFOptions{
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		data, err := client.PrintToPDF(ctx, target.ID, cdp.PDFOptions{
 			Landscape:       *landscape,
 			PrintBackground: *background,
 		})
@@ -861,20 +804,11 @@ type FocusResult struct {
 }
 
 func cmdFocus(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Focus(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.Focus(ctx, pages[0].ID, selector)
-		if err != nil {
-			return nil, err
-		}
-
 		return FocusResult{Focused: true, Selector: selector}, nil
 	})
 }
@@ -886,20 +820,11 @@ type PressResult struct {
 }
 
 func cmdPress(cfg *Config, key string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.PressKey(ctx, target.ID, key)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.PressKey(ctx, pages[0].ID, key)
-		if err != nil {
-			return nil, err
-		}
-
 		return PressResult{Pressed: true, Key: key}, nil
 	})
 }
@@ -911,20 +836,11 @@ type HoverResult struct {
 }
 
 func cmdHover(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Hover(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.Hover(ctx, pages[0].ID, selector)
-		if err != nil {
-			return nil, err
-		}
-
 		return HoverResult{Hovered: true, Selector: selector}, nil
 	})
 }
@@ -937,20 +853,11 @@ type AttrResult struct {
 }
 
 func cmdAttr(cfg *Config, selector, attribute string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		value, err := client.GetAttribute(ctx, target.ID, selector, attribute)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		value, err := client.GetAttribute(ctx, pages[0].ID, selector, attribute)
-		if err != nil {
-			return nil, err
-		}
-
 		return AttrResult{Selector: selector, Attribute: attribute, Value: value}, nil
 	})
 }
@@ -974,20 +881,11 @@ func cmdReload(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Reload(ctx, target.ID, *ignoreCache)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.Reload(ctx, pages[0].ID, *ignoreCache)
-		if err != nil {
-			return nil, err
-		}
-
 		return ReloadResult{Reloaded: true, IgnoreCache: *ignoreCache}, nil
 	})
 }
@@ -998,20 +896,11 @@ type BackResult struct {
 }
 
 func cmdBack(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.GoBack(ctx, target.ID)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.GoBack(ctx, pages[0].ID)
-		if err != nil {
-			return nil, err
-		}
-
 		return BackResult{Success: true}, nil
 	})
 }
@@ -1022,20 +911,11 @@ type ForwardResult struct {
 }
 
 func cmdForward(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.GoForward(ctx, target.ID)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.GoForward(ctx, pages[0].ID)
-		if err != nil {
-			return nil, err
-		}
-
 		return ForwardResult{Success: true}, nil
 	})
 }
@@ -1046,20 +926,11 @@ type TitleResult struct {
 }
 
 func cmdTitle(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		title, err := client.GetTitle(ctx, target.ID)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		title, err := client.GetTitle(ctx, pages[0].ID)
-		if err != nil {
-			return nil, err
-		}
-
 		return TitleResult{Title: title}, nil
 	})
 }
@@ -1070,20 +941,11 @@ type URLResult struct {
 }
 
 func cmdURL(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		url, err := client.GetURL(ctx, target.ID)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		url, err := client.GetURL(ctx, pages[0].ID)
-		if err != nil {
-			return nil, err
-		}
-
 		return URLResult{URL: url}, nil
 	})
 }
@@ -1114,22 +976,12 @@ type CloseTabResult struct {
 }
 
 func cmdClose(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.CloseTab(ctx, target.ID)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		targetID := pages[0].ID
-		err = client.CloseTab(ctx, targetID)
-		if err != nil {
-			return nil, err
-		}
-
-		return CloseTabResult{Closed: true, TargetID: targetID}, nil
+		return CloseTabResult{Closed: true, TargetID: target.ID}, nil
 	})
 }
 
@@ -1140,15 +992,8 @@ type DblClickResult struct {
 }
 
 func cmdDblClick(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.DoubleClick(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.DoubleClick(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1163,15 +1008,8 @@ type RightClickResult struct {
 }
 
 func cmdRightClick(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.RightClick(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.RightClick(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1186,15 +1024,8 @@ type ClearResult struct {
 }
 
 func cmdClear(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.Clear(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Clear(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1210,15 +1041,8 @@ type SelectResult struct {
 }
 
 func cmdSelect(cfg *Config, selector, value string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.SelectOption(ctx, pages[0].ID, selector, value)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SelectOption(ctx, target.ID, selector, value)
 		if err != nil {
 			return nil, err
 		}
@@ -1233,15 +1057,8 @@ type CheckResult struct {
 }
 
 func cmdCheck(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.Check(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Check(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1256,15 +1073,8 @@ type UncheckResult struct {
 }
 
 func cmdUncheck(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.Uncheck(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Uncheck(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1279,15 +1089,8 @@ type ScrollToResult struct {
 }
 
 func cmdScrollTo(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.ScrollIntoView(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.ScrollIntoView(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1314,15 +1117,8 @@ func cmdScroll(cfg *Config, xStr, yStr string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.ScrollBy(ctx, pages[0].ID, x, y)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.ScrollBy(ctx, target.ID, x, y)
 		if err != nil {
 			return nil, err
 		}
@@ -1337,15 +1133,8 @@ type CountResult struct {
 }
 
 func cmdCount(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		count, err := client.CountElements(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		count, err := client.CountElements(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1360,15 +1149,8 @@ type VisibleResult struct {
 }
 
 func cmdVisible(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		visible, err := client.IsVisible(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		visible, err := client.IsVisible(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1377,15 +1159,8 @@ func cmdVisible(cfg *Config, selector string) int {
 }
 
 func cmdBounds(cfg *Config, selector string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		bounds, err := client.GetBoundingBox(ctx, pages[0].ID, selector)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		bounds, err := client.GetBoundingBox(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}
@@ -1411,15 +1186,8 @@ func cmdViewport(cfg *Config, widthStr, heightStr string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.SetViewport(ctx, pages[0].ID, width, height)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetViewport(ctx, target.ID, width, height)
 		if err != nil {
 			return nil, err
 		}
@@ -1454,17 +1222,13 @@ func cmdWaitLoad(cfg *Config, args []string) int {
 	}
 	defer client.Close()
 
-	pages, err := client.Pages(ctx)
+	target, err := resolveTarget(ctx, client, cfg)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
 	}
-	if len(pages) == 0 {
-		fmt.Fprintln(cfg.Stderr, "error: no pages available")
-		return ExitError
-	}
 
-	err = client.WaitForLoad(ctx, pages[0].ID)
+	err = client.WaitForLoad(ctx, target.ID)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
@@ -1509,15 +1273,8 @@ func cmdStorage(cfg *Config, args []string) int {
 	remaining := fs.Args()
 
 	if *clear {
-		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-			pages, err := client.Pages(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if len(pages) == 0 {
-				return nil, fmt.Errorf("no pages available")
-			}
-			err = client.ClearLocalStorage(ctx, pages[0].ID)
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.ClearLocalStorage(ctx, target.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -1534,15 +1291,8 @@ func cmdStorage(cfg *Config, args []string) int {
 
 	if len(remaining) == 1 {
 		// Get
-		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-			pages, err := client.Pages(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if len(pages) == 0 {
-				return nil, fmt.Errorf("no pages available")
-			}
-			value, err := client.GetLocalStorage(ctx, pages[0].ID, key)
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			value, err := client.GetLocalStorage(ctx, target.ID, key)
 			if err != nil {
 				return nil, err
 			}
@@ -1552,15 +1302,8 @@ func cmdStorage(cfg *Config, args []string) int {
 
 	// Set
 	value := remaining[1]
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-		err = client.SetLocalStorage(ctx, pages[0].ID, key, value)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetLocalStorage(ctx, target.ID, key, value)
 		if err != nil {
 			return nil, err
 		}
@@ -1598,20 +1341,11 @@ func cmdDialog(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.HandleDialog(ctx, target.ID, action, *promptText)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.HandleDialog(ctx, pages[0].ID, action, *promptText)
-		if err != nil {
-			return nil, err
-		}
-
 		return DialogResult{Action: action, PromptText: *promptText}, nil
 	})
 }
@@ -1629,20 +1363,11 @@ func cmdRun(cfg *Config, file string) int {
 		return ExitError
 	}
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.ExecuteScriptFile(ctx, target.ID, string(content))
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		result, err := client.ExecuteScriptFile(ctx, pages[0].ID, string(content))
-		if err != nil {
-			return nil, err
-		}
-
 		return RunResult{File: file, Value: result.Value}, nil
 	})
 }
@@ -1693,17 +1418,13 @@ func cmdRaw(cfg *Config, args []string) int {
 		// Browser-level command
 		result, err = client.RawCall(ctx, method, params)
 	} else {
-		// Session-level command (to first page)
-		pages, err := client.Pages(ctx)
-		if err != nil {
-			fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		// Session-level command (to resolved target)
+		target, targetErr := resolveTarget(ctx, client, cfg)
+		if targetErr != nil {
+			fmt.Fprintf(cfg.Stderr, "error: %v\n", targetErr)
 			return ExitError
 		}
-		if len(pages) == 0 {
-			fmt.Fprintln(cfg.Stderr, "error: no pages available")
-			return ExitError
-		}
-		result, err = client.RawCallSession(ctx, pages[0].ID, method, params)
+		result, err = client.RawCallSession(ctx, target.ID, method, params)
 	}
 
 	if err != nil {
@@ -1745,20 +1466,11 @@ func cmdWait(cfg *Config, args []string) int {
 	}
 	selector := remaining[0]
 
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
-		pages, err := client.Pages(ctx)
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.WaitFor(ctx, target.ID, selector, *timeout)
 		if err != nil {
 			return nil, err
 		}
-		if len(pages) == 0 {
-			return nil, fmt.Errorf("no pages available")
-		}
-
-		err = client.WaitFor(ctx, pages[0].ID, selector, *timeout)
-		if err != nil {
-			return nil, err
-		}
-
 		return WaitResult{Found: true, Selector: selector}, nil
 	})
 }

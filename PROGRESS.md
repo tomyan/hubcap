@@ -1,7 +1,7 @@
 # CDP CLI Progress Tracker
 
 ## Current State
-- **Last Commit**: adf5b16 - Slices 47-48 (Dialog and run)
+- **Last Commit**: c21ef75 - Slice 49 (Raw CDP support)
 - **Chrome Status**: Running headless on port 9222
 
 ## Completed Slices
@@ -152,15 +152,21 @@
 ### Slice 48: Execute script file ✅
 - `cdp run <file.js>` - execute JavaScript from file
 
+### Slice 49: Raw CDP support ✅
+- `cdp raw <method> [params-json]` - send CDP command to page
+- `cdp raw --browser <method> [params-json]` - send to browser level
+
+### Slice 50: Target selection ✅
+- `--target <id|index>` global flag for page selection
+- Accepts integer (0-based index) or target ID string
+- All page-specific commands respect this flag
+
 ## Next Slices
 
-### Slice 49: Target selection
-- `--target <id|index>` global flag for page selection
-
-### Slice 50: Device emulation
+### Slice 51: Device emulation
 - `cdp emulate <device>` - emulate mobile devices
 
-### Slice 51: User agent
+### Slice 52: User agent
 - `cdp useragent <string>` - set custom user agent
 
 ## Test Command
@@ -173,7 +179,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (47 commands)
+## Commands Implemented (48 commands)
 ```
 # Browser info
 cdp version

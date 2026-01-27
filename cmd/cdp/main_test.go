@@ -1456,3 +1456,171 @@ func TestRun_New_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_TargetFlag_ByIndex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Create a new tab
+	code := run([]string{"new", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create new tab: %d", code)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Get the list of tabs
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"tabs"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to list tabs: %d", code)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var tabs []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &tabs); err != nil {
+		t.Fatalf("failed to parse tabs: %v", err)
+	}
+
+	if len(tabs) < 2 {
+		t.Skip("need at least 2 tabs for this test")
+	}
+
+	// Set a unique title on each tab using --target flag
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", "0", "eval", "document.title = 'Tab Zero'"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to eval on tab 0: %d, stderr: %s", code, stderr)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", "1", "eval", "document.title = 'Tab One'"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to eval on tab 1: %d, stderr: %s", code, stderr)
+	}
+
+	// Verify titles
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", "0", "title"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to get title for tab 0: %d", code)
+	}
+
+	var result map[string]interface{}
+	stdout = cfg.Stdout.(*bytes.Buffer).String()
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["title"] != "Tab Zero" {
+		t.Errorf("expected title 'Tab Zero', got %v", result["title"])
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", "1", "title"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to get title for tab 1: %d", code)
+	}
+
+	stdout = cfg.Stdout.(*bytes.Buffer).String()
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["title"] != "Tab One" {
+		t.Errorf("expected title 'Tab One', got %v", result["title"])
+	}
+
+	// Clean up - close the second tab
+	cfg.Stdout = &bytes.Buffer{}
+	run([]string{"--target", "1", "close"}, cfg)
+}
+
+func TestRun_TargetFlag_ByID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Create a new tab
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code := run([]string{"new", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create new tab: %d", code)
+	}
+
+	var newResult map[string]interface{}
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	if err := json.Unmarshal([]byte(stdout), &newResult); err != nil {
+		t.Fatalf("failed to parse new tab result: %v", err)
+	}
+
+	targetID := newResult["targetId"].(string)
+	time.Sleep(100 * time.Millisecond)
+
+	// Use the target ID to set a title
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", targetID, "eval", "document.title = 'By ID'"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to eval with target ID: %d, stderr: %s", code, stderr)
+	}
+
+	// Verify title
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", targetID, "title"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to get title: %d", code)
+	}
+
+	var result map[string]interface{}
+	stdout = cfg.Stdout.(*bytes.Buffer).String()
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+
+	if result["title"] != "By ID" {
+		t.Errorf("expected title 'By ID', got %v", result["title"])
+	}
+
+	// Clean up
+	cfg.Stdout = &bytes.Buffer{}
+	run([]string{"--target", targetID, "close"}, cfg)
+}
+
+func TestRun_TargetFlag_InvalidIndex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Try to use an invalid index
+	code := run([]string{"--target", "999", "title"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d for invalid target, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "invalid target") {
+		t.Errorf("expected 'invalid target' error, got: %s", stderr)
+	}
+}
