@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -235,6 +236,109 @@ func TestRun_Goto_NoChrome(t *testing.T) {
 	cfg.Port = 1
 
 	code := run([]string{"goto", "https://example.com"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Screenshot_MissingOutput(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"screenshot"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Screenshot_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	tmpFile := t.TempDir() + "/screenshot.png"
+
+	code := run([]string{"screenshot", "--output", tmpFile}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify JSON output
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["format"] == nil {
+		t.Error("expected 'format' field in output")
+	}
+	if result["size"] == nil {
+		t.Error("expected 'size' field in output")
+	}
+
+	// Verify file was written with valid PNG data
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read screenshot file: %v", err)
+	}
+
+	// PNG magic bytes
+	pngMagic := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	if len(data) < 8 {
+		t.Fatal("screenshot file too small")
+	}
+	for i, b := range pngMagic {
+		if data[i] != b {
+			t.Fatalf("file is not valid PNG: byte %d is %x, expected %x", i, data[i], b)
+		}
+	}
+}
+
+func TestRun_Screenshot_JPEG(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	tmpFile := t.TempDir() + "/screenshot.jpg"
+
+	code := run([]string{"screenshot", "--output", tmpFile, "--format", "jpeg", "--quality", "90"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+
+	if result["format"] != "jpeg" {
+		t.Errorf("expected format 'jpeg', got %v", result["format"])
+	}
+
+	// Verify file was written with valid JPEG data
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read screenshot file: %v", err)
+	}
+	if len(data) < 2 || data[0] != 0xFF || data[1] != 0xD8 {
+		t.Fatalf("file is not valid JPEG: got %x %x", data[0], data[1])
+	}
+}
+
+func TestRun_Screenshot_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1
+
+	code := run([]string{"screenshot", "--output", "/tmp/test.png"}, cfg)
 	if code != ExitConnFailed {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}

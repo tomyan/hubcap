@@ -2,6 +2,7 @@ package cdp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,6 +55,18 @@ type NavigateResult struct {
 	LoaderID  string `json:"loaderId,omitempty"`
 	URL       string `json:"url"`
 	ErrorText string `json:"errorText,omitempty"`
+}
+
+// ScreenshotOptions configures screenshot capture.
+type ScreenshotOptions struct {
+	Format  string // "png", "jpeg", "webp"
+	Quality int    // 0-100, only for jpeg/webp
+}
+
+// ScreenshotResult contains metadata about a captured screenshot.
+type ScreenshotResult struct {
+	Format string `json:"format"`
+	Size   int    `json:"size"`
 }
 
 // Client represents a connection to Chrome DevTools Protocol.
@@ -275,6 +288,55 @@ func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*Na
 		LoaderID: navResp.LoaderID,
 		URL:      url,
 	}, nil
+}
+
+// Screenshot captures a screenshot of a target.
+func (c *Client) Screenshot(ctx context.Context, targetID string, opts ScreenshotOptions) ([]byte, error) {
+	// Attach to the target
+	attachResult, err := c.Call(ctx, "Target.attachToTarget", map[string]interface{}{
+		"targetId": targetID,
+		"flatten":  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attaching to target: %w", err)
+	}
+
+	var attachResp struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(attachResult, &attachResp); err != nil {
+		return nil, fmt.Errorf("parsing attach response: %w", err)
+	}
+
+	// Build screenshot params
+	params := map[string]interface{}{}
+	if opts.Format != "" {
+		params["format"] = opts.Format
+	}
+	if opts.Quality > 0 {
+		params["quality"] = opts.Quality
+	}
+
+	// Capture screenshot
+	result, err := c.CallSession(ctx, attachResp.SessionID, "Page.captureScreenshot", params)
+	if err != nil {
+		return nil, fmt.Errorf("capturing screenshot: %w", err)
+	}
+
+	var screenshotResp struct {
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal(result, &screenshotResp); err != nil {
+		return nil, fmt.Errorf("parsing screenshot response: %w", err)
+	}
+
+	// Decode base64
+	data, err := base64.StdEncoding.DecodeString(screenshotResp.Data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding screenshot data: %w", err)
+	}
+
+	return data, nil
 }
 
 // CallSession sends a CDP command to a specific session.

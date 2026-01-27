@@ -396,3 +396,83 @@ func TestNavigateResult_JSONSerializable(t *testing.T) {
 		t.Error("expected 'url' field in JSON")
 	}
 }
+
+func TestClient_Screenshot_ReturnsPNG(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	data, err := client.Screenshot(ctx, pages[0].ID, cdp.ScreenshotOptions{
+		Format: "png",
+	})
+	if err != nil {
+		t.Fatalf("failed to take screenshot: %v", err)
+	}
+
+	// PNG magic bytes
+	if len(data) < 8 {
+		t.Fatal("screenshot data too small")
+	}
+	pngMagic := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	for i, b := range pngMagic {
+		if data[i] != b {
+			t.Fatalf("not a valid PNG: byte %d is %x, expected %x", i, data[i], b)
+		}
+	}
+}
+
+func TestClient_Screenshot_ReturnsJPEG(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	data, err := client.Screenshot(ctx, pages[0].ID, cdp.ScreenshotOptions{
+		Format:  "jpeg",
+		Quality: 80,
+	})
+	if err != nil {
+		t.Fatalf("failed to take screenshot: %v", err)
+	}
+
+	// JPEG magic bytes
+	if len(data) < 2 {
+		t.Fatal("screenshot data too small")
+	}
+	if data[0] != 0xFF || data[1] != 0xD8 {
+		t.Fatalf("not a valid JPEG: got %x %x", data[0], data[1])
+	}
+}

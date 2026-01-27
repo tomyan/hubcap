@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto <url>")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto <url>, screenshot --output <file>")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -105,6 +105,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdGoto(cfg, remaining[1])
+	case "screenshot":
+		return cmdScreenshot(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -160,6 +162,54 @@ func cmdGoto(cfg *Config, url string) int {
 		}
 
 		return client.Navigate(ctx, pages[0].ID, url)
+	})
+}
+
+func cmdScreenshot(cfg *Config, args []string) int {
+	// Parse screenshot-specific flags
+	fs := flag.NewFlagSet("screenshot", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	output := fs.String("output", "", "Output file path (required)")
+	format := fs.String("format", "png", "Image format: png, jpeg, webp")
+	quality := fs.Int("quality", 80, "JPEG/WebP quality (0-100)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *output == "" {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100]")
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		data, err := client.Screenshot(ctx, pages[0].ID, cdp.ScreenshotOptions{
+			Format:  *format,
+			Quality: *quality,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if err := os.WriteFile(*output, data, 0644); err != nil {
+			return nil, fmt.Errorf("writing file: %w", err)
+		}
+
+		return cdp.ScreenshotResult{
+			Format: *format,
+			Size:   len(data),
+		}, nil
 	})
 }
 
