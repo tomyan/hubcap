@@ -1441,3 +1441,76 @@ func TestClient_PrintToPDF_Success(t *testing.T) {
 		}
 	}
 }
+
+func TestClient_DeleteCookie_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to a page first
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Set a cookie first
+	err = client.SetCookie(ctx, pages[0].ID, cdp.Cookie{
+		Name:   "delete_test",
+		Value:  "test_value",
+		Domain: "example.com",
+	})
+	if err != nil {
+		t.Fatalf("failed to set cookie: %v", err)
+	}
+
+	// Verify cookie exists
+	cookies, err := client.GetCookies(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get cookies: %v", err)
+	}
+	found := false
+	for _, c := range cookies {
+		if c.Name == "delete_test" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("cookie was not set")
+	}
+
+	// Delete the cookie
+	err = client.DeleteCookie(ctx, pages[0].ID, "delete_test", "example.com")
+	if err != nil {
+		t.Fatalf("failed to delete cookie: %v", err)
+	}
+
+	// Verify cookie is gone
+	cookies, err = client.GetCookies(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get cookies after delete: %v", err)
+	}
+	for _, c := range cookies {
+		if c.Name == "delete_test" {
+			t.Error("cookie was not deleted")
+		}
+	}
+}

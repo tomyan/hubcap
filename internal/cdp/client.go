@@ -1040,6 +1040,28 @@ func (c *Client) SetCookie(ctx context.Context, targetID string, cookie Cookie) 
 	return nil
 }
 
+// DeleteCookie deletes a cookie by name and domain.
+func (c *Client) DeleteCookie(ctx context.Context, targetID string, name, domain string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	params := map[string]interface{}{
+		"name": name,
+	}
+	if domain != "" {
+		params["domain"] = domain
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Network.deleteCookies", params)
+	if err != nil {
+		return fmt.Errorf("deleting cookie: %w", err)
+	}
+
+	return nil
+}
+
 // PrintToPDF generates a PDF of the page.
 func (c *Client) PrintToPDF(ctx context.Context, targetID string, opts PDFOptions) ([]byte, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

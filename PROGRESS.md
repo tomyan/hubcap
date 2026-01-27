@@ -1,8 +1,7 @@
 # CDP CLI Progress Tracker
 
 ## Current State
-- **Last Commit**: 133330f - Slice 13 (Console capture)
-- **In Progress**: Slice 14 (Cookies or Network)
+- **Last Commit**: 4c83585 - Slice 15 (PDF export)
 - **Chrome Status**: Running headless on port 9222
 
 ## Completed Slices
@@ -49,20 +48,28 @@
 - Streams NDJSON output until duration expires
 - Added event handling infrastructure to CDP client
 
+### Slice 14: Cookie management ✅
+- `cdp cookies` - list cookies
+- `cdp cookies --set name=value [--domain <domain>]` - set cookie
+
+### Slice 15: PDF export ✅
+- `cdp pdf --output <file> [--landscape] [--background]` - export page as PDF
+
 ## Next Slices
 
-### Slice 14: Cookie management
-- `cdp cookies` - list cookies
-- `cdp cookies --set name=value` - set cookie
-- Useful for authentication scenarios
+### Slice 16: Delete cookie
+- `cdp cookies --delete <name>` - delete a cookie
 
-### Slice 15: Network interception
+### Slice 17: Network monitoring
 - `cdp network` - capture network requests/responses
 - Useful for debugging and testing
 
-### Slice 16: PDF export
-- `cdp pdf --output <file>` - export page as PDF
-- Useful for generating reports
+### Slice 18: Clear cookies
+- `cdp cookies --clear` - clear all cookies
+
+### Slice 19: Target selection
+- `--target <id|index>` flag for all commands
+- Select which page/tab to operate on
 
 ## Test Command
 ```bash
@@ -89,6 +96,8 @@ cdp wait <selector> [--timeout <duration>]
 cdp text <selector>
 cdp type <text>
 cdp console [--duration <duration>]
+cdp cookies [--set name=value] [--domain <domain>]
+cdp pdf --output <file> [--landscape] [--background]
 ```
 
 ## Known Issues / Deferred Items

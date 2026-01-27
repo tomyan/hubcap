@@ -814,6 +814,41 @@ func TestRun_Cookies_Set(t *testing.T) {
 	}
 }
 
+func TestRun_Cookies_Delete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Navigate to a page first
+	run([]string{"goto", "https://example.com"}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	// Set a cookie first
+	run([]string{"cookies", "--set", "delete_me=value", "--domain", "example.com"}, cfg)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Delete the cookie
+	code := run([]string{"cookies", "--delete", "delete_me", "--domain", "example.com"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["deleted"] != true {
+		t.Errorf("expected deleted: true, got %v", result["deleted"])
+	}
+}
+
 func TestRun_Cookies_NoChrome(t *testing.T) {
 	cfg := testConfig()
 	cfg.Port = 1 // Invalid port
