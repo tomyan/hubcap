@@ -1143,3 +1143,74 @@ func TestClient_GetText_Success(t *testing.T) {
 		t.Errorf("expected 'Hello World!', got %q", text)
 	}
 }
+
+func TestClient_Type_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
+	// Create a page with an input and keydown counter
+	_, err = client.Eval(ctx, pages[0].ID, `
+		document.body.innerHTML = '<input id="test-input" type="text" />';
+		window.keydownCount = 0;
+		document.querySelector('#test-input').addEventListener('keydown', () => { window.keydownCount++; });
+	`)
+	if err != nil {
+		t.Fatalf("failed to create input: %v", err)
+	}
+
+	// Focus the input first
+	_, err = client.Eval(ctx, pages[0].ID, `document.querySelector('#test-input').focus()`)
+	if err != nil {
+		t.Fatalf("failed to focus input: %v", err)
+	}
+
+	// Type "abc" character by character
+	err = client.Type(ctx, pages[0].ID, "abc")
+	if err != nil {
+		t.Fatalf("failed to type: %v", err)
+	}
+
+	// Verify the value
+	result, err := client.Eval(ctx, pages[0].ID, `document.querySelector('#test-input').value`)
+	if err != nil {
+		t.Fatalf("failed to verify value: %v", err)
+	}
+
+	if result.Value != "abc" {
+		t.Errorf("expected 'abc', got %v", result.Value)
+	}
+
+	// Verify keydown events were fired (should be 3, one per character)
+	countResult, err := client.Eval(ctx, pages[0].ID, `window.keydownCount`)
+	if err != nil {
+		t.Fatalf("failed to get keydown count: %v", err)
+	}
+
+	if count, ok := countResult.Value.(float64); !ok || count != 3 {
+		t.Errorf("expected 3 keydown events, got %v", countResult.Value)
+	}
+}

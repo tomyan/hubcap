@@ -835,6 +835,47 @@ func (c *Client) GetText(ctx context.Context, targetID string, selector string) 
 	return evalResp.Result.Value, nil
 }
 
+// Type sends individual key events for each character in the text.
+// This is useful for inputs that need realistic typing (autocomplete, etc.).
+func (c *Client) Type(ctx context.Context, targetID string, text string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Input domain
+	_, err = c.CallSession(ctx, sessionID, "Input.enable", nil)
+	if err != nil {
+		// Input.enable might not exist in all Chrome versions, continue anyway
+	}
+
+	// Type each character individually
+	for _, char := range text {
+		charStr := string(char)
+
+		// keyDown with char
+		_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+			"type": "keyDown",
+			"text": charStr,
+			"key":  charStr,
+		})
+		if err != nil {
+			return fmt.Errorf("keyDown for %q: %w", charStr, err)
+		}
+
+		// keyUp
+		_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+			"type": "keyUp",
+			"key":  charStr,
+		})
+		if err != nil {
+			return fmt.Errorf("keyUp for %q: %w", charStr, err)
+		}
+	}
+
+	return nil
+}
+
 // CallSession sends a CDP command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {

@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -149,6 +149,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdText(cfg, remaining[1])
+	case "type":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp type <text>")
+			return ExitError
+		}
+		return cmdType(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -387,6 +393,31 @@ func cmdText(cfg *Config, selector string) int {
 		}
 
 		return TextResult{Selector: selector, Text: text}, nil
+	})
+}
+
+// TypeResult is returned by the type command.
+type TypeResult struct {
+	Typed bool   `json:"typed"`
+	Text  string `json:"text"`
+}
+
+func cmdType(cfg *Config, text string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.Type(ctx, pages[0].ID, text)
+		if err != nil {
+			return nil, err
+		}
+
+		return TypeResult{Typed: true, Text: text}, nil
 	})
 }
 

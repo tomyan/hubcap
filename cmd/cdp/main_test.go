@@ -655,3 +655,53 @@ func TestRun_Wait_Success(t *testing.T) {
 		t.Errorf("expected found: true, got %v", result["found"])
 	}
 }
+
+func TestRun_Type_MissingText(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"type"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Type_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Create an input field and focus it
+	run([]string{"eval", `document.body.innerHTML = '<input id="test-input" type="text" />'; document.querySelector('#test-input').focus();`}, cfg)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"type", "hello"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["typed"] != true {
+		t.Errorf("expected typed: true, got %v", result["typed"])
+	}
+	if result["text"] != "hello" {
+		t.Errorf("expected text: hello, got %v", result["text"])
+	}
+}
+
+func TestRun_Type_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"type", "test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
