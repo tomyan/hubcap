@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto <url>, screenshot --output <file>, eval <expr>")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -113,6 +113,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdEval(cfg, remaining[1])
+	case "query":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp query <selector>")
+			return ExitError
+		}
+		return cmdQuery(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -230,6 +236,20 @@ func cmdEval(cfg *Config, expression string) int {
 		}
 
 		return client.Eval(ctx, pages[0].ID, expression)
+	})
+}
+
+func cmdQuery(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		return client.Query(ctx, pages[0].ID, selector)
 	})
 }
 

@@ -620,3 +620,123 @@ func TestClient_Eval_JSException(t *testing.T) {
 		t.Errorf("expected 'JS exception' in error, got: %v", err)
 	}
 }
+
+func TestClient_Query_FindsElement(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to example.com which has a body element
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
+	// Query for body element
+	result, err := client.Query(ctx, pages[0].ID, "body")
+	if err != nil {
+		t.Fatalf("failed to query: %v", err)
+	}
+
+	if result.NodeID == 0 {
+		t.Error("expected non-zero nodeId")
+	}
+	if result.TagName != "BODY" {
+		t.Errorf("expected tagName 'BODY', got %q", result.TagName)
+	}
+}
+
+func TestClient_Query_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Query for non-existent element
+	result, err := client.Query(ctx, pages[0].ID, "#nonexistent-element-12345")
+	if err != nil {
+		t.Fatalf("expected nil error for not found, got: %v", err)
+	}
+
+	if result.NodeID != 0 {
+		t.Errorf("expected nodeId 0 for not found, got %d", result.NodeID)
+	}
+}
+
+func TestClient_Query_JSONSerializable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	result, err := client.Query(ctx, pages[0].ID, "body")
+	if err != nil {
+		t.Fatalf("failed to query: %v", err)
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if m["nodeId"] == nil {
+		t.Error("expected 'nodeId' in JSON")
+	}
+	if m["tagName"] == nil {
+		t.Error("expected 'tagName' in JSON")
+	}
+}

@@ -75,6 +75,13 @@ type EvalResult struct {
 	Type  string      `json:"type,omitempty"`
 }
 
+// QueryResult contains the result of querying for a DOM element.
+type QueryResult struct {
+	NodeID     int               `json:"nodeId"`
+	TagName    string            `json:"tagName,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
+}
+
 // Client represents a connection to Chrome DevTools Protocol.
 type Client struct {
 	conn      *websocket.Conn
@@ -385,6 +392,86 @@ func (c *Client) Eval(ctx context.Context, targetID string, expression string) (
 	return &EvalResult{
 		Value: evalResp.Result.Value,
 		Type:  evalResp.Result.Type,
+	}, nil
+}
+
+// Query finds the first DOM element matching a CSS selector.
+func (c *Client) Query(ctx context.Context, targetID string, selector string) (*QueryResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return nil, fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query selector
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return nil, fmt.Errorf("parsing query response: %w", err)
+	}
+
+	// If not found, return empty result
+	if queryResp.NodeID == 0 {
+		return &QueryResult{NodeID: 0}, nil
+	}
+
+	// Describe the node to get tag name and attributes
+	descResult, err := c.CallSession(ctx, sessionID, "DOM.describeNode", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describing node: %w", err)
+	}
+
+	var descResp struct {
+		Node struct {
+			NodeName   string   `json:"nodeName"`
+			Attributes []string `json:"attributes"`
+		} `json:"node"`
+	}
+	if err := json.Unmarshal(descResult, &descResp); err != nil {
+		return nil, fmt.Errorf("parsing describe response: %w", err)
+	}
+
+	// Parse attributes (CDP returns flat array: [name, value, name, value, ...])
+	attrs := make(map[string]string)
+	for i := 0; i+1 < len(descResp.Node.Attributes); i += 2 {
+		attrs[descResp.Node.Attributes[i]] = descResp.Node.Attributes[i+1]
+	}
+
+	return &QueryResult{
+		NodeID:     queryResp.NodeID,
+		TagName:    descResp.Node.NodeName,
+		Attributes: attrs,
 	}, nil
 }
 
