@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -161,6 +161,12 @@ func run(args []string, cfg *Config) int {
 		return cmdCookies(cfg, remaining[1:])
 	case "pdf":
 		return cmdPDF(cfg, remaining[1:])
+	case "focus":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp focus <selector>")
+			return ExitError
+		}
+		return cmdFocus(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -660,6 +666,31 @@ func cmdPDF(cfg *Config, args []string) int {
 			"size":      len(data),
 			"landscape": *landscape,
 		}, nil
+	})
+}
+
+// FocusResult is returned by the focus command.
+type FocusResult struct {
+	Focused  bool   `json:"focused"`
+	Selector string `json:"selector"`
+}
+
+func cmdFocus(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.Focus(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+
+		return FocusResult{Focused: true, Selector: selector}, nil
 	})
 }
 

@@ -1578,3 +1578,55 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 		t.Errorf("expected no cookies after clear, got %d", len(cookies))
 	}
 }
+
+func TestClient_Focus_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page and create an input
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<input id="focus-test" type="text" />'`)
+	if err != nil {
+		t.Fatalf("failed to create input: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Focus the element
+	err = client.Focus(ctx, pages[0].ID, "#focus-test")
+	if err != nil {
+		t.Fatalf("failed to focus: %v", err)
+	}
+
+	// Verify focus via JS
+	result, err := client.Eval(ctx, pages[0].ID, `document.activeElement.id`)
+	if err != nil {
+		t.Fatalf("failed to verify focus: %v", err)
+	}
+
+	if result.Value != "focus-test" {
+		t.Errorf("expected focused element id 'focus-test', got %v", result.Value)
+	}
+}
