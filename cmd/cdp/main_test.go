@@ -343,3 +343,72 @@ func TestRun_Screenshot_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Eval_MissingExpression(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"eval"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Eval_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	code := run([]string{"eval", "1 + 2"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["value"] != float64(3) {
+		t.Errorf("expected value 3, got %v", result["value"])
+	}
+}
+
+func TestRun_Eval_String(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	code := run([]string{"eval", "'hello'"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["value"] != "hello" {
+		t.Errorf("expected value 'hello', got %v", result["value"])
+	}
+}
+
+func TestRun_Eval_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1
+
+	code := run([]string{"eval", "1 + 2"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

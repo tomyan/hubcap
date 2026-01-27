@@ -476,3 +476,147 @@ func TestClient_Screenshot_ReturnsJPEG(t *testing.T) {
 		t.Fatalf("not a valid JPEG: got %x %x", data[0], data[1])
 	}
 }
+
+func TestClient_Eval_SimpleExpression(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	result, err := client.Eval(ctx, pages[0].ID, "1 + 2")
+	if err != nil {
+		t.Fatalf("failed to eval: %v", err)
+	}
+
+	// Should return EvalResult with value 3
+	if result.Value == nil {
+		t.Error("expected non-nil value")
+	}
+
+	// Value should be number 3
+	if v, ok := result.Value.(float64); !ok || v != 3 {
+		t.Errorf("expected value 3, got %v (%T)", result.Value, result.Value)
+	}
+}
+
+func TestClient_Eval_StringExpression(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	result, err := client.Eval(ctx, pages[0].ID, "'hello' + ' world'")
+	if err != nil {
+		t.Fatalf("failed to eval: %v", err)
+	}
+
+	if v, ok := result.Value.(string); !ok || v != "hello world" {
+		t.Errorf("expected 'hello world', got %v", result.Value)
+	}
+}
+
+func TestClient_Eval_JSONSerializable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	result, err := client.Eval(ctx, pages[0].ID, "({a: 1, b: 'test'})")
+	if err != nil {
+		t.Fatalf("failed to eval: %v", err)
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if m["value"] == nil {
+		t.Error("expected 'value' in JSON")
+	}
+}
+
+func TestClient_Eval_JSException(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	_, err = client.Eval(ctx, pages[0].ID, "throw new Error('test error')")
+	if err == nil {
+		t.Error("expected error for thrown exception")
+	}
+
+	if !strings.Contains(err.Error(), "JS exception") {
+		t.Errorf("expected 'JS exception' in error, got: %v", err)
+	}
+}

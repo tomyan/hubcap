@@ -69,6 +69,12 @@ type ScreenshotResult struct {
 	Size   int    `json:"size"`
 }
 
+// EvalResult contains the result of evaluating a JavaScript expression.
+type EvalResult struct {
+	Value interface{} `json:"value"`
+	Type  string      `json:"type,omitempty"`
+}
+
 // Client represents a connection to Chrome DevTools Protocol.
 type Client struct {
 	conn      *websocket.Conn
@@ -231,32 +237,41 @@ func (c *Client) Pages(ctx context.Context) ([]TargetInfo, error) {
 	return pages, nil
 }
 
-// Navigate navigates a target to the given URL and waits for load.
-func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*NavigateResult, error) {
-	// Attach to the target
+// attachToTarget attaches to a target and returns the session ID.
+func (c *Client) attachToTarget(ctx context.Context, targetID string) (string, error) {
 	attachResult, err := c.Call(ctx, "Target.attachToTarget", map[string]interface{}{
 		"targetId": targetID,
 		"flatten":  true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("attaching to target: %w", err)
+		return "", fmt.Errorf("attaching to target: %w", err)
 	}
 
 	var attachResp struct {
 		SessionID string `json:"sessionId"`
 	}
 	if err := json.Unmarshal(attachResult, &attachResp); err != nil {
-		return nil, fmt.Errorf("parsing attach response: %w", err)
+		return "", fmt.Errorf("parsing attach response: %w", err)
+	}
+
+	return attachResp.SessionID, nil
+}
+
+// Navigate navigates a target to the given URL and waits for load.
+func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*NavigateResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Enable Page domain on the session
-	_, err = c.CallSession(ctx, attachResp.SessionID, "Page.enable", nil)
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
 	if err != nil {
 		return nil, fmt.Errorf("enabling Page domain: %w", err)
 	}
 
 	// Navigate
-	navResult, err := c.CallSession(ctx, attachResp.SessionID, "Page.navigate", map[string]string{
+	navResult, err := c.CallSession(ctx, sessionID, "Page.navigate", map[string]string{
 		"url": url,
 	})
 	if err != nil {
@@ -292,20 +307,9 @@ func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*Na
 
 // Screenshot captures a screenshot of a target.
 func (c *Client) Screenshot(ctx context.Context, targetID string, opts ScreenshotOptions) ([]byte, error) {
-	// Attach to the target
-	attachResult, err := c.Call(ctx, "Target.attachToTarget", map[string]interface{}{
-		"targetId": targetID,
-		"flatten":  true,
-	})
+	sessionID, err := c.attachToTarget(ctx, targetID)
 	if err != nil {
-		return nil, fmt.Errorf("attaching to target: %w", err)
-	}
-
-	var attachResp struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(attachResult, &attachResp); err != nil {
-		return nil, fmt.Errorf("parsing attach response: %w", err)
+		return nil, err
 	}
 
 	// Build screenshot params
@@ -318,7 +322,7 @@ func (c *Client) Screenshot(ctx context.Context, targetID string, opts Screensho
 	}
 
 	// Capture screenshot
-	result, err := c.CallSession(ctx, attachResp.SessionID, "Page.captureScreenshot", params)
+	result, err := c.CallSession(ctx, sessionID, "Page.captureScreenshot", params)
 	if err != nil {
 		return nil, fmt.Errorf("capturing screenshot: %w", err)
 	}
@@ -337,6 +341,51 @@ func (c *Client) Screenshot(ctx context.Context, targetID string, opts Screensho
 	}
 
 	return data, nil
+}
+
+// Eval evaluates a JavaScript expression in a target's page context.
+func (c *Client) Eval(ctx context.Context, targetID string, expression string) (*EvalResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Runtime domain
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	// Evaluate expression
+	evalResult, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    expression,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluating expression: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Type  string      `json:"type"`
+			Value interface{} `json:"value"`
+		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails"`
+	}
+	if err := json.Unmarshal(evalResult, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing eval response: %w", err)
+	}
+
+	if evalResp.ExceptionDetails != nil {
+		return nil, fmt.Errorf("JS exception: %s", evalResp.ExceptionDetails.Text)
+	}
+
+	return &EvalResult{
+		Value: evalResp.Result.Value,
+		Type:  evalResp.Result.Type,
+	}, nil
 }
 
 // CallSession sends a CDP command to a specific session.
