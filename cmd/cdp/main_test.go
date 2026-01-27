@@ -751,3 +751,74 @@ func TestRun_Console_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Cookies_List(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Navigate to a page first
+	run([]string{"goto", "https://example.com"}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"cookies"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Output should be valid JSON (array of cookies)
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var cookies []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &cookies); err != nil {
+		t.Errorf("output is not valid JSON array: %v, got: %s", err, stdout)
+	}
+}
+
+func TestRun_Cookies_Set(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Navigate to a page first
+	run([]string{"goto", "https://example.com"}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"cookies", "--set", "test_cookie=test_value", "--domain", "example.com"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["set"] != true {
+		t.Errorf("expected set: true, got %v", result["set"])
+	}
+	if result["name"] != "test_cookie" {
+		t.Errorf("expected name: test_cookie, got %v", result["name"])
+	}
+}
+
+func TestRun_Cookies_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"cookies"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

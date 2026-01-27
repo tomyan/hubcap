@@ -82,6 +82,18 @@ type ConsoleMessage struct {
 	Text string `json:"text"`
 }
 
+// Cookie represents a browser cookie.
+type Cookie struct {
+	Name     string  `json:"name"`
+	Value    string  `json:"value"`
+	Domain   string  `json:"domain,omitempty"`
+	Path     string  `json:"path,omitempty"`
+	Expires  float64 `json:"expires,omitempty"`
+	HTTPOnly bool    `json:"httpOnly,omitempty"`
+	Secure   bool    `json:"secure,omitempty"`
+	SameSite string  `json:"sameSite,omitempty"`
+}
+
 // QueryResult contains the result of querying for a DOM element.
 type QueryResult struct {
 	NodeID     int               `json:"nodeId"`
@@ -950,6 +962,67 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 	}()
 
 	return output, nil
+}
+
+// GetCookies returns all cookies for the page.
+func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get cookies via Network domain
+	result, err := c.CallSession(ctx, sessionID, "Network.getCookies", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting cookies: %w", err)
+	}
+
+	var resp struct {
+		Cookies []Cookie `json:"cookies"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("parsing cookies response: %w", err)
+	}
+
+	return resp.Cookies, nil
+}
+
+// SetCookie sets a cookie for the page.
+func (c *Client) SetCookie(ctx context.Context, targetID string, cookie Cookie) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	params := map[string]interface{}{
+		"name":  cookie.Name,
+		"value": cookie.Value,
+	}
+	if cookie.Domain != "" {
+		params["domain"] = cookie.Domain
+	}
+	if cookie.Path != "" {
+		params["path"] = cookie.Path
+	}
+	if cookie.Expires > 0 {
+		params["expires"] = cookie.Expires
+	}
+	if cookie.HTTPOnly {
+		params["httpOnly"] = cookie.HTTPOnly
+	}
+	if cookie.Secure {
+		params["secure"] = cookie.Secure
+	}
+	if cookie.SameSite != "" {
+		params["sameSite"] = cookie.SameSite
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Network.setCookie", params)
+	if err != nil {
+		return fmt.Errorf("setting cookie: %w", err)
+	}
+
+	return nil
 }
 
 // CallSession sends a CDP command to a specific session.

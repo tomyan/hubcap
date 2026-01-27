@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -157,6 +157,8 @@ func run(args []string, cfg *Config) int {
 		return cmdType(cfg, remaining[1])
 	case "console":
 		return cmdConsole(cfg, remaining[1:])
+	case "cookies":
+		return cmdCookies(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -481,6 +483,85 @@ func cmdConsole(cfg *Config, args []string) int {
 			return ExitSuccess
 		}
 	}
+}
+
+func cmdCookies(cfg *Config, args []string) int {
+	// Parse cookies-specific flags
+	fs := flag.NewFlagSet("cookies", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	setName := fs.String("set", "", "Cookie name=value to set")
+	domain := fs.String("domain", "", "Cookie domain (for set)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *setName != "" {
+		// Set mode
+		return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+			pages, err := client.Pages(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(pages) == 0 {
+				return nil, fmt.Errorf("no pages available")
+			}
+
+			// Parse name=value
+			parts := splitCookieValue(*setName)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid cookie format, use name=value")
+			}
+
+			cookie := cdp.Cookie{
+				Name:   parts[0],
+				Value:  parts[1],
+				Domain: *domain,
+			}
+
+			err = client.SetCookie(ctx, pages[0].ID, cookie)
+			if err != nil {
+				return nil, err
+			}
+
+			return map[string]interface{}{
+				"set":    true,
+				"name":   cookie.Name,
+				"value":  cookie.Value,
+				"domain": cookie.Domain,
+			}, nil
+		})
+	}
+
+	// List mode (default)
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		return client.GetCookies(ctx, pages[0].ID)
+	})
+}
+
+func splitCookieValue(s string) []string {
+	idx := -1
+	for i, c := range s {
+		if c == '=' {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return []string{s}
+	}
+	return []string{s[:idx], s[idx+1:]}
 }
 
 func cmdWait(cfg *Config, args []string) int {

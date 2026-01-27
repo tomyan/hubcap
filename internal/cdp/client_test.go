@@ -1295,3 +1295,102 @@ func TestClient_CaptureConsole_Success(t *testing.T) {
 		t.Error("timeout waiting for console message")
 	}
 }
+
+func TestClient_GetCookies_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to a page to have cookies
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Get cookies - should return a slice (may be empty)
+	cookies, err := client.GetCookies(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get cookies: %v", err)
+	}
+
+	// Should return a non-nil slice
+	if cookies == nil {
+		t.Error("expected non-nil cookies slice")
+	}
+}
+
+func TestClient_SetCookie_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to a page first
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Set a cookie
+	err = client.SetCookie(ctx, pages[0].ID, cdp.Cookie{
+		Name:   "test_cookie",
+		Value:  "test_value",
+		Domain: "example.com",
+	})
+	if err != nil {
+		t.Fatalf("failed to set cookie: %v", err)
+	}
+
+	// Verify cookie was set
+	cookies, err := client.GetCookies(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get cookies: %v", err)
+	}
+
+	found := false
+	for _, c := range cookies {
+		if c.Name == "test_cookie" && c.Value == "test_value" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("cookie was not set correctly")
+	}
+}

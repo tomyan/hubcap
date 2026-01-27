@@ -1,8 +1,8 @@
 # CDP CLI Progress Tracker
 
 ## Current State
-- **Last Commit**: 4acbc30 - Slice 11 (GetText)
-- **In Progress**: Slice 12 (Type)
+- **Last Commit**: 133330f - Slice 13 (Console capture)
+- **In Progress**: Slice 14 (Cookies or Network)
 - **Chrome Status**: Running headless on port 9222
 
 ## Completed Slices
@@ -40,27 +40,38 @@
 ### Slice 11: Get Text ✅
 - `cdp text "<selector>"` - get innerText of element
 
-## Next Slices
-
-### Slice 12: Type (keystroke by keystroke)
+### Slice 12: Type (keystroke by keystroke) ✅
 - `cdp type "<text>"` - type text with individual key events
 - Useful for inputs that need realistic typing (autocomplete, etc.)
 
-### Slice 13: Console capture
-- `cdp console` - capture console messages
-- Useful for debugging
+### Slice 13: Console capture ✅
+- `cdp console [--duration <d>]` - capture console messages
+- Streams NDJSON output until duration expires
+- Added event handling infrastructure to CDP client
 
-### Slice 14: Network interception
-- `cdp intercept` - intercept/modify network requests
-- Useful for testing and debugging
+## Next Slices
 
-### Slice 15: Cookie management
-- `cdp cookies` - get/set cookies
+### Slice 14: Cookie management
+- `cdp cookies` - list cookies
+- `cdp cookies --set name=value` - set cookie
 - Useful for authentication scenarios
+
+### Slice 15: Network interception
+- `cdp network` - capture network requests/responses
+- Useful for debugging and testing
+
+### Slice 16: PDF export
+- `cdp pdf --output <file>` - export page as PDF
+- Useful for generating reports
 
 ## Test Command
 ```bash
-go test -v ./...
+# Run tests sequentially (required because tests share Chrome instance)
+go test -p 1 -v ./...
+
+# Run individual package tests
+go test -v ./cmd/cdp
+go test -v ./internal/cdp
 ```
 
 ## Commands Implemented
@@ -76,10 +87,14 @@ cdp fill <selector> <text>
 cdp html <selector>
 cdp wait <selector> [--timeout <duration>]
 cdp text <selector>
+cdp type <text>
+cdp console [--duration <duration>]
 ```
 
 ## Known Issues / Deferred Items
 - Sessions not detached after use (minor resource leak)
 - No --target flag for page selection (always uses first page)
 - Navigate doesn't wait for actual load completion
-- Events not handled in readMessages
+- Tests must run sequentially (-p 1) because they share Chrome instance
+- Special keys (Enter, Tab, etc.) not handled in type command
+- No modifier key support (Ctrl, Alt, Shift) in type command
