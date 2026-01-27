@@ -664,6 +664,72 @@ func (c *Client) Fill(ctx context.Context, targetID string, selector string, tex
 	return nil
 }
 
+// GetHTML returns the outer HTML of an element matching the selector.
+func (c *Client) GetHTML(ctx context.Context, targetID string, selector string) (string, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return "", err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return "", fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return "", fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return "", fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query selector
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return "", fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return "", fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return "", fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get outer HTML
+	htmlResult, err := c.CallSession(ctx, sessionID, "DOM.getOuterHTML", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting outer HTML: %w", err)
+	}
+
+	var htmlResp struct {
+		OuterHTML string `json:"outerHTML"`
+	}
+	if err := json.Unmarshal(htmlResult, &htmlResp); err != nil {
+		return "", fmt.Errorf("parsing HTML response: %w", err)
+	}
+
+	return htmlResp.OuterHTML, nil
+}
+
 // CallSession sends a CDP command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {

@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -131,6 +131,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdFill(cfg, remaining[1], remaining[2])
+	case "html":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp html <selector>")
+			return ExitError
+		}
+		return cmdHTML(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -313,6 +319,31 @@ func cmdFill(cfg *Config, selector, text string) int {
 		}
 
 		return FillResult{Filled: true, Selector: selector, Text: text}, nil
+	})
+}
+
+// HTMLResult is returned by the html command.
+type HTMLResult struct {
+	Selector string `json:"selector"`
+	HTML     string `json:"html"`
+}
+
+func cmdHTML(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		html, err := client.GetHTML(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+
+		return HTMLResult{Selector: selector, HTML: html}, nil
 	})
 }
 

@@ -578,3 +578,42 @@ func TestRun_Fill_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_HTML_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"html"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_HTML_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+
+	// Create a test element
+	run([]string{"eval", `document.body.innerHTML = '<div id="test">Content</div>'`}, cfg)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"html", "#test"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	html, ok := result["html"].(string)
+	if !ok || !strings.Contains(html, "Content") {
+		t.Errorf("expected HTML containing 'Content', got %v", result["html"])
+	}
+}

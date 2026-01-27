@@ -890,3 +890,73 @@ func TestClient_Fill_NotFound(t *testing.T) {
 		t.Errorf("expected 'not found' in error, got: %v", err)
 	}
 }
+
+func TestClient_GetHTML_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Create a test element
+	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<div id="test"><span>Hello</span></div>'`)
+	if err != nil {
+		t.Fatalf("failed to create element: %v", err)
+	}
+
+	// Get HTML
+	html, err := client.GetHTML(ctx, pages[0].ID, "#test")
+	if err != nil {
+		t.Fatalf("failed to get HTML: %v", err)
+	}
+
+	if !strings.Contains(html, "<span>Hello</span>") {
+		t.Errorf("expected HTML to contain '<span>Hello</span>', got %q", html)
+	}
+	if !strings.Contains(html, `id="test"`) {
+		t.Errorf("expected HTML to contain 'id=\"test\"', got %q", html)
+	}
+}
+
+func TestClient_GetHTML_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	_, err = client.GetHTML(ctx, pages[0].ID, "#nonexistent-12345")
+	if err == nil {
+		t.Error("expected error for non-existent element")
+	}
+}
