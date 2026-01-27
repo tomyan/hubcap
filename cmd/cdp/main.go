@@ -343,6 +343,12 @@ func run(args []string, cfg *Config) int {
 		return cmdMetrics(cfg)
 	case "a11y":
 		return cmdA11y(cfg)
+	case "source":
+		return cmdSource(cfg)
+	case "waitidle":
+		return cmdWaitIdle(cfg, remaining[1:])
+	case "links":
+		return cmdLinks(cfg)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1494,6 +1500,23 @@ type A11yResult struct {
 	Nodes []cdp.AccessibilityNode `json:"nodes"`
 }
 
+type SourceResult struct {
+	HTML string `json:"html"`
+}
+
+type WaitIdleResult struct {
+	Idle bool `json:"idle"`
+}
+
+type LinkInfo struct {
+	Href string `json:"href"`
+	Text string `json:"text"`
+}
+
+type LinksResult struct {
+	Links []LinkInfo `json:"links"`
+}
+
 type StylesResult struct {
 	Selector string            `json:"selector"`
 	Styles   map[string]string `json:"styles"`
@@ -1611,6 +1634,67 @@ func cmdA11y(cfg *Config) int {
 			return nil, err
 		}
 		return A11yResult{Nodes: nodes}, nil
+	})
+}
+
+func cmdSource(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		html, err := client.GetPageSource(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return SourceResult{HTML: html}, nil
+	})
+}
+
+func cmdWaitIdle(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("waitidle", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	idleTime := fs.Duration("idle", 500*time.Millisecond, "Time with no network activity to consider idle")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.WaitForNetworkIdle(ctx, target.ID, *idleTime)
+		if err != nil {
+			return nil, err
+		}
+		return WaitIdleResult{Idle: true}, nil
+	})
+}
+
+func cmdLinks(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.Eval(ctx, target.ID, `
+			Array.from(document.querySelectorAll('a[href]')).map(a => ({
+				href: a.href,
+				text: a.textContent.trim()
+			}))
+		`)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse the result
+		links := []LinkInfo{}
+		if arr, ok := result.Value.([]interface{}); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]interface{}); ok {
+					link := LinkInfo{
+						Href: fmt.Sprintf("%v", m["href"]),
+						Text: fmt.Sprintf("%v", m["text"]),
+					}
+					links = append(links, link)
+				}
+			}
+		}
+
+		return LinksResult{Links: links}, nil
 	})
 }
 

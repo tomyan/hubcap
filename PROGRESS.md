@@ -205,6 +205,17 @@
 - `cdp a11y` - get accessibility tree for the page
 - Returns nodes with role, name, description, value, and properties
 
+### Slice 62: Page source ✅
+- `cdp source` - get full HTML source of the page
+
+### Slice 63: Wait for network idle ✅
+- `cdp waitidle [--idle <duration>]` - wait for network to be idle
+- Default idle time: 500ms with no network activity
+
+### Slice 64: Get all links ✅
+- `cdp links` - get all links on the page
+- Returns href and text for each anchor element
+
 ## Next Slices
 
 ## Test Command
@@ -217,7 +228,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (58 commands)
+## Commands Implemented (61 commands)
 ```
 # Browser info
 cdp version
@@ -313,6 +324,9 @@ cdp block <pattern>... [--disable]
 # Performance & debugging
 cdp metrics
 cdp a11y
+cdp source
+cdp waitidle [--idle <duration>]
+cdp links
 ```
 
 ## Known Issues / Deferred Items

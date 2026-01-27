@@ -2254,3 +2254,141 @@ func TestRun_A11y_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Source_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Navigate to a page with content
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.innerHTML = '<h1>Test Page</h1>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"source"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v, output: %s", err, stdout)
+	}
+
+	html, ok := result["html"].(string)
+	if !ok {
+		t.Fatal("expected html in result")
+	}
+
+	if !strings.Contains(html, "<h1>Test Page</h1>") {
+		t.Error("expected page source to contain <h1>Test Page</h1>")
+	}
+}
+
+func TestRun_Source_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"source"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_WaitIdle_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Navigate to a simple page
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// Wait for network idle
+	code := run([]string{"waitidle"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v, output: %s", err, stdout)
+	}
+
+	if result["idle"] != true {
+		t.Error("expected idle to be true")
+	}
+}
+
+func TestRun_WaitIdle_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"waitidle"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Links_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Navigate and create content with links
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.innerHTML = '<a href="https://example.com">Example</a><a href="/about">About</a>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"links"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v, output: %s", err, stdout)
+	}
+
+	links, ok := result["links"].([]interface{})
+	if !ok {
+		t.Fatal("expected links in result")
+	}
+
+	if len(links) != 2 {
+		t.Errorf("expected 2 links, got %d", len(links))
+	}
+}
+
+func TestRun_Links_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"links"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

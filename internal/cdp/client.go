@@ -2966,6 +2966,133 @@ type AccessibilityNode struct {
 	Children    []AccessibilityNode    `json:"children,omitempty"`
 }
 
+// WaitForNetworkIdle waits until there are no pending network requests for the specified duration.
+func (c *Client) WaitForNetworkIdle(ctx context.Context, targetID string, idleTime time.Duration) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Network domain
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling network: %w", err)
+	}
+
+	// Subscribe to network events
+	requestCh := c.subscribeEvent(sessionID, "Network.requestWillBeSent")
+	responseCh := c.subscribeEvent(sessionID, "Network.loadingFinished")
+	failedCh := c.subscribeEvent(sessionID, "Network.loadingFailed")
+
+	defer c.unsubscribeEvent(sessionID, "Network.requestWillBeSent", requestCh)
+	defer c.unsubscribeEvent(sessionID, "Network.loadingFinished", responseCh)
+	defer c.unsubscribeEvent(sessionID, "Network.loadingFailed", failedCh)
+
+	pendingRequests := make(map[string]bool)
+	idleTimer := time.NewTimer(idleTime)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case params := <-requestCh:
+			var event struct {
+				RequestID string `json:"requestId"`
+			}
+			if err := json.Unmarshal(params, &event); err == nil {
+				pendingRequests[event.RequestID] = true
+				// Reset idle timer when new request starts
+				if !idleTimer.Stop() {
+					select {
+					case <-idleTimer.C:
+					default:
+					}
+				}
+				idleTimer.Reset(idleTime)
+			}
+		case params := <-responseCh:
+			var event struct {
+				RequestID string `json:"requestId"`
+			}
+			if err := json.Unmarshal(params, &event); err == nil {
+				delete(pendingRequests, event.RequestID)
+				// Reset idle timer when request finishes
+				if !idleTimer.Stop() {
+					select {
+					case <-idleTimer.C:
+					default:
+					}
+				}
+				idleTimer.Reset(idleTime)
+			}
+		case params := <-failedCh:
+			var event struct {
+				RequestID string `json:"requestId"`
+			}
+			if err := json.Unmarshal(params, &event); err == nil {
+				delete(pendingRequests, event.RequestID)
+				// Reset idle timer when request fails
+				if !idleTimer.Stop() {
+					select {
+					case <-idleTimer.C:
+					default:
+					}
+				}
+				idleTimer.Reset(idleTime)
+			}
+		case <-idleTimer.C:
+			// No network activity for idleTime
+			if len(pendingRequests) == 0 {
+				return nil
+			}
+			// Still have pending requests, reset timer
+			idleTimer.Reset(idleTime)
+		}
+	}
+}
+
+// GetPageSource returns the full HTML source of the page.
+func (c *Client) GetPageSource(ctx context.Context, targetID string) (string, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return "", err
+	}
+
+	// Get the document root
+	result, err := c.CallSession(ctx, sessionID, "DOM.getDocument", map[string]interface{}{
+		"depth": -1,
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResult struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(result, &docResult); err != nil {
+		return "", fmt.Errorf("parsing document: %w", err)
+	}
+
+	// Get outer HTML of the root
+	result, err = c.CallSession(ctx, sessionID, "DOM.getOuterHTML", map[string]interface{}{
+		"nodeId": docResult.Root.NodeID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting outer HTML: %w", err)
+	}
+
+	var htmlResult struct {
+		OuterHTML string `json:"outerHTML"`
+	}
+	if err := json.Unmarshal(result, &htmlResult); err != nil {
+		return "", fmt.Errorf("parsing outer HTML: %w", err)
+	}
+
+	return htmlResult.OuterHTML, nil
+}
+
 // GetAccessibilityTree returns the accessibility tree for the page.
 func (c *Client) GetAccessibilityTree(ctx context.Context, targetID string) ([]AccessibilityNode, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
