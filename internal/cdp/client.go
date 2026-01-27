@@ -137,6 +137,8 @@ type Client struct {
 	pendingMu       sync.Mutex
 	eventHandlers   map[string][]chan json.RawMessage // key: "sessionID:method"
 	eventHandlersMu sync.Mutex
+	sessions        map[string]string // targetID -> sessionID (session cache)
+	sessionsMu      sync.Mutex
 	closed          atomic.Bool
 	closeOnce       sync.Once
 	closeCh         chan struct{}
@@ -186,6 +188,7 @@ func Connect(ctx context.Context, host string, port int) (*Client, error) {
 		wsURL:         versionResp.WebSocketDebuggerURL,
 		pending:       make(map[int64]chan callResult),
 		eventHandlers: make(map[string][]chan json.RawMessage),
+		sessions:      make(map[string]string),
 		closeCh:       make(chan struct{}),
 	}
 
@@ -204,6 +207,23 @@ func (c *Client) WebSocketURL() string {
 func (c *Client) Close() error {
 	var err error
 	c.closeOnce.Do(func() {
+		// Detach all cached sessions (best effort)
+		c.sessionsMu.Lock()
+		sessions := make(map[string]string)
+		for k, v := range c.sessions {
+			sessions[k] = v
+		}
+		c.sessions = make(map[string]string)
+		c.sessionsMu.Unlock()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		for _, sessionID := range sessions {
+			c.Call(ctx, "Target.detachFromTarget", map[string]interface{}{
+				"sessionId": sessionID,
+			})
+		}
+
 		c.closed.Store(true)
 		close(c.closeCh)
 		err = c.conn.Close()
@@ -293,7 +313,17 @@ func (c *Client) Pages(ctx context.Context) ([]TargetInfo, error) {
 }
 
 // attachToTarget attaches to a target and returns the session ID.
+// Sessions are cached and reused to avoid creating too many sessions.
 func (c *Client) attachToTarget(ctx context.Context, targetID string) (string, error) {
+	// Check cache first
+	c.sessionsMu.Lock()
+	if sessionID, ok := c.sessions[targetID]; ok {
+		c.sessionsMu.Unlock()
+		return sessionID, nil
+	}
+	c.sessionsMu.Unlock()
+
+	// Create new session
 	attachResult, err := c.Call(ctx, "Target.attachToTarget", map[string]interface{}{
 		"targetId": targetID,
 		"flatten":  true,
@@ -308,6 +338,11 @@ func (c *Client) attachToTarget(ctx context.Context, targetID string) (string, e
 	if err := json.Unmarshal(attachResult, &attachResp); err != nil {
 		return "", fmt.Errorf("parsing attach response: %w", err)
 	}
+
+	// Cache the session
+	c.sessionsMu.Lock()
+	c.sessions[targetID] = attachResp.SessionID
+	c.sessionsMu.Unlock()
 
 	return attachResp.SessionID, nil
 }
@@ -1096,18 +1131,19 @@ func (c *Client) PressKey(ctx context.Context, targetID string, key string) erro
 }
 
 // CaptureConsole starts capturing console messages from a page.
-// Returns a channel that receives messages. The channel is buffered.
-// The caller should read from the channel to receive messages.
-func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan ConsoleMessage, error) {
+// Returns a channel that receives ConsoleMessage and a stop function.
+// The stop function MUST be called when done to release resources.
+// The channel is closed when stop is called or when the client is closed.
+func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan ConsoleMessage, func(), error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Enable Runtime domain to receive console events
 	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
 	if err != nil {
-		return nil, fmt.Errorf("enabling Runtime domain: %w", err)
+		return nil, nil, fmt.Errorf("enabling Runtime domain: %w", err)
 	}
 
 	// Subscribe to console API events
@@ -1115,6 +1151,22 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 
 	// Create output channel
 	output := make(chan ConsoleMessage, 100)
+
+	// Create a done channel to signal the goroutine to stop
+	done := make(chan struct{})
+	var stopOnce sync.Once
+
+	// Stop function to clean up resources
+	stop := func() {
+		stopOnce.Do(func() {
+			close(done)
+			c.unsubscribeEvent(sessionID, "Runtime.consoleAPICalled", eventCh)
+			// Best effort to disable Runtime domain
+			disableCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			c.CallSession(disableCtx, sessionID, "Runtime.disable", nil)
+		})
+	}
 
 	// Start goroutine to translate events to ConsoleMessages
 	go func() {
@@ -1153,27 +1205,31 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 				default:
 					// Drop if channel is full
 				}
+			case <-done:
+				return
 			case <-c.closeCh:
 				return
 			}
 		}
 	}()
 
-	return output, nil
+	return output, stop, nil
 }
 
 // CaptureNetwork starts capturing network events from a page.
-// Returns a channel that receives NetworkEvent. The channel is buffered.
-func (c *Client) CaptureNetwork(ctx context.Context, targetID string) (<-chan NetworkEvent, error) {
+// Returns a channel that receives NetworkEvent and a stop function.
+// The stop function MUST be called when done to release resources.
+// The channel is closed when stop is called or when the client is closed.
+func (c *Client) CaptureNetwork(ctx context.Context, targetID string) (<-chan NetworkEvent, func(), error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Enable Network domain to receive events
 	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
 	if err != nil {
-		return nil, fmt.Errorf("enabling Network domain: %w", err)
+		return nil, nil, fmt.Errorf("enabling Network domain: %w", err)
 	}
 
 	// Subscribe to network events
@@ -1182,6 +1238,23 @@ func (c *Client) CaptureNetwork(ctx context.Context, targetID string) (<-chan Ne
 
 	// Create output channel
 	output := make(chan NetworkEvent, 100)
+
+	// Create a done channel to signal the goroutine to stop
+	done := make(chan struct{})
+	var stopOnce sync.Once
+
+	// Stop function to clean up resources
+	stop := func() {
+		stopOnce.Do(func() {
+			close(done)
+			c.unsubscribeEvent(sessionID, "Network.requestWillBeSent", requestCh)
+			c.unsubscribeEvent(sessionID, "Network.responseReceived", responseCh)
+			// Best effort to disable Network domain
+			disableCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			c.CallSession(disableCtx, sessionID, "Network.disable", nil)
+		})
+	}
 
 	// Start goroutine to translate events
 	go func() {
@@ -1236,13 +1309,15 @@ func (c *Client) CaptureNetwork(ctx context.Context, targetID string) (<-chan Ne
 				}:
 				default:
 				}
+			case <-done:
+				return
 			case <-c.closeCh:
 				return
 			}
 		}
 	}()
 
-	return output, nil
+	return output, stop, nil
 }
 
 // GetCookies returns all cookies for the page.
@@ -1944,6 +2019,11 @@ func (c *Client) RawCallSession(ctx context.Context, targetID string, method str
 
 // CloseTab closes a browser tab by its target ID.
 func (c *Client) CloseTab(ctx context.Context, targetID string) error {
+	// Remove session from cache before closing
+	c.sessionsMu.Lock()
+	delete(c.sessions, targetID)
+	c.sessionsMu.Unlock()
+
 	_, err := c.Call(ctx, "Target.closeTarget", map[string]interface{}{
 		"targetId": targetID,
 	})

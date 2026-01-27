@@ -3,15 +3,42 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomyan/cdp-cli/internal/testutil"
 )
+
+// Test Chrome instance - each package gets its own
+const testChromePort = 9301
+
+var chromeInstance *testutil.ChromeInstance
+
+// TestMain sets up and tears down Chrome for all tests
+func TestMain(m *testing.M) {
+	// Start Chrome for this package's tests
+	var err error
+	chromeInstance, err = testutil.StartChrome(testChromePort)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start Chrome: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Run tests
+	code := m.Run()
+
+	// Stop Chrome
+	chromeInstance.Stop()
+
+	os.Exit(code)
+}
 
 func testConfig() *Config {
 	return &Config{
-		Port:    9222,
+		Port:    testChromePort,
 		Host:    "localhost",
 		Timeout: 5 * time.Second,
 		Output:  "json",
@@ -21,7 +48,39 @@ func testConfig() *Config {
 	}
 }
 
+// createTestTabCLI creates a new isolated tab for CLI tests.
+// Returns the tab ID and a cleanup function that must be deferred.
+func createTestTabCLI(t *testing.T) (string, func()) {
+	t.Helper()
+
+	cfg := testConfig()
+	code := run([]string{"new"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to create test tab: %s", stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse new tab result: %v", err)
+	}
+
+	tabID, ok := result["targetId"].(string)
+	if !ok {
+		t.Fatalf("new tab result missing targetId")
+	}
+
+	cleanup := func() {
+		cfg := testConfig()
+		run([]string{"--target", tabID, "close"}, cfg)
+	}
+
+	return tabID, cleanup
+}
+
 func TestRun_NoArgs(t *testing.T) {
+	t.Parallel() // No Chrome needed
 	cfg := testConfig()
 	code := run([]string{}, cfg)
 	if code != ExitError {
@@ -35,6 +94,7 @@ func TestRun_NoArgs(t *testing.T) {
 }
 
 func TestRun_UnknownCommand(t *testing.T) {
+	t.Parallel() // No Chrome needed
 	cfg := testConfig()
 	code := run([]string{"unknown"}, cfg)
 	if code != ExitError {
@@ -48,6 +108,7 @@ func TestRun_UnknownCommand(t *testing.T) {
 }
 
 func TestRun_Help(t *testing.T) {
+	t.Parallel() // No Chrome needed
 	cfg := testConfig()
 	code := run([]string{"-h"}, cfg)
 	if code != ExitSuccess {
@@ -56,6 +117,7 @@ func TestRun_Help(t *testing.T) {
 }
 
 func TestRun_Version_NoChrome(t *testing.T) {
+	t.Parallel() // No Chrome needed
 	cfg := testConfig()
 	cfg.Port = 1 // Port that won't have Chrome
 
@@ -542,22 +604,22 @@ func TestRun_Fill_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 15 * time.Second
 
-	// Navigate to blank page to reset state
-	run([]string{"goto", "about:blank"}, cfg)
-	time.Sleep(50 * time.Millisecond)
-
 	// Create a page with an input
-	run([]string{"eval", `document.body.innerHTML = '<input id="test-input" type="text" />'`}, cfg)
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<input id="test-input" type="text" />'`}, cfg)
 	time.Sleep(50 * time.Millisecond)
 
 	// Reset buffers
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code := run([]string{"fill", "#test-input", "test value"}, cfg)
+	code := run([]string{"--target", tabID, "fill", "#test-input", "test value"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -597,20 +659,20 @@ func TestRun_HTML_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 
-	// Navigate to blank page to reset state
-	run([]string{"goto", "about:blank"}, cfg)
-	time.Sleep(50 * time.Millisecond)
-
 	// Create a test element
-	run([]string{"eval", `document.body.innerHTML = '<div id="test">Content</div>'`}, cfg)
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<div id="test">Content</div>'`}, cfg)
 	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code := run([]string{"html", "#test"}, cfg)
+	code := run([]string{"--target", tabID, "html", "#test"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -641,20 +703,20 @@ func TestRun_Wait_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 
-	// Navigate to blank page to reset state
-	run([]string{"goto", "about:blank"}, cfg)
-	time.Sleep(50 * time.Millisecond)
-
 	// Create element that exists
-	run([]string{"eval", `document.body.innerHTML = '<div id="exists">Test</div>'`}, cfg)
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<div id="exists">Test</div>'`}, cfg)
 	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code := run([]string{"wait", "#exists"}, cfg)
+	code := run([]string{"--target", tabID, "wait", "#exists"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -962,18 +1024,20 @@ func TestRun_Focus_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 
-	// Navigate to blank and create input
-	run([]string{"goto", "about:blank"}, cfg)
-	time.Sleep(50 * time.Millisecond)
-	run([]string{"eval", `document.body.innerHTML = '<input id="focus-input" type="text" />'`}, cfg)
+	// Create input
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<input id="focus-input" type="text" />'`}, cfg)
 	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code := run([]string{"focus", "#focus-input"}, cfg)
+	code := run([]string{"--target", tabID, "focus", "#focus-input"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1039,23 +1103,25 @@ func TestRun_Press_MissingKey(t *testing.T) {
 }
 
 func TestRun_Press_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
-	// Navigate to blank page and create an input
-	code := run([]string{"goto", "about:blank"}, cfg)
-	if code != ExitSuccess {
-		t.Fatalf("failed to navigate: %d", code)
-	}
-	time.Sleep(50 * time.Millisecond)
-
-	code = run([]string{"eval", `document.body.innerHTML = '<input id="press-input" type="text" />'`}, cfg)
+	// Create an input
+	code := run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<input id="press-input" type="text" />'`}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to create input: %d", code)
 	}
 	time.Sleep(50 * time.Millisecond)
 
-	code = run([]string{"focus", "#press-input"}, cfg)
+	code = run([]string{"--target", tabID, "focus", "#press-input"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to focus: %d", code)
 	}
@@ -1063,7 +1129,7 @@ func TestRun_Press_Success(t *testing.T) {
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"press", "Enter"}, cfg)
+	code = run([]string{"--target", tabID, "press", "Enter"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1101,17 +1167,19 @@ func TestRun_Hover_MissingSelector(t *testing.T) {
 }
 
 func TestRun_Hover_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
-	// Navigate to blank page and create a button
-	code := run([]string{"goto", "about:blank"}, cfg)
-	if code != ExitSuccess {
-		t.Fatalf("failed to navigate: %d", code)
-	}
-	time.Sleep(50 * time.Millisecond)
-
-	code = run([]string{"eval", `document.body.innerHTML = '<button id="hover-btn" style="width:100px;height:50px;">Hover</button>'`}, cfg)
+	// Create a button
+	code := run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<button id="hover-btn" style="width:100px;height:50px;">Hover</button>'`}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to create button: %d", code)
 	}
@@ -1120,7 +1188,7 @@ func TestRun_Hover_Success(t *testing.T) {
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"hover", "#hover-btn"}, cfg)
+	code = run([]string{"--target", tabID, "hover", "#hover-btn"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1161,26 +1229,25 @@ func TestRun_Attr_MissingArgs(t *testing.T) {
 }
 
 func TestRun_Attr_Success(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
-	// Navigate to blank page and create a link
-	code := run([]string{"goto", "about:blank"}, cfg)
+	// Navigate to a data URL with a link
+	dataURL := `data:text/html,<html><body><a id="link" href="https://test.com">Test</a></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
 	if code != ExitSuccess {
-		t.Fatalf("failed to navigate: %d", code)
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("failed to navigate: %d, stderr: %s", code, stderr)
 	}
-	time.Sleep(50 * time.Millisecond)
-
-	code = run([]string{"eval", `document.body.innerHTML = '<a id="link" href="https://test.com">Test</a>'`}, cfg)
-	if code != ExitSuccess {
-		t.Fatalf("failed to create link: %d", code)
-	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"attr", "#link", "href"}, cfg)
+	code = run([]string{"--target", tabID, "attr", "#link", "href"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)

@@ -668,11 +668,12 @@ func cmdConsole(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	messages, err := client.CaptureConsole(ctx, target.ID)
+	messages, stopCapture, err := client.CaptureConsole(ctx, target.ID)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
 	}
+	defer stopCapture() // Clean up resources on exit
 
 	enc := json.NewEncoder(cfg.Stdout)
 	for {
@@ -724,11 +725,12 @@ func cmdNetwork(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	events, err := client.CaptureNetwork(ctx, target.ID)
+	events, stopCapture, err := client.CaptureNetwork(ctx, target.ID)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitError
 	}
+	defer stopCapture() // Clean up resources on exit
 
 	enc := json.NewEncoder(cfg.Stdout)
 	for {
