@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -97,13 +97,16 @@ func run(args []string, cfg *Config) int {
 	switch cmd {
 	case "version":
 		return cmdVersion(cfg)
+	case "tabs":
+		return cmdTabs(cfg)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
 	}
 }
 
-func cmdVersion(cfg *Config) int {
+// withClient executes a function with a connected CDP client.
+func withClient(cfg *Config, fn func(ctx context.Context, client *cdp.Client) (interface{}, error)) int {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
@@ -114,7 +117,7 @@ func cmdVersion(cfg *Config) int {
 	}
 	defer client.Close()
 
-	version, err := client.Version(ctx)
+	result, err := fn(ctx, client)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			fmt.Fprintln(cfg.Stderr, "error: timeout")
@@ -124,7 +127,19 @@ func cmdVersion(cfg *Config) int {
 		return ExitError
 	}
 
-	return outputResult(cfg, version)
+	return outputResult(cfg, result)
+}
+
+func cmdVersion(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		return client.Version(ctx)
+	})
+}
+
+func cmdTabs(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		return client.Pages(ctx)
+	})
 }
 
 func outputResult(cfg *Config, v interface{}) int {

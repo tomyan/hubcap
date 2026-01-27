@@ -140,3 +140,61 @@ func TestRun_InvalidOutputFormat(t *testing.T) {
 		t.Errorf("expected exit code %d for invalid output format, got %d", ExitError, code)
 	}
 }
+
+func TestRun_Tabs_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	code := run([]string{"tabs"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify output is valid JSON array
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result []interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON array: %v, got: %s", err, stdout)
+	}
+}
+
+func TestRun_Tabs_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1
+
+	code := run([]string{"tabs"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Tabs_OutputContainsPageInfo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	code := run([]string{"tabs"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("expected exit code %d, got %d", ExitSuccess, code)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var tabs []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &tabs); err != nil {
+		t.Fatalf("failed to parse output: %v", err)
+	}
+
+	// Each tab should have id, type, title, url
+	for i, tab := range tabs {
+		if tab["id"] == nil {
+			t.Errorf("tab %d missing 'id' field", i)
+		}
+		if tab["type"] == nil {
+			t.Errorf("tab %d missing 'type' field", i)
+		}
+	}
+}

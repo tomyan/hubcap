@@ -168,7 +168,12 @@ echo '[{"cmd": "goto", "args": ["https://example.com"]}, {"cmd": "screenshot"}]'
 
 ---
 
-## Current Slice: 1 - Hello Chrome
+## Current Slice: 2 - List Tabs
+
+### Completed
+- [x] Slice 1: Hello Chrome (version command)
+
+## Slice 1 - Hello Chrome (DONE)
 
 ### Acceptance Test
 ```bash

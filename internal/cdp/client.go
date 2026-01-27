@@ -40,6 +40,14 @@ type VersionInfo struct {
 	V8Version       string `json:"v8,omitempty"`
 }
 
+// TargetInfo contains information about a browser target (tab/page).
+type TargetInfo struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
 // Client represents a connection to Chrome DevTools Protocol.
 type Client struct {
 	conn      *websocket.Conn
@@ -152,6 +160,54 @@ func (c *Client) Version(ctx context.Context) (*VersionInfo, error) {
 		UserAgent:       resp.UserAgent,
 		V8Version:       resp.JsVersion,
 	}, nil
+}
+
+// Targets returns all browser targets (pages, workers, etc.).
+func (c *Client) Targets(ctx context.Context) ([]TargetInfo, error) {
+	result, err := c.Call(ctx, "Target.getTargets", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		TargetInfos []struct {
+			TargetID string `json:"targetId"`
+			Type     string `json:"type"`
+			Title    string `json:"title"`
+			URL      string `json:"url"`
+		} `json:"targetInfos"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshaling targets: %w", err)
+	}
+
+	targets := make([]TargetInfo, 0, len(resp.TargetInfos))
+	for _, t := range resp.TargetInfos {
+		targets = append(targets, TargetInfo{
+			ID:    t.TargetID,
+			Type:  t.Type,
+			Title: t.Title,
+			URL:   t.URL,
+		})
+	}
+
+	return targets, nil
+}
+
+// Pages returns only page targets (tabs).
+func (c *Client) Pages(ctx context.Context) ([]TargetInfo, error) {
+	targets, err := c.Targets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pages := make([]TargetInfo, 0)
+	for _, t := range targets {
+		if t.Type == "page" {
+			pages = append(pages, t)
+		}
+	}
+	return pages, nil
 }
 
 type cdpRequest struct {

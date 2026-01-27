@@ -173,3 +173,118 @@ func TestClient_Call_InvalidMethod(t *testing.T) {
 		t.Errorf("expected ErrCDPError, got %v", err)
 	}
 }
+
+func TestClient_Targets_ReturnsPages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	targets, err := client.Targets(ctx)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+
+	// Should return a slice (may be empty)
+	if targets == nil {
+		t.Error("expected non-nil targets slice")
+	}
+}
+
+func TestClient_Targets_JSONSerializable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	targets, err := client.Targets(ctx)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+
+	data, err := json.Marshal(targets)
+	if err != nil {
+		t.Fatalf("failed to marshal targets: %v", err)
+	}
+
+	// Should be a JSON array
+	if len(data) == 0 || data[0] != '[' {
+		t.Errorf("expected JSON array, got: %s", string(data))
+	}
+}
+
+func TestTargetInfo_Fields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	targets, err := client.Targets(ctx)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+
+	if len(targets) == 0 {
+		t.Skip("no targets available")
+	}
+
+	// Check first target has expected fields
+	target := targets[0]
+	if target.ID == "" {
+		t.Error("expected non-empty ID")
+	}
+	if target.Type == "" {
+		t.Error("expected non-empty Type")
+	}
+}
+
+func TestClient_Pages_ReturnsOnlyPages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+
+	// All returned targets should be pages
+	for _, p := range pages {
+		if p.Type != "page" {
+			t.Errorf("expected type 'page', got %q", p.Type)
+		}
+	}
+}
