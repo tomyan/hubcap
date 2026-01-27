@@ -801,6 +801,40 @@ func (c *Client) WaitFor(ctx context.Context, targetID string, selector string, 
 	}
 }
 
+// GetText returns the text content of an element.
+func (c *Client) GetText(ctx context.Context, targetID string, selector string) (string, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return "", err
+	}
+
+	// Enable Runtime domain to use JavaScript
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return "", fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	// Use JavaScript to get innerText (handles whitespace better than textContent)
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    fmt.Sprintf(`document.querySelector(%q)?.innerText || ''`, selector),
+		"returnByValue": true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("evaluating expression: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value string `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return "", fmt.Errorf("parsing eval response: %w", err)
+	}
+
+	return evalResp.Result.Value, nil
+}
+
 // CallSession sends a CDP command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {

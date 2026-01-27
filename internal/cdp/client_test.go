@@ -833,6 +833,12 @@ func TestClient_Fill_Success(t *testing.T) {
 		t.Skip("no pages available")
 	}
 
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
 	// Create a page with an input via JS
 	_, err = client.Eval(ctx, pages[0].ID, `
 		document.body.innerHTML = '<input id="test-input" type="text" />';
@@ -913,6 +919,12 @@ func TestClient_GetHTML_Success(t *testing.T) {
 		t.Skip("no pages available")
 	}
 
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
 	// Create a test element
 	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<div id="test"><span>Hello</span></div>'`)
 	if err != nil {
@@ -983,6 +995,12 @@ func TestClient_WaitFor_ImmediateMatch(t *testing.T) {
 		t.Skip("no pages available")
 	}
 
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
 	// Create element immediately
 	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<div id="exists">Test</div>'`)
 	if err != nil {
@@ -1016,6 +1034,12 @@ func TestClient_WaitFor_DelayedAppear(t *testing.T) {
 	}
 	if len(pages) == 0 {
 		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
 	}
 
 	// Set up delayed element creation (500ms)
@@ -1058,6 +1082,12 @@ func TestClient_WaitFor_Timeout(t *testing.T) {
 		t.Skip("no pages available")
 	}
 
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
 	// Wait for non-existent element with short timeout
 	err = client.WaitFor(ctx, pages[0].ID, "#never-exists", 500*time.Millisecond)
 	if err == nil {
@@ -1066,5 +1096,50 @@ func TestClient_WaitFor_Timeout(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "timeout") {
 		t.Errorf("expected 'timeout' in error, got: %v", err)
+	}
+}
+
+func TestClient_GetText_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to blank page to reset DOM state
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+
+	// Create element with text
+	_, err = client.Eval(ctx, pages[0].ID, `document.body.innerHTML = '<div id="test">Hello <span>World</span>!</div>'`)
+	if err != nil {
+		t.Fatalf("failed to create element: %v", err)
+	}
+
+	text, err := client.GetText(ctx, pages[0].ID, "#test")
+	if err != nil {
+		t.Fatalf("failed to get text: %v", err)
+	}
+
+	// Should get concatenated text content
+	if text != "Hello World!" {
+		t.Errorf("expected 'Hello World!', got %q", text)
 	}
 }

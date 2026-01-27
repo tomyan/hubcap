@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -143,6 +143,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdWait(cfg, remaining[1:])
+	case "text":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp text <selector>")
+			return ExitError
+		}
+		return cmdText(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -357,6 +363,31 @@ func cmdHTML(cfg *Config, selector string) int {
 type WaitResult struct {
 	Found    bool   `json:"found"`
 	Selector string `json:"selector"`
+}
+
+// TextResult is returned by the text command.
+type TextResult struct {
+	Selector string `json:"selector"`
+	Text     string `json:"text"`
+}
+
+func cmdText(cfg *Config, selector string) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		text, err := client.GetText(ctx, pages[0].ID, selector)
+		if err != nil {
+			return nil, err
+		}
+
+		return TextResult{Selector: selector, Text: text}, nil
+	})
 }
 
 func cmdWait(cfg *Config, args []string) int {
