@@ -2005,3 +2005,83 @@ func TestClient_GoBack_Success(t *testing.T) {
 		t.Errorf("expected href 'about:blank', got %v", result.Value)
 	}
 }
+
+func TestClient_GetTitle_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to example.com which has a title
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Get the title
+	title, err := client.GetTitle(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get title: %v", err)
+	}
+
+	if title == "" {
+		t.Error("expected non-empty title")
+	}
+}
+
+func TestClient_GetURL_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to example.com
+	_, err = client.Navigate(ctx, pages[0].ID, "https://example.com")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Get the URL
+	url, err := client.GetURL(ctx, pages[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get URL: %v", err)
+	}
+
+	if !strings.Contains(url, "example.com") {
+		t.Errorf("expected URL to contain 'example.com', got %s", url)
+	}
+}

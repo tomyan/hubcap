@@ -1333,3 +1333,90 @@ func TestRun_Forward_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Title_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to blank page and set title
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Set a title via eval
+	code = run([]string{"eval", `document.title = "Test Title"`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to set title: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"title"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["title"] != "Test Title" {
+		t.Errorf("expected title 'Test Title', got %v", result["title"])
+	}
+}
+
+func TestRun_Title_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"title"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_URL_Success(t *testing.T) {
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate to about:blank
+	code := run([]string{"goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code = run([]string{"url"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	url := result["url"].(string)
+	if url != "about:blank" {
+		t.Errorf("expected URL 'about:blank', got %s", url)
+	}
+}
+
+func TestRun_URL_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"url"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

@@ -1405,6 +1405,36 @@ func (c *Client) Focus(ctx context.Context, targetID string, selector string) er
 	return nil
 }
 
+// GetTitle returns the page title.
+func (c *Client) GetTitle(ctx context.Context, targetID string) (string, error) {
+	result, err := c.Eval(ctx, targetID, "document.title")
+	if err != nil {
+		return "", err
+	}
+	if result.Value == nil {
+		return "", nil
+	}
+	if s, ok := result.Value.(string); ok {
+		return s, nil
+	}
+	return fmt.Sprintf("%v", result.Value), nil
+}
+
+// GetURL returns the current page URL.
+func (c *Client) GetURL(ctx context.Context, targetID string) (string, error) {
+	result, err := c.Eval(ctx, targetID, "document.location.href")
+	if err != nil {
+		return "", err
+	}
+	if result.Value == nil {
+		return "", nil
+	}
+	if s, ok := result.Value.(string); ok {
+		return s, nil
+	}
+	return fmt.Sprintf("%v", result.Value), nil
+}
+
 // GetAttribute returns the value of an attribute for an element.
 func (c *Client) GetAttribute(ctx context.Context, targetID string, selector string, name string) (string, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

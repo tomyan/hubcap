@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, fill, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -194,6 +194,10 @@ func run(args []string, cfg *Config) int {
 		return cmdBack(cfg)
 	case "forward":
 		return cmdForward(cfg)
+	case "title":
+		return cmdTitle(cfg)
+	case "url":
+		return cmdURL(cfg)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -939,6 +943,54 @@ func cmdForward(cfg *Config) int {
 		}
 
 		return ForwardResult{Success: true}, nil
+	})
+}
+
+// TitleResult is returned by the title command.
+type TitleResult struct {
+	Title string `json:"title"`
+}
+
+func cmdTitle(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		title, err := client.GetTitle(ctx, pages[0].ID)
+		if err != nil {
+			return nil, err
+		}
+
+		return TitleResult{Title: title}, nil
+	})
+}
+
+// URLResult is returned by the url command.
+type URLResult struct {
+	URL string `json:"url"`
+}
+
+func cmdURL(cfg *Config) int {
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		url, err := client.GetURL(ctx, pages[0].ID)
+		if err != nil {
+			return nil, err
+		}
+
+		return URLResult{URL: url}, nil
 	})
 }
 
