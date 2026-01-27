@@ -2455,3 +2455,44 @@ func TestClient_RawCallSession_Success(t *testing.T) {
 		t.Errorf("expected value 2, got %v", resp.Result.Value)
 	}
 }
+
+func TestClient_Emulate_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", 9222)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		t.Fatalf("failed to get pages: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Skip("no pages available")
+	}
+
+	// Navigate to a page first
+	_, err = client.Navigate(ctx, pages[0].ID, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Emulate iPhone 12 - just verify the method succeeds
+	device := cdp.CommonDevices["iPhone 12"]
+	err = client.Emulate(ctx, pages[0].ID, device)
+	if err != nil {
+		t.Fatalf("failed to emulate: %v", err)
+	}
+
+	// Note: In headless Chrome, the emulation may not affect window.innerWidth/Height
+	// because there's no actual display. The emulation affects how the page renders
+	// and what user-agent is reported. We just verify the CDP calls succeed.
+}

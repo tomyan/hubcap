@@ -1500,6 +1500,84 @@ type BoundingBox struct {
 	Height float64 `json:"height"`
 }
 
+// DeviceInfo contains device emulation parameters.
+type DeviceInfo struct {
+	Name              string  `json:"name"`
+	Width             int     `json:"width"`
+	Height            int     `json:"height"`
+	DeviceScaleFactor float64 `json:"deviceScaleFactor"`
+	Mobile            bool    `json:"mobile"`
+	UserAgent         string  `json:"userAgent"`
+}
+
+// CommonDevices is a map of common device names to their configurations.
+var CommonDevices = map[string]DeviceInfo{
+	"iPhone 12": {
+		Name:              "iPhone 12",
+		Width:             390,
+		Height:            844,
+		DeviceScaleFactor: 3,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+	},
+	"iPhone 12 Pro": {
+		Name:              "iPhone 12 Pro",
+		Width:             390,
+		Height:            844,
+		DeviceScaleFactor: 3,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+	},
+	"iPhone 12 Pro Max": {
+		Name:              "iPhone 12 Pro Max",
+		Width:             428,
+		Height:            926,
+		DeviceScaleFactor: 3,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+	},
+	"iPhone SE": {
+		Name:              "iPhone SE",
+		Width:             375,
+		Height:            667,
+		DeviceScaleFactor: 2,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+	},
+	"Pixel 5": {
+		Name:              "Pixel 5",
+		Width:             393,
+		Height:            851,
+		DeviceScaleFactor: 2.75,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36",
+	},
+	"Galaxy S21": {
+		Name:              "Galaxy S21",
+		Width:             360,
+		Height:            800,
+		DeviceScaleFactor: 3,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36",
+	},
+	"iPad": {
+		Name:              "iPad",
+		Width:             768,
+		Height:            1024,
+		DeviceScaleFactor: 2,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+	},
+	"iPad Pro": {
+		Name:              "iPad Pro",
+		Width:             1024,
+		Height:            1366,
+		DeviceScaleFactor: 2,
+		Mobile:            true,
+		UserAgent:         "Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+	},
+}
+
 // GetBoundingBox returns the bounding box of an element.
 func (c *Client) GetBoundingBox(ctx context.Context, targetID string, selector string) (*BoundingBox, error) {
 	js := fmt.Sprintf(`
@@ -2477,4 +2555,33 @@ func (c *Client) unsubscribeEvent(sessionID, method string, ch chan json.RawMess
 			return
 		}
 	}
+}
+
+// Emulate sets device emulation for the specified target.
+func (c *Client) Emulate(ctx context.Context, targetID string, device DeviceInfo) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Set device metrics override
+	_, err = c.CallSession(ctx, sessionID, "Emulation.setDeviceMetricsOverride", map[string]interface{}{
+		"width":             device.Width,
+		"height":            device.Height,
+		"deviceScaleFactor": device.DeviceScaleFactor,
+		"mobile":            device.Mobile,
+	})
+	if err != nil {
+		return fmt.Errorf("setting device metrics: %w", err)
+	}
+
+	// Set user agent override
+	_, err = c.CallSession(ctx, sessionID, "Emulation.setUserAgentOverride", map[string]interface{}{
+		"userAgent": device.UserAgent,
+	})
+	if err != nil {
+		return fmt.Errorf("setting user agent: %w", err)
+	}
+
+	return nil
 }

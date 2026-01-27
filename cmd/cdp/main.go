@@ -294,6 +294,16 @@ func run(args []string, cfg *Config) int {
 		return cmdRun(cfg, remaining[1])
 	case "raw":
 		return cmdRaw(cfg, remaining[1:])
+	case "emulate":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp emulate <device>")
+			fmt.Fprintln(cfg.Stderr, "\nAvailable devices:")
+			for name := range cdp.CommonDevices {
+				fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
+			}
+			return ExitError
+		}
+		return cmdEmulate(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1369,6 +1379,40 @@ func cmdRun(cfg *Config, file string) int {
 			return nil, err
 		}
 		return RunResult{File: file, Value: result.Value}, nil
+	})
+}
+
+type EmulateResult struct {
+	Device            string  `json:"device"`
+	Width             int     `json:"width"`
+	Height            int     `json:"height"`
+	DeviceScaleFactor float64 `json:"deviceScaleFactor"`
+	Mobile            bool    `json:"mobile"`
+}
+
+func cmdEmulate(cfg *Config, deviceName string) int {
+	device, ok := cdp.CommonDevices[deviceName]
+	if !ok {
+		fmt.Fprintf(cfg.Stderr, "error: unknown device: %s\n", deviceName)
+		fmt.Fprintln(cfg.Stderr, "\nAvailable devices:")
+		for name := range cdp.CommonDevices {
+			fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Emulate(ctx, target.ID, device)
+		if err != nil {
+			return nil, err
+		}
+		return EmulateResult{
+			Device:            device.Name,
+			Width:             device.Width,
+			Height:            device.Height,
+			DeviceScaleFactor: device.DeviceScaleFactor,
+			Mobile:            device.Mobile,
+		}, nil
 	})
 }
 

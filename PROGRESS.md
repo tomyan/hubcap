@@ -161,10 +161,11 @@
 - Accepts integer (0-based index) or target ID string
 - All page-specific commands respect this flag
 
-## Next Slices
-
-### Slice 51: Device emulation
+### Slice 51: Device emulation ✅
 - `cdp emulate <device>` - emulate mobile devices
+- Preset devices: iPhone 12, iPhone 12 Pro, iPhone 12 Pro Max, iPhone SE, Pixel 5, Galaxy S21, iPad, iPad Pro
+
+## Next Slices
 
 ### Slice 52: User agent
 - `cdp useragent <string>` - set custom user agent
@@ -179,7 +180,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (48 commands)
+## Commands Implemented (49 commands)
 ```
 # Browser info
 cdp version
@@ -259,6 +260,9 @@ cdp dialog [accept|dismiss] [--text <prompt>]
 
 # Script execution
 cdp run <file.js>
+
+# Device emulation
+cdp emulate <device>
 ```
 
 ## Known Issues / Deferred Items
