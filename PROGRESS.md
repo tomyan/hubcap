@@ -174,6 +174,18 @@
 ### Slice 54: Offline mode ✅
 - `cdp offline <true|false>` - enable/disable offline mode
 
+### Slice 55: Element screenshot ✅
+- `cdp screenshot --output <file> --selector <css>` - capture just an element
+- Returns bounding box with screenshot metadata
+
+### Slice 56: Computed styles ✅
+- `cdp styles <selector>` - get computed CSS styles for an element
+- Returns common layout/styling properties
+
+### Slice 57: Element layout ✅
+- `cdp layout <selector> [--depth <n>]` - get comprehensive layout info
+- Includes bounds, styles, and children with their layouts
+
 ## Next Slices
 
 ## Test Command
@@ -186,7 +198,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (52 commands)
+## Commands Implemented (54 commands)
 ```
 # Browser info
 cdp version
@@ -207,7 +219,7 @@ cdp title
 cdp url
 
 # Screenshots & PDF
-cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100]
+cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>]
 cdp pdf --output <file> [--landscape] [--background]
 
 # JavaScript execution
@@ -221,6 +233,8 @@ cdp attr <selector> <attribute>
 cdp count <selector>
 cdp visible <selector>
 cdp bounds <selector>
+cdp styles <selector>
+cdp layout <selector> [--depth <n>]
 
 # Click actions
 cdp click <selector>

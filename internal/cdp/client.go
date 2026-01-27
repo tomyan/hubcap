@@ -1578,6 +1578,202 @@ var CommonDevices = map[string]DeviceInfo{
 	},
 }
 
+// ElementLayout contains comprehensive layout information for an element.
+type ElementLayout struct {
+	Selector string                 `json:"selector"`
+	TagName  string                 `json:"tagName"`
+	Bounds   *BoundingBox           `json:"bounds"`
+	Styles   map[string]string      `json:"styles,omitempty"`
+	Children []ElementLayout        `json:"children,omitempty"`
+}
+
+// GetComputedStyles returns computed CSS styles for an element.
+func (c *Client) GetComputedStyles(ctx context.Context, targetID string, selector string, properties []string) (map[string]string, error) {
+	// Build JS to get computed styles
+	propsJS := "null"
+	if len(properties) > 0 {
+		propsJSON, _ := json.Marshal(properties)
+		propsJS = string(propsJSON)
+	}
+
+	js := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) return null;
+			const computed = window.getComputedStyle(el);
+			const props = %s;
+			const result = {};
+			if (props) {
+				for (const p of props) {
+					result[p] = computed.getPropertyValue(p);
+				}
+			} else {
+				// Return common layout/styling properties
+				const common = [
+					'display', 'position', 'top', 'left', 'right', 'bottom',
+					'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
+					'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+					'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+					'border', 'borderWidth', 'borderStyle', 'borderColor',
+					'backgroundColor', 'color', 'fontSize', 'fontFamily', 'fontWeight',
+					'lineHeight', 'textAlign', 'overflow', 'visibility', 'opacity',
+					'zIndex', 'flexDirection', 'justifyContent', 'alignItems',
+					'gridTemplateColumns', 'gridTemplateRows', 'gap'
+				];
+				for (const p of common) {
+					const val = computed.getPropertyValue(p.replace(/([A-Z])/g, '-$1').toLowerCase());
+					if (val) result[p] = val;
+				}
+			}
+			return result;
+		})()
+	`, selector, propsJS)
+
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Value == nil {
+		return nil, fmt.Errorf("element not found: %s", selector)
+	}
+
+	stylesMap, ok := result.Value.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type")
+	}
+
+	styles := make(map[string]string)
+	for k, v := range stylesMap {
+		if s, ok := v.(string); ok {
+			styles[k] = s
+		}
+	}
+
+	return styles, nil
+}
+
+// GetElementLayout returns comprehensive layout info for an element and its children.
+func (c *Client) GetElementLayout(ctx context.Context, targetID string, selector string, depth int) (*ElementLayout, error) {
+	js := fmt.Sprintf(`
+		(function() {
+			function getLayout(el, currentDepth, maxDepth) {
+				if (!el) return null;
+				const rect = el.getBoundingClientRect();
+				const computed = window.getComputedStyle(el);
+
+				const layout = {
+					tagName: el.tagName,
+					bounds: {
+						x: rect.x,
+						y: rect.y,
+						width: rect.width,
+						height: rect.height
+					},
+					styles: {
+						display: computed.display,
+						position: computed.position,
+						backgroundColor: computed.backgroundColor,
+						color: computed.color,
+						fontSize: computed.fontSize,
+						padding: computed.padding,
+						margin: computed.margin
+					}
+				};
+
+				if (currentDepth < maxDepth && el.children.length > 0) {
+					layout.children = [];
+					for (const child of el.children) {
+						layout.children.push(getLayout(child, currentDepth + 1, maxDepth));
+					}
+				}
+
+				return layout;
+			}
+
+			const el = document.querySelector(%q);
+			return getLayout(el, 0, %d);
+		})()
+	`, selector, depth)
+
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Value == nil {
+		return nil, fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Convert the result to ElementLayout
+	jsonBytes, err := json.Marshal(result.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	var layout ElementLayout
+	if err := json.Unmarshal(jsonBytes, &layout); err != nil {
+		return nil, err
+	}
+
+	layout.Selector = selector
+	return &layout, nil
+}
+
+// ScreenshotElement captures a screenshot of a specific element.
+func (c *Client) ScreenshotElement(ctx context.Context, targetID string, selector string, opts ScreenshotOptions) ([]byte, *BoundingBox, error) {
+	// First get the bounding box
+	bounds, err := c.GetBoundingBox(ctx, targetID, selector)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Take screenshot with clip region
+	format := opts.Format
+	if format == "" {
+		format = "png"
+	}
+
+	params := map[string]interface{}{
+		"format": format,
+		"clip": map[string]interface{}{
+			"x":      bounds.X,
+			"y":      bounds.Y,
+			"width":  bounds.Width,
+			"height": bounds.Height,
+			"scale":  1,
+		},
+	}
+
+	if format == "jpeg" || format == "webp" {
+		params["quality"] = opts.Quality
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Page.captureScreenshot", params)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var screenshot struct {
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal(result, &screenshot); err != nil {
+		return nil, nil, err
+	}
+
+	data, err := base64.StdEncoding.DecodeString(screenshot.Data)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return data, bounds, nil
+}
+
 // GetBoundingBox returns the bounding box of an element.
 func (c *Client) GetBoundingBox(ctx context.Context, targetID string, selector string) (*BoundingBox, error) {
 	js := fmt.Sprintf(`

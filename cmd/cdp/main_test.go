@@ -1867,3 +1867,153 @@ func TestRun_Offline_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Screenshot_Element(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate and create a test element
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.innerHTML = '<div id="test" style="width:100px;height:50px;background:red;">Test</div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	tmpFile := t.TempDir() + "/element.png"
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"screenshot", "--output", tmpFile, "--selector", "#test"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify file was created
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read screenshot: %v", err)
+	}
+
+	// Should be a valid PNG
+	if len(data) < 8 || data[0] != 0x89 || data[1] != 0x50 {
+		t.Error("output is not a valid PNG")
+	}
+
+	// Verify JSON output includes element info
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["selector"] != "#test" {
+		t.Errorf("expected selector '#test', got %v", result["selector"])
+	}
+}
+
+func TestRun_Styles_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate and create a styled element
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.innerHTML = '<div id="styled" style="color:red;font-size:16px;margin:10px;">Styled</div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"styles", "#styled"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	styles, ok := result["styles"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected styles object in result")
+	}
+
+	// Check some computed style values
+	if styles["color"] == nil {
+		t.Error("expected color in styles")
+	}
+	if styles["fontSize"] == nil {
+		t.Error("expected fontSize in styles")
+	}
+}
+
+func TestRun_Styles_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"styles"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Layout_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate and create nested elements
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.innerHTML = '<div id="parent" style="padding:10px;"><span class="child" style="margin:5px;">A</span><span class="child">B</span></div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"layout", "#parent"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Should have bounds
+	if result["bounds"] == nil {
+		t.Error("expected bounds in result")
+	}
+
+	// Should have children
+	children, ok := result["children"].([]interface{})
+	if !ok {
+		t.Fatal("expected children array in result")
+	}
+	if len(children) != 2 {
+		t.Errorf("expected 2 children, got %d", len(children))
+	}
+}
+
+func TestRun_Layout_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"layout"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}

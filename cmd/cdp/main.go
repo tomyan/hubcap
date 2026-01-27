@@ -322,6 +322,18 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdOffline(cfg, remaining[1])
+	case "styles":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp styles <selector>")
+			return ExitError
+		}
+		return cmdStyles(cfg, remaining[1])
+	case "layout":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp layout <selector> [--depth <n>]")
+			return ExitError
+		}
+		return cmdLayout(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -438,6 +450,14 @@ func cmdGoto(cfg *Config, url string) int {
 	})
 }
 
+// ElementScreenshotResult contains metadata about an element screenshot.
+type ElementScreenshotResult struct {
+	Format   string         `json:"format"`
+	Size     int            `json:"size"`
+	Selector string         `json:"selector,omitempty"`
+	Bounds   *cdp.BoundingBox `json:"bounds,omitempty"`
+}
+
 func cmdScreenshot(cfg *Config, args []string) int {
 	// Parse screenshot-specific flags
 	fs := flag.NewFlagSet("screenshot", flag.ContinueOnError)
@@ -445,6 +465,7 @@ func cmdScreenshot(cfg *Config, args []string) int {
 	output := fs.String("output", "", "Output file path (required)")
 	format := fs.String("format", "png", "Image format: png, jpeg, webp")
 	quality := fs.Int("quality", 80, "JPEG/WebP quality (0-100)")
+	selector := fs.String("selector", "", "CSS selector for element screenshot")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -454,21 +475,43 @@ func cmdScreenshot(cfg *Config, args []string) int {
 	}
 
 	if *output == "" {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100]")
+		fmt.Fprintln(cfg.Stderr, "usage: cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>]")
 		return ExitError
 	}
 
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
-		data, err := client.Screenshot(ctx, target.ID, cdp.ScreenshotOptions{
+		opts := cdp.ScreenshotOptions{
 			Format:  *format,
 			Quality: *quality,
-		})
+		}
+
+		var data []byte
+		var bounds *cdp.BoundingBox
+		var err error
+
+		if *selector != "" {
+			// Element-specific screenshot
+			data, bounds, err = client.ScreenshotElement(ctx, target.ID, *selector, opts)
+		} else {
+			// Full page screenshot
+			data, err = client.Screenshot(ctx, target.ID, opts)
+		}
+
 		if err != nil {
 			return nil, err
 		}
 
 		if err := os.WriteFile(*output, data, 0644); err != nil {
 			return nil, fmt.Errorf("writing file: %w", err)
+		}
+
+		if *selector != "" {
+			return ElementScreenshotResult{
+				Format:   *format,
+				Size:     len(data),
+				Selector: *selector,
+				Bounds:   bounds,
+			}, nil
 		}
 
 		return cdp.ScreenshotResult{
@@ -1420,6 +1463,50 @@ type GeolocationResult struct {
 
 type OfflineResult struct {
 	Offline bool `json:"offline"`
+}
+
+type StylesResult struct {
+	Selector string            `json:"selector"`
+	Styles   map[string]string `json:"styles"`
+}
+
+func cmdStyles(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		styles, err := client.GetComputedStyles(ctx, target.ID, selector, nil)
+		if err != nil {
+			return nil, err
+		}
+		return StylesResult{Selector: selector, Styles: styles}, nil
+	})
+}
+
+func cmdLayout(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("layout", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	depth := fs.Int("depth", 1, "Depth of children to include (0=element only, 1=immediate children)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp layout <selector> [--depth <n>]")
+		return ExitError
+	}
+
+	selector := remaining[0]
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		layout, err := client.GetElementLayout(ctx, target.ID, selector, *depth)
+		if err != nil {
+			return nil, err
+		}
+		return layout, nil
+	})
 }
 
 func cmdOffline(cfg *Config, offlineStr string) int {
