@@ -475,6 +475,114 @@ func (c *Client) Query(ctx context.Context, targetID string, selector string) (*
 	}, nil
 }
 
+// Click clicks on the first element matching a CSS selector.
+func (c *Client) Click(ctx context.Context, targetID string, selector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query selector
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get box model for element coordinates
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"` // [x1,y1, x2,y2, x3,y3, x4,y4]
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	// Calculate center point from content quad
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return fmt.Errorf("invalid box model")
+	}
+	x := (content[0] + content[2] + content[4] + content[6]) / 4
+	y := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Dispatch mouse events: move, press, release
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseMoved: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased: %w", err)
+	}
+
+	return nil
+}
+
 // CallSession sends a CDP command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {
