@@ -1,7 +1,7 @@
 # CDP CLI Progress Tracker
 
 ## Current State
-- **Last Commit**: b5de90a - Slices 27-28 (Title and URL)
+- **Last Commit**: c8b3d26 - Slices 29-48 (Major feature expansion)
 - **Chrome Status**: Running headless on port 9222
 
 ## Completed Slices
@@ -96,64 +96,60 @@
 ### Slice 28: Get page URL ✅
 - `cdp url` - get the current page URL
 
-## Next Slices
-
-### Slice 29: New tab
+### Slice 29: New tab ✅
 - `cdp new [url]` - create a new tab, optionally navigate to URL
 
-### Slice 30: Close tab
+### Slice 30: Close tab ✅
 - `cdp close` - close the current tab
 
-### Slice 31: Double-click
+### Slice 31: Double-click ✅
 - `cdp dblclick <selector>` - double-click an element
 
-### Slice 32: Right-click
+### Slice 32: Right-click ✅
 - `cdp rightclick <selector>` - right-click (context menu) an element
 
-### Slice 33: Clear input
+### Slice 33: Clear input ✅
 - `cdp clear <selector>` - clear a text input field
 
-### Slice 34: Select dropdown
+### Slice 34: Select dropdown ✅
 - `cdp select <selector> <value>` - select option by value
 
-### Slice 35: Check checkbox
+### Slice 35: Check checkbox ✅
 - `cdp check <selector>` - check a checkbox
 
-### Slice 36: Uncheck checkbox
+### Slice 36: Uncheck checkbox ✅
 - `cdp uncheck <selector>` - uncheck a checkbox
 
-### Slice 37: Scroll into view
+### Slice 37: Scroll into view ✅
 - `cdp scrollto <selector>` - scroll element into view
 
-### Slice 38: Scroll by
+### Slice 38: Scroll by ✅
 - `cdp scroll <x> <y>` - scroll by x,y pixels
 
-### Slice 39: Count elements
+### Slice 39: Count elements ✅
 - `cdp count <selector>` - count matching elements
 
-### Slice 40: Is visible
+### Slice 40: Is visible ✅
 - `cdp visible <selector>` - check if element is visible
 
-### Slice 41: Bounding box
+### Slice 41: Bounding box ✅
 - `cdp bounds <selector>` - get element position and size
 
-### Slice 42: Wait for navigation
+### Slice 42: Wait for load ✅
 - `cdp waitload [--timeout]` - wait for page load event
 
-### Slice 43: Set viewport
+### Slice 43: Set viewport ✅
 - `cdp viewport <width> <height>` - set browser viewport size
 
-### Slice 44: Handle dialog
-- `cdp dialog [accept|dismiss]` - handle alert/confirm/prompt dialogs
-
-### Slice 45: Local storage get
+### Slice 44-46: Local storage ✅
 - `cdp storage <key>` - get localStorage value
-
-### Slice 46: Local storage set
 - `cdp storage <key> <value>` - set localStorage value
-
-### Slice 47: Local storage clear
 - `cdp storage --clear` - clear localStorage
+
+## Next Slices
+
+### Slice 47: Handle dialog
+- `cdp dialog [accept|dismiss]` - handle alert/confirm/prompt dialogs
 
 ### Slice 48: Execute script file
 - `cdp run <file.js>` - execute JavaScript from file
@@ -171,33 +167,80 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented
+## Commands Implemented (45 commands)
 ```
+# Browser info
 cdp version
 cdp tabs
+
+# Navigation
 cdp goto <url>
-cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100]
-cdp eval <expression>
-cdp query <selector>
-cdp click <selector>
-cdp fill <selector> <text>
-cdp html <selector>
-cdp wait <selector> [--timeout <duration>]
-cdp text <selector>
-cdp type <text>
-cdp console [--duration <duration>]
-cdp cookies [--set name=value] [--domain <domain>] [--delete <name>] [--clear]
-cdp pdf --output <file> [--landscape] [--background]
-cdp focus <selector>
-cdp network [--duration <duration>]
-cdp press <key>
-cdp hover <selector>
-cdp attr <selector> <attribute>
-cdp reload [--bypass-cache]
 cdp back
 cdp forward
+cdp reload [--bypass-cache]
+
+# Tab management
+cdp new [url]
+cdp close
+
+# Page info
 cdp title
 cdp url
+
+# Screenshots & PDF
+cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100]
+cdp pdf --output <file> [--landscape] [--background]
+
+# JavaScript execution
+cdp eval <expression>
+
+# DOM queries
+cdp query <selector>
+cdp html <selector>
+cdp text <selector>
+cdp attr <selector> <attribute>
+cdp count <selector>
+cdp visible <selector>
+cdp bounds <selector>
+
+# Click actions
+cdp click <selector>
+cdp dblclick <selector>
+cdp rightclick <selector>
+cdp hover <selector>
+
+# Form interactions
+cdp fill <selector> <text>
+cdp clear <selector>
+cdp focus <selector>
+cdp select <selector> <value>
+cdp check <selector>
+cdp uncheck <selector>
+
+# Keyboard input
+cdp type <text>
+cdp press <key>
+
+# Scrolling
+cdp scrollto <selector>
+cdp scroll <x> <y>
+
+# Waiting
+cdp wait <selector> [--timeout <duration>]
+cdp waitload [--timeout <duration>]
+
+# Viewport
+cdp viewport <width> <height>
+
+# Cookies
+cdp cookies [--set name=value] [--domain <domain>] [--delete <name>] [--clear]
+
+# Local storage
+cdp storage <key> [value] [--clear]
+
+# Streaming/monitoring
+cdp console [--duration <duration>]
+cdp network [--duration <duration>]
 ```
 
 ## Known Issues / Deferred Items

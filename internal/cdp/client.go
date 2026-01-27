@@ -1597,6 +1597,47 @@ func (c *Client) ClearLocalStorage(ctx context.Context, targetID string) error {
 	return err
 }
 
+// HandleDialog sets up automatic dialog handling.
+// action can be "accept" or "dismiss".
+// promptText is the text to enter for prompts (optional).
+func (c *Client) HandleDialog(ctx context.Context, targetID string, action string, promptText string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Page domain
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Subscribe to dialog events
+	eventCh := c.subscribeEvent(sessionID, "Page.javascriptDialogOpening")
+
+	// Handle dialog in background
+	go func() {
+		select {
+		case <-eventCh:
+			params := map[string]interface{}{
+				"accept": action == "accept",
+			}
+			if promptText != "" {
+				params["promptText"] = promptText
+			}
+			c.CallSession(ctx, sessionID, "Page.handleJavaScriptDialog", params)
+		case <-ctx.Done():
+		}
+	}()
+
+	return nil
+}
+
+// ExecuteScriptFile reads and executes JavaScript from a file.
+func (c *Client) ExecuteScriptFile(ctx context.Context, targetID string, content string) (*EvalResult, error) {
+	return c.Eval(ctx, targetID, content)
+}
+
 // CloseTab closes a browser tab by its target ID.
 func (c *Client) CloseTab(ctx context.Context, targetID string) error {
 	_, err := c.Call(ctx, "Target.closeTarget", map[string]interface{}{

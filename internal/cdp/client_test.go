@@ -1737,6 +1737,7 @@ func TestClient_PressKey_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to focus: %v", err)
 	}
+	time.Sleep(50 * time.Millisecond)
 
 	// Press the Enter key
 	err = client.PressKey(ctx, pages[0].ID, "Enter")

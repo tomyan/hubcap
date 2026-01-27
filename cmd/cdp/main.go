@@ -86,7 +86,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -282,6 +282,14 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitLoad(cfg, remaining[1:])
 	case "storage":
 		return cmdStorage(cfg, remaining[1:])
+	case "dialog":
+		return cmdDialog(cfg, remaining[1:])
+	case "run":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp run <file.js>")
+			return ExitError
+		}
+		return cmdRun(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1555,6 +1563,85 @@ func cmdStorage(cfg *Config, args []string) int {
 			return nil, err
 		}
 		return StorageSetResult{Key: key, Value: value, Set: true}, nil
+	})
+}
+
+// DialogResult is returned by the dialog command.
+type DialogResult struct {
+	Action     string `json:"action"`
+	PromptText string `json:"promptText,omitempty"`
+}
+
+func cmdDialog(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("dialog", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	promptText := fs.String("text", "", "Text to enter for prompts")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) == 0 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp dialog [accept|dismiss] [--text <prompt-text>]")
+		return ExitError
+	}
+
+	action := remaining[0]
+	if action != "accept" && action != "dismiss" {
+		fmt.Fprintln(cfg.Stderr, "action must be 'accept' or 'dismiss'")
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		err = client.HandleDialog(ctx, pages[0].ID, action, *promptText)
+		if err != nil {
+			return nil, err
+		}
+
+		return DialogResult{Action: action, PromptText: *promptText}, nil
+	})
+}
+
+// RunResult is returned by the run command.
+type RunResult struct {
+	File  string      `json:"file"`
+	Value interface{} `json:"value,omitempty"`
+}
+
+func cmdRun(cfg *Config, file string) int {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error reading file: %v\n", err)
+		return ExitError
+	}
+
+	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+		pages, err := client.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(pages) == 0 {
+			return nil, fmt.Errorf("no pages available")
+		}
+
+		result, err := client.ExecuteScriptFile(ctx, pages[0].ID, string(content))
+		if err != nil {
+			return nil, err
+		}
+
+		return RunResult{File: file, Value: result.Value}, nil
 	})
 }
 
