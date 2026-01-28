@@ -185,6 +185,7 @@ func run(args []string, cfg *Config) int {
 		if len(remaining) < 2 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp press <key>")
 			fmt.Fprintln(cfg.Stderr, "keys: Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown, Space")
+			fmt.Fprintln(cfg.Stderr, "modifiers: Ctrl+<key>, Alt+<key>, Shift+<key>, Meta+<key> (e.g., Ctrl+a, Ctrl+Shift+n)")
 			return ExitError
 		}
 		return cmdPress(cfg, remaining[1])
@@ -1285,7 +1286,28 @@ type PressResult struct {
 
 func cmdPress(cfg *Config, key string) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
-		err := client.PressKey(ctx, target.ID, key)
+		// Parse modifier+key combinations like "Ctrl+A", "Shift+End", "Ctrl+Shift+N"
+		mods := cdp.KeyModifiers{}
+		actualKey := key
+
+		parts := strings.Split(key, "+")
+		if len(parts) > 1 {
+			actualKey = parts[len(parts)-1]
+			for _, mod := range parts[:len(parts)-1] {
+				switch strings.ToLower(mod) {
+				case "ctrl", "control":
+					mods.Ctrl = true
+				case "alt":
+					mods.Alt = true
+				case "shift":
+					mods.Shift = true
+				case "meta", "cmd", "command":
+					mods.Meta = true
+				}
+			}
+		}
+
+		err := client.PressKeyWithModifiers(ctx, target.ID, actualKey, mods)
 		if err != nil {
 			return nil, err
 		}

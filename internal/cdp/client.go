@@ -1552,8 +1552,39 @@ var keyCodeMap = map[string]int{
 	"Space":      32,
 }
 
+// KeyModifiers represents keyboard modifier keys.
+type KeyModifiers struct {
+	Ctrl  bool
+	Alt   bool
+	Shift bool
+	Meta  bool
+}
+
+// modifierBitmask returns the CDP modifier bitmask.
+func (m KeyModifiers) modifierBitmask() int {
+	mask := 0
+	if m.Shift {
+		mask |= 1
+	}
+	if m.Ctrl {
+		mask |= 2
+	}
+	if m.Alt {
+		mask |= 4
+	}
+	if m.Meta {
+		mask |= 8
+	}
+	return mask
+}
+
 // PressKey presses a special key (Enter, Tab, Escape, etc.).
 func (c *Client) PressKey(ctx context.Context, targetID string, key string) error {
+	return c.PressKeyWithModifiers(ctx, targetID, key, KeyModifiers{})
+}
+
+// PressKeyWithModifiers presses a key with modifier keys (Ctrl, Alt, Shift, Meta).
+func (c *Client) PressKeyWithModifiers(ctx context.Context, targetID string, key string, mods KeyModifiers) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
 	if err != nil {
 		return err
@@ -1561,10 +1592,12 @@ func (c *Client) PressKey(ctx context.Context, targetID string, key string) erro
 
 	// Get key code if available
 	keyCode, hasKeyCode := keyCodeMap[key]
+	modMask := mods.modifierBitmask()
 
 	params := map[string]interface{}{
-		"type": "keyDown",
-		"key":  key,
+		"type":      "keyDown",
+		"key":       key,
+		"modifiers": modMask,
 	}
 	if hasKeyCode {
 		params["windowsVirtualKeyCode"] = keyCode

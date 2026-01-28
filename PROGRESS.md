@@ -358,6 +358,10 @@
 - `cdp goto --wait <url>` - navigate and wait for page load
 - Uses Page.loadEventFired event for reliable load detection
 
+### Slice 100: Modifier key support ✅
+- `cdp press Ctrl+a` - press key with modifiers
+- Supports Ctrl, Alt, Shift, Meta (Cmd) modifiers
+
 ## Next Slices
 
 ## Test Command
@@ -370,7 +374,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (94 commands)
+## Commands Implemented (95 commands)
 ```
 # Browser info
 cdp version
@@ -437,7 +441,7 @@ cdp setvalue <selector> <value>
 
 # Keyboard input
 cdp type <text>
-cdp press <key>
+cdp press <key> (supports Ctrl+, Alt+, Shift+, Meta+)
 
 # Scrolling
 cdp scrollto <selector>
@@ -508,5 +512,5 @@ cdp stylesheets
 - ~~Navigate doesn't wait for actual load completion~~ **FIXED: Use `goto --wait` to wait for load**
 - ~~Tests must run sequentially (-p 1) because they share Chrome instance~~ **FIXED: Each package now has its own Chrome instance**
 - Special keys (Enter, Tab, etc.) not handled in type command
-- No modifier key support (Ctrl, Alt, Shift) in type command
+- ~~No modifier key support (Ctrl, Alt, Shift) in type command~~ **FIXED: Use `press Ctrl+a`, `press Shift+End`, etc.**
 - ~~Long test runs can accumulate tabs causing Chrome memory pressure~~ **FIXED: Tests now use isolated tabs with proper cleanup**

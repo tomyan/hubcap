@@ -4528,3 +4528,47 @@ func TestRun_SetValue_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Press_WithModifiers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with an input
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "data:text/html,<html><body><input id='test' type='text' value='hello world'></body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Focus the input
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "focus", "#test"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to focus")
+	}
+
+	// Press Ctrl+a (select all)
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "press", "Ctrl+a"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["pressed"] != true {
+		t.Errorf("expected pressed: true, got %v", result["pressed"])
+	}
+	if result["key"] != "Ctrl+a" {
+		t.Errorf("expected key: 'Ctrl+a', got %v", result["key"])
+	}
+}
