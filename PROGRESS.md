@@ -334,6 +334,10 @@
 - `cdp screenshot --base64` - return screenshot as base64 data
 - Useful for embedding in HTML, markdown, or JSON pipelines
 
+### Slice 94: Page info ✅
+- `cdp info` - get combined page information
+- Returns title, URL, readyState, characterSet, contentType
+
 ## Next Slices
 
 ## Test Command
@@ -346,7 +350,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (89 commands)
+## Commands Implemented (90 commands)
 ```
 # Browser info
 cdp version
@@ -365,6 +369,7 @@ cdp close
 # Page info
 cdp title
 cdp url
+cdp info
 
 # Screenshots & PDF
 cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>] [--base64]

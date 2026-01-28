@@ -4216,3 +4216,50 @@ func TestRun_Screenshot_Base64(t *testing.T) {
 		t.Errorf("expected format png, got %v", result["format"])
 	}
 }
+
+func TestRun_Info_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with a title
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "data:text/html,<html><head><title>Test Page</title></head><body>Hello</body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get page info
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "info"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Verify info structure
+	if _, ok := result["title"]; !ok {
+		t.Errorf("expected title field")
+	}
+	if _, ok := result["url"]; !ok {
+		t.Errorf("expected url field")
+	}
+}
+
+func TestRun_Info_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"info"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

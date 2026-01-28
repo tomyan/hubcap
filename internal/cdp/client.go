@@ -2253,6 +2253,61 @@ func (c *Client) GetStylesheets(ctx context.Context, targetID string) (*Styleshe
 	return stylesheets, nil
 }
 
+// PageInfo represents combined information about the current page.
+type PageInfo struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	ReadyState  string `json:"readyState"`
+	CharacterSet string `json:"characterSet"`
+	ContentType string `json:"contentType"`
+}
+
+// GetPageInfo returns combined information about the current page.
+func (c *Client) GetPageInfo(ctx context.Context, targetID string) (*PageInfo, error) {
+	result, err := c.Eval(ctx, targetID, `
+		(function() {
+			return {
+				title: document.title,
+				url: document.location.href,
+				readyState: document.readyState,
+				characterSet: document.characterSet,
+				contentType: document.contentType
+			};
+		})()
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("getting page info: %w", err)
+	}
+
+	info := &PageInfo{}
+	if result.Value == nil {
+		return info, nil
+	}
+
+	data, ok := result.Value.(map[string]interface{})
+	if !ok {
+		return info, nil
+	}
+
+	if title, ok := data["title"].(string); ok {
+		info.Title = title
+	}
+	if url, ok := data["url"].(string); ok {
+		info.URL = url
+	}
+	if readyState, ok := data["readyState"].(string); ok {
+		info.ReadyState = readyState
+	}
+	if characterSet, ok := data["characterSet"].(string); ok {
+		info.CharacterSet = characterSet
+	}
+	if contentType, ok := data["contentType"].(string); ok {
+		info.ContentType = contentType
+	}
+
+	return info, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

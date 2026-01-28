@@ -224,6 +224,8 @@ func run(args []string, cfg *Config) int {
 		return cmdCoverage(cfg)
 	case "stylesheets":
 		return cmdStylesheets(cfg)
+	case "info":
+		return cmdInfo(cfg)
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1008,6 +1010,12 @@ func cmdCoverage(cfg *Config) int {
 func cmdStylesheets(cfg *Config) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		return client.GetStylesheets(ctx, target.ID)
+	})
+}
+
+func cmdInfo(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetPageInfo(ctx, target.ID)
 	})
 }
 
