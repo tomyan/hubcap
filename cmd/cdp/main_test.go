@@ -4572,3 +4572,59 @@ func TestRun_Press_WithModifiers(t *testing.T) {
 		t.Errorf("expected key: 'Ctrl+a', got %v", result["key"])
 	}
 }
+
+func TestRun_Mouse_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"mouse"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Mouse_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "data:text/html,<html><body></body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Move mouse to coordinates
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "mouse", "100", "200"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["x"].(float64) != 100 || result["y"].(float64) != 200 {
+		t.Errorf("expected x:100, y:200, got x:%v, y:%v", result["x"], result["y"])
+	}
+}
+
+func TestRun_Mouse_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"mouse", "100", "100"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

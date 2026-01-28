@@ -2597,6 +2597,31 @@ func (c *Client) SetValue(ctx context.Context, targetID string, selector string,
 	return setResult, nil
 }
 
+// MouseMoveResult represents the result of moving the mouse.
+type MouseMoveResult struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// MouseMove moves the mouse to the specified coordinates without clicking.
+func (c *Client) MouseMove(ctx context.Context, targetID string, x, y float64) (*MouseMoveResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("moving mouse: %w", err)
+	}
+
+	return &MouseMoveResult{X: x, Y: y}, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

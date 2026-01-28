@@ -362,6 +362,10 @@
 - `cdp press Ctrl+a` - press key with modifiers
 - Supports Ctrl, Alt, Shift, Meta (Cmd) modifiers
 
+### Slice 101: Mouse move ✅
+- `cdp mouse <x> <y>` - move mouse without clicking
+- Uses Input.dispatchMouseEvent with mouseMoved type
+
 ## Next Slices
 
 ## Test Command
@@ -374,7 +378,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (95 commands)
+## Commands Implemented (96 commands)
 ```
 # Browser info
 cdp version
@@ -428,6 +432,7 @@ cdp dblclick <selector>
 cdp rightclick <selector>
 cdp hover <selector>
 cdp tap <selector>
+cdp mouse <x> <y>
 
 # Form interactions
 cdp fill <selector> <text>

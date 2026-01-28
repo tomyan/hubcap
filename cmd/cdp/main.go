@@ -247,6 +247,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdSetValue(cfg, remaining[1], remaining[2])
+	case "mouse":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp mouse <x> <y>")
+			return ExitError
+		}
+		return cmdMouse(cfg, remaining[1], remaining[2])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1123,6 +1129,23 @@ func cmdFind(cfg *Config, text string) int {
 func cmdSetValue(cfg *Config, selector string, value string) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		return client.SetValue(ctx, target.ID, selector, value)
+	})
+}
+
+func cmdMouse(cfg *Config, xStr, yStr string) int {
+	x, err := strconv.ParseFloat(xStr, 64)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "invalid x coordinate: %v\n", err)
+		return ExitError
+	}
+	y, err := strconv.ParseFloat(yStr, 64)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "invalid y coordinate: %v\n", err)
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.MouseMove(ctx, target.ID, x, y)
 	})
 }
 
