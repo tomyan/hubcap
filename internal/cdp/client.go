@@ -2415,6 +2415,53 @@ func (c *Client) GetScripts(ctx context.Context, targetID string) (*ScriptsResul
 	return scripts, nil
 }
 
+// FindResult represents the result of finding text on the page.
+type FindResult struct {
+	Text  string `json:"text"`
+	Count int    `json:"count"`
+	Found bool   `json:"found"`
+}
+
+// FindText searches for text on the page and returns occurrence count.
+func (c *Client) FindText(ctx context.Context, targetID string, text string) (*FindResult, error) {
+	escapedText := strings.ReplaceAll(text, "'", "\\'")
+	result, err := c.Eval(ctx, targetID, fmt.Sprintf(`
+		(function() {
+			const text = '%s';
+			const content = document.body ? document.body.innerText : '';
+			let count = 0;
+			let pos = 0;
+			while ((pos = content.indexOf(text, pos)) !== -1) {
+				count++;
+				pos += text.length;
+			}
+			return { text: text, count: count, found: count > 0 };
+		})()
+	`, escapedText))
+	if err != nil {
+		return nil, fmt.Errorf("finding text: %w", err)
+	}
+
+	findResult := &FindResult{Text: text}
+	if result.Value == nil {
+		return findResult, nil
+	}
+
+	data, ok := result.Value.(map[string]interface{})
+	if !ok {
+		return findResult, nil
+	}
+
+	if count, ok := data["count"].(float64); ok {
+		findResult.Count = int(count)
+	}
+	if found, ok := data["found"].(bool); ok {
+		findResult.Found = found
+	}
+
+	return findResult, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

@@ -346,6 +346,10 @@
 - `cdp scripts` - get all script elements on the page
 - Returns src, type, async, defer, and inline status
 
+### Slice 97: Find text ✅
+- `cdp find <text>` - find text occurrences on the page
+- Returns count and found status
+
 ## Next Slices
 
 ## Test Command
@@ -358,7 +362,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (92 commands)
+## Commands Implemented (93 commands)
 ```
 # Browser info
 cdp version
@@ -403,6 +407,7 @@ cdp images
 cdp highlight <selector> [--hide]
 cdp scripts
 cdp shadow <host> <inner>
+cdp find <text>
 
 # Click actions
 cdp click <selector>

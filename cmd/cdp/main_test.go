@@ -4387,3 +4387,59 @@ func TestRun_Scripts_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Find_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"find"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Find_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with text
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "data:text/html,<html><body><p>Hello World</p><p>Hello Again</p></body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Find text
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "find", "Hello"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if count, ok := result["count"].(float64); !ok || count < 2 {
+		t.Errorf("expected count >= 2, got %v", result["count"])
+	}
+}
+
+func TestRun_Find_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"find", "hello"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
