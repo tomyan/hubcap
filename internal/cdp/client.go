@@ -926,6 +926,133 @@ func (c *Client) Tap(ctx context.Context, targetID string, selector string) erro
 	return nil
 }
 
+// Drag performs a drag from one element to another.
+func (c *Client) Drag(ctx context.Context, targetID string, sourceSelector, destSelector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Helper to get element center
+	getCenter := func(selector string) (float64, float64, error) {
+		queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+			"nodeId":   docResp.Root.NodeID,
+			"selector": selector,
+		})
+		if err != nil {
+			return 0, 0, fmt.Errorf("querying selector %s: %w", selector, err)
+		}
+
+		var queryResp struct {
+			NodeID int `json:"nodeId"`
+		}
+		if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+			return 0, 0, fmt.Errorf("parsing query response: %w", err)
+		}
+		if queryResp.NodeID == 0 {
+			return 0, 0, fmt.Errorf("element not found: %s", selector)
+		}
+
+		boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+			"nodeId": queryResp.NodeID,
+		})
+		if err != nil {
+			return 0, 0, fmt.Errorf("getting box model: %w", err)
+		}
+
+		var boxResp struct {
+			Model struct {
+				Content []float64 `json:"content"`
+			} `json:"model"`
+		}
+		if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+			return 0, 0, fmt.Errorf("parsing box model: %w", err)
+		}
+
+		content := boxResp.Model.Content
+		if len(content) < 8 {
+			return 0, 0, fmt.Errorf("invalid box model")
+		}
+		x := (content[0] + content[2] + content[4] + content[6]) / 4
+		y := (content[1] + content[3] + content[5] + content[7]) / 4
+		return x, y, nil
+	}
+
+	// Get source and destination centers
+	srcX, srcY, err := getCenter(sourceSelector)
+	if err != nil {
+		return err
+	}
+	dstX, dstY, err := getCenter(destSelector)
+	if err != nil {
+		return err
+	}
+
+	// Perform drag: move to source, press, move to dest, release
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    srcX,
+		"y":    srcY,
+	})
+	if err != nil {
+		return fmt.Errorf("moving to source: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          srcX,
+		"y":          srcY,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("pressing at source: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    dstX,
+		"y":    dstY,
+	})
+	if err != nil {
+		return fmt.Errorf("moving to destination: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          dstX,
+		"y":          dstY,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("releasing at destination: %w", err)
+	}
+
+	return nil
+}
+
 // Fill fills an input element with text.
 func (c *Client) Fill(ctx context.Context, targetID string, selector string, text string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

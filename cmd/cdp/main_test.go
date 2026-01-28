@@ -3840,3 +3840,60 @@ func TestRun_Clipboard_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Drag_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"drag"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Drag_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with draggable elements
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><body><div id="src" draggable="true" style="width:50px;height:50px;background:red;position:absolute;left:10px;top:10px"></div><div id="dst" style="width:100px;height:100px;background:blue;position:absolute;left:200px;top:10px"></div></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Drag from source to destination
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "drag", "#src", "#dst"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["dragged"] != true {
+		t.Errorf("expected dragged: true, got %v", result["dragged"])
+	}
+}
+
+func TestRun_Drag_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"drag", "#src", "#dst"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

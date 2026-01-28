@@ -306,6 +306,10 @@
 - `cdp clipboard --read` - read text from clipboard
 - Uses navigator.clipboard API with permission grants
 
+### Slice 87: Drag and drop ✅
+- `cdp drag <source> <dest>` - drag from one element to another
+- Uses Input.dispatchMouseEvent for mouse drag simulation
+
 ## Next Slices
 
 ## Test Command

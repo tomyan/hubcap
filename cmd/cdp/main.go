@@ -199,6 +199,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdTap(cfg, remaining[1])
+	case "drag":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp drag <source-selector> <dest-selector>")
+			return ExitError
+		}
+		return cmdDrag(cfg, remaining[1], remaining[2])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1110,6 +1116,23 @@ func cmdTap(cfg *Config, selector string) int {
 			return nil, err
 		}
 		return TapResult{Tapped: true, Selector: selector}, nil
+	})
+}
+
+// DragResult is returned by the drag command.
+type DragResult struct {
+	Dragged bool   `json:"dragged"`
+	Source  string `json:"source"`
+	Dest    string `json:"dest"`
+}
+
+func cmdDrag(cfg *Config, source, dest string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Drag(ctx, target.ID, source, dest)
+		if err != nil {
+			return nil, err
+		}
+		return DragResult{Dragged: true, Source: source, Dest: dest}, nil
 	})
 }
 
