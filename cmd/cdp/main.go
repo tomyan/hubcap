@@ -166,6 +166,8 @@ func run(args []string, cfg *Config) int {
 		return cmdType(cfg, remaining[1])
 	case "console":
 		return cmdConsole(cfg, remaining[1:])
+	case "errors":
+		return cmdErrors(cfg, remaining[1:])
 	case "cookies":
 		return cmdCookies(cfg, remaining[1:])
 	case "pdf":
@@ -771,6 +773,63 @@ func cmdConsole(cfg *Config, args []string) int {
 				return ExitSuccess
 			}
 			if err := enc.Encode(msg); err != nil {
+				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+				return ExitError
+			}
+		case <-ctx.Done():
+			return ExitSuccess
+		}
+	}
+}
+
+func cmdErrors(cfg *Config, args []string) int {
+	// Parse errors-specific flags
+	fs := flag.NewFlagSet("errors", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	ctx := context.Background()
+	if *duration > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *duration)
+		defer cancel()
+	}
+
+	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer client.Close()
+
+	target, err := resolveTarget(ctx, client, cfg)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	exceptions, stopCapture, err := client.CaptureExceptions(ctx, target.ID)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+	defer stopCapture()
+
+	enc := json.NewEncoder(cfg.Stdout)
+	for {
+		select {
+		case exc, ok := <-exceptions:
+			if !ok {
+				return ExitSuccess
+			}
+			if err := enc.Encode(exc); err != nil {
 				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 				return ExitError
 			}

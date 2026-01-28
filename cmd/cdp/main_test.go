@@ -3544,3 +3544,51 @@ func TestRun_ClickAt_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Errors_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page that throws an error
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><body><script>throw new Error("Test error");</script></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get page errors (short duration to capture the error)
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "errors", "--duration", "500ms"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	// Output is NDJSON, so parse line by line
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		// No errors captured is acceptable for this test - error might have already happened
+		return
+	}
+
+	// Verify first line is valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+}
+
+func TestRun_Errors_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"errors"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

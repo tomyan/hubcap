@@ -283,6 +283,10 @@
 - `cdp clickat <x> <y>` - click at specific x, y coordinates
 - Uses Input.dispatchMouseEvent CDP method
 
+### Slice 82: Page errors ✅
+- `cdp errors [--duration <d>]` - capture JavaScript exceptions
+- Streams NDJSON output with text, lineNumber, columnNumber, url
+
 ## Next Slices
 
 ## Test Command
@@ -295,7 +299,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (79 commands)
+## Commands Implemented (80 commands)
 ```
 # Browser info
 cdp version
@@ -385,6 +389,7 @@ cdp session <key> [value] [--clear]
 # Streaming/monitoring
 cdp console [--duration <duration>]
 cdp network [--duration <duration>]
+cdp errors [--duration <duration>]
 
 # Dialog handling
 cdp dialog [accept|dismiss] [--text <prompt>]

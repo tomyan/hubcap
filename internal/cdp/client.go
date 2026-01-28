@@ -1258,6 +1258,103 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 	return output, stop, nil
 }
 
+// ExceptionInfo represents a JavaScript exception.
+type ExceptionInfo struct {
+	Text        string `json:"text"`
+	LineNumber  int    `json:"lineNumber,omitempty"`
+	ColumnNumber int   `json:"columnNumber,omitempty"`
+	URL         string `json:"url,omitempty"`
+}
+
+// CaptureExceptions starts capturing JavaScript exceptions from a page.
+// Returns a channel that receives ExceptionInfo and a stop function.
+// The stop function MUST be called when done to release resources.
+// The channel is closed when stop is called or when the client is closed.
+func (c *Client) CaptureExceptions(ctx context.Context, targetID string) (<-chan ExceptionInfo, func(), error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Enable Runtime domain to receive exception events
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	// Subscribe to exception events
+	eventCh := c.subscribeEvent(sessionID, "Runtime.exceptionThrown")
+
+	// Create output channel
+	output := make(chan ExceptionInfo, 100)
+
+	// Create a done channel to signal the goroutine to stop
+	done := make(chan struct{})
+	var stopOnce sync.Once
+
+	// Stop function to clean up resources
+	stop := func() {
+		stopOnce.Do(func() {
+			close(done)
+			c.unsubscribeEvent(sessionID, "Runtime.exceptionThrown", eventCh)
+			// Best effort to disable Runtime domain
+			disableCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			c.CallSession(disableCtx, sessionID, "Runtime.disable", nil)
+		})
+	}
+
+	// Start goroutine to translate events to ExceptionInfo
+	go func() {
+		defer close(output)
+		for {
+			select {
+			case params, ok := <-eventCh:
+				if !ok {
+					return
+				}
+				// Parse the event
+				var event struct {
+					ExceptionDetails struct {
+						Text         string `json:"text"`
+						LineNumber   int    `json:"lineNumber"`
+						ColumnNumber int    `json:"columnNumber"`
+						URL          string `json:"url"`
+						Exception    struct {
+							Description string `json:"description"`
+						} `json:"exception"`
+					} `json:"exceptionDetails"`
+				}
+				if err := json.Unmarshal(params, &event); err != nil {
+					continue
+				}
+
+				text := event.ExceptionDetails.Text
+				if event.ExceptionDetails.Exception.Description != "" {
+					text = event.ExceptionDetails.Exception.Description
+				}
+
+				select {
+				case output <- ExceptionInfo{
+					Text:         text,
+					LineNumber:   event.ExceptionDetails.LineNumber,
+					ColumnNumber: event.ExceptionDetails.ColumnNumber,
+					URL:          event.ExceptionDetails.URL,
+				}:
+				default:
+					// Drop if channel is full
+				}
+			case <-done:
+				return
+			case <-c.closeCh:
+				return
+			}
+		}
+	}()
+
+	return output, stop, nil
+}
+
 // CaptureNetwork starts capturing network events from a page.
 // Returns a channel that receives NetworkEvent and a stop function.
 // The stop function MUST be called when done to release resources.
