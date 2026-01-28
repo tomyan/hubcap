@@ -827,6 +827,105 @@ func (c *Client) ClickAt(ctx context.Context, targetID string, x, y float64) err
 	return nil
 }
 
+// Tap performs a touch tap on an element (like a finger tap on mobile).
+func (c *Client) Tap(ctx context.Context, targetID string, selector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query selector
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get element bounding box
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return fmt.Errorf("invalid box model")
+	}
+	x := (content[0] + content[2] + content[4] + content[6]) / 4
+	y := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Dispatch touch events: touchStart, touchEnd
+	touchPoints := []map[string]interface{}{
+		{
+			"x": x,
+			"y": y,
+		},
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+		"type":        "touchStart",
+		"touchPoints": touchPoints,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching touchStart: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+		"type":        "touchEnd",
+		"touchPoints": []map[string]interface{}{},
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching touchEnd: %w", err)
+	}
+
+	return nil
+}
+
 // Fill fills an input element with text.
 func (c *Client) Fill(ctx context.Context, targetID string, selector string, text string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

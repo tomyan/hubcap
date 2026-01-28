@@ -193,6 +193,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdHover(cfg, remaining[1])
+	case "tap":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp tap <selector>")
+			return ExitError
+		}
+		return cmdTap(cfg, remaining[1])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1077,6 +1083,22 @@ func cmdHover(cfg *Config, selector string) int {
 			return nil, err
 		}
 		return HoverResult{Hovered: true, Selector: selector}, nil
+	})
+}
+
+// TapResult is returned by the tap command.
+type TapResult struct {
+	Tapped   bool   `json:"tapped"`
+	Selector string `json:"selector"`
+}
+
+func cmdTap(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Tap(ctx, target.ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return TapResult{Tapped: true, Selector: selector}, nil
 	})
 }
 

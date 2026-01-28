@@ -287,6 +287,10 @@
 - `cdp errors [--duration <d>]` - capture JavaScript exceptions
 - Streams NDJSON output with text, lineNumber, columnNumber, url
 
+### Slice 83: Touch tap ✅
+- `cdp tap <selector>` - perform touch tap on element
+- Uses Input.dispatchTouchEvent CDP method
+
 ## Next Slices
 
 ## Test Command
@@ -299,7 +303,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (80 commands)
+## Commands Implemented (81 commands)
 ```
 # Browser info
 cdp version
@@ -348,6 +352,7 @@ cdp clickat <x> <y>
 cdp dblclick <selector>
 cdp rightclick <selector>
 cdp hover <selector>
+cdp tap <selector>
 
 # Form interactions
 cdp fill <selector> <text>
