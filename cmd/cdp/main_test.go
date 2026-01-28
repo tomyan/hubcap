@@ -5064,3 +5064,128 @@ func TestRun_Caret_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+// Slice 109: Type escape sequences
+
+func TestRun_Type_EscapeNewline(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create a textarea and focus it
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<textarea id="ta"></textarea>';
+		document.getElementById('ta').focus();
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page")
+	}
+
+	// Type text with \n escape
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "type", `Hello\nWorld`}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify the textarea has a newline
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "eval", "document.getElementById('ta').value"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to read textarea value")
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	if !strings.Contains(stdout, "Hello") || !strings.Contains(stdout, "World") {
+		t.Errorf("expected text with newline, got: %s", stdout)
+	}
+}
+
+func TestRun_Type_EscapeTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create a textarea and focus it
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<textarea id="ta"></textarea>';
+		document.getElementById('ta').focus();
+		// Prevent tab from moving focus
+		document.getElementById('ta').addEventListener('keydown', function(e) {
+			if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '\t'); }
+		});
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page")
+	}
+
+	// Type text with \t escape
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "type", `A\tB`}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify the Tab key was dispatched
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+	if result["typed"] != true {
+		t.Errorf("expected typed: true, got %v", result["typed"])
+	}
+}
+
+func TestRun_Type_EscapeBackslash(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create an input and focus it
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<input id="inp" type="text" />';
+		document.getElementById('inp').focus();
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page")
+	}
+
+	// Type text with \\ escape (literal backslash)
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "type", `path\\to`}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// Verify the input has a literal backslash
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "eval", "document.getElementById('inp').value"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to read input value")
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var evalResult map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &evalResult); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if evalResult["value"] != `path\to` {
+		t.Errorf("expected path\\to in value, got: %v", evalResult["value"])
+	}
+}

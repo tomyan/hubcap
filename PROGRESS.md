@@ -401,6 +401,11 @@
 - Returns start and end positions of selection range
 - Useful for verifying input cursor position
 
+### Slice 109: Type escape sequences ✅
+- `cdp type "Hello\nWorld"` - handles escape sequences in type command
+- `\n` → Enter key, `\t` → Tab key, `\\` → literal backslash
+- Fixes known issue "Special keys not handled in type command"
+
 ## Next Slices
 
 ## Test Command
@@ -558,6 +563,6 @@ cdp stylesheets
 - ~~Sessions not detached after use (minor resource leak)~~ **FIXED: Sessions now cached and detached on close**
 - ~~Navigate doesn't wait for actual load completion~~ **FIXED: Use `goto --wait` to wait for load**
 - ~~Tests must run sequentially (-p 1) because they share Chrome instance~~ **FIXED: Each package now has its own Chrome instance**
-- Special keys (Enter, Tab, etc.) not handled in type command
+- ~~Special keys (Enter, Tab, etc.) not handled in type command~~ **FIXED: Use `\n`, `\t`, `\\` escape sequences in type command**
 - ~~No modifier key support (Ctrl, Alt, Shift) in type command~~ **FIXED: Use `press Ctrl+a`, `press Shift+End`, etc.**
 - ~~Long test runs can accumulate tabs causing Chrome memory pressure~~ **FIXED: Tests now use isolated tabs with proper cleanup**

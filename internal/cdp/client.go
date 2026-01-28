@@ -1507,30 +1507,93 @@ func (c *Client) Type(ctx context.Context, targetID string, text string) error {
 		// Input.enable might not exist in all Chrome versions, continue anyway
 	}
 
-	// Type each character individually
-	for _, char := range text {
-		charStr := string(char)
-
-		// keyDown with char
-		_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
-			"type": "keyDown",
-			"text": charStr,
-			"key":  charStr,
-		})
-		if err != nil {
-			return fmt.Errorf("keyDown for %q: %w", charStr, err)
+	// Process text with escape sequence support
+	i := 0
+	for i < len(text) {
+		if text[i] == '\\' && i+1 < len(text) {
+			next := text[i+1]
+			switch next {
+			case 'n':
+				// \n → Enter key
+				if err := c.typeSpecialKey(ctx, sessionID, "Enter", "\r", 13); err != nil {
+					return err
+				}
+				i += 2
+				continue
+			case 't':
+				// \t → Tab key
+				if err := c.typeSpecialKey(ctx, sessionID, "Tab", "", 9); err != nil {
+					return err
+				}
+				i += 2
+				continue
+			case '\\':
+				// \\ → literal backslash
+				if err := c.typeChar(ctx, sessionID, `\`); err != nil {
+					return err
+				}
+				i += 2
+				continue
+			}
 		}
 
-		// keyUp
-		_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
-			"type": "keyUp",
-			"key":  charStr,
-		})
-		if err != nil {
-			return fmt.Errorf("keyUp for %q: %w", charStr, err)
+		// Regular character
+		charStr := string(text[i])
+		if err := c.typeChar(ctx, sessionID, charStr); err != nil {
+			return err
 		}
+		i++
 	}
 
+	return nil
+}
+
+// typeChar dispatches key events for a regular character.
+func (c *Client) typeChar(ctx context.Context, sessionID string, char string) error {
+	_, err := c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type": "keyDown",
+		"text": char,
+		"key":  char,
+	})
+	if err != nil {
+		return fmt.Errorf("keyDown for %q: %w", char, err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type": "keyUp",
+		"key":  char,
+	})
+	if err != nil {
+		return fmt.Errorf("keyUp for %q: %w", char, err)
+	}
+	return nil
+}
+
+// typeSpecialKey dispatches key events for a special key (Enter, Tab, etc).
+func (c *Client) typeSpecialKey(ctx context.Context, sessionID string, key string, text string, keyCode int) error {
+	params := map[string]interface{}{
+		"type":                    "keyDown",
+		"key":                     key,
+		"windowsVirtualKeyCode":   keyCode,
+		"nativeVirtualKeyCode":    keyCode,
+	}
+	if text != "" {
+		params["text"] = text
+	}
+	_, err := c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", params)
+	if err != nil {
+		return fmt.Errorf("keyDown for %q: %w", key, err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchKeyEvent", map[string]interface{}{
+		"type":                    "keyUp",
+		"key":                     key,
+		"windowsVirtualKeyCode":   keyCode,
+		"nativeVirtualKeyCode":    keyCode,
+	})
+	if err != nil {
+		return fmt.Errorf("keyUp for %q: %w", key, err)
+	}
 	return nil
 }
 
