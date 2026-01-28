@@ -381,6 +381,11 @@
 - Uses window.getComputedStyle() to get resolved CSS values
 - Returns property name and computed value
 
+### Slice 105: Triple click ✅
+- `cdp tripleclick <selector>` - triple-click to select paragraph
+- Dispatches three clicks with clickCount 1, 2, 3
+- Useful for selecting entire text blocks
+
 ## Next Slices
 
 ## Test Command
@@ -393,7 +398,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (99 commands)
+## Commands Implemented (100 commands)
 ```
 # Browser info
 cdp version
@@ -445,6 +450,7 @@ cdp find <text>
 cdp click <selector>
 cdp clickat <x> <y>
 cdp dblclick <selector>
+cdp tripleclick <selector>
 cdp rightclick <selector>
 cdp hover <selector>
 cdp tap <selector>

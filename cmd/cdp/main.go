@@ -492,6 +492,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdComputed(cfg, remaining[1], remaining[2])
+	case "tripleclick":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp tripleclick <selector>")
+			return ExitError
+		}
+		return cmdTripleClick(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -3145,5 +3151,20 @@ func cmdComputed(cfg *Config, selector, property string) int {
 			return nil, err
 		}
 		return result, nil
+	})
+}
+
+type TripleClickResult struct {
+	Clicked  bool   `json:"clicked"`
+	Selector string `json:"selector"`
+}
+
+func cmdTripleClick(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.TripleClick(ctx, target.ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return TripleClickResult{Clicked: true, Selector: selector}, nil
 	})
 }

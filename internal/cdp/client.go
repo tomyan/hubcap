@@ -5761,3 +5761,155 @@ func (c *Client) GetComputedStyle(ctx context.Context, targetID string, selector
 		Value:    evalResp.Result.Value.Value,
 	}, nil
 }
+
+// TripleClick triple-clicks on an element specified by selector.
+// This is typically used to select an entire paragraph.
+func (c *Client) TripleClick(ctx context.Context, targetID string, selector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int64 `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query for element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int64 `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get box model for coordinates
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return fmt.Errorf("invalid box model")
+	}
+	x := (content[0] + content[2] + content[4] + content[6]) / 4
+	y := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Move mouse to element
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseMoved: %w", err)
+	}
+
+	// First click (clickCount=1)
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed (1): %w", err)
+	}
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased (1): %w", err)
+	}
+
+	// Second click (clickCount=2)
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 2,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed (2): %w", err)
+	}
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 2,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased (2): %w", err)
+	}
+
+	// Third click (clickCount=3)
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 3,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed (3): %w", err)
+	}
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 3,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased (3): %w", err)
+	}
+
+	return nil
+}

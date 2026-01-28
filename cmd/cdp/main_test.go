@@ -4819,3 +4819,63 @@ func TestRun_Computed_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Tripleclick_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"tripleclick"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Tripleclick_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create a page with a paragraph
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<p id="para">This is a test paragraph with text.</p>';
+		window.clickCount = 0;
+		document.getElementById('para').addEventListener('click', () => window.clickCount++);
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page")
+	}
+
+	// Triple click on the paragraph
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "tripleclick", "#para"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["clicked"] != true {
+		t.Errorf("expected clicked: true, got %v", result["clicked"])
+	}
+}
+
+func TestRun_Tripleclick_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"tripleclick", "#para"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
