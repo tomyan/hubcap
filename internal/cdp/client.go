@@ -1815,6 +1815,253 @@ func (c *Client) CaptureNetwork(ctx context.Context, targetID string) (<-chan Ne
 	return output, stop, nil
 }
 
+// HARLog represents an HTTP Archive log.
+type HARLog struct {
+	Log struct {
+		Version string     `json:"version"`
+		Creator HARCreator `json:"creator"`
+		Entries []HAREntry `json:"entries"`
+	} `json:"log"`
+}
+
+// HARCreator represents the creator of the HAR file.
+type HARCreator struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// HAREntry represents a single HTTP transaction.
+type HAREntry struct {
+	StartedDateTime string      `json:"startedDateTime"`
+	Time            float64     `json:"time"`
+	Request         HARRequest  `json:"request"`
+	Response        HARResponse `json:"response"`
+	Cache           struct{}    `json:"cache"`
+	Timings         HARTimings  `json:"timings"`
+}
+
+// HARRequest represents an HTTP request.
+type HARRequest struct {
+	Method      string      `json:"method"`
+	URL         string      `json:"url"`
+	HTTPVersion string      `json:"httpVersion"`
+	Headers     []HARHeader `json:"headers"`
+	QueryString []HARQuery  `json:"queryString"`
+	HeadersSize int         `json:"headersSize"`
+	BodySize    int         `json:"bodySize"`
+}
+
+// HARResponse represents an HTTP response.
+type HARResponse struct {
+	Status      int         `json:"status"`
+	StatusText  string      `json:"statusText"`
+	HTTPVersion string      `json:"httpVersion"`
+	Headers     []HARHeader `json:"headers"`
+	Content     HARContent  `json:"content"`
+	RedirectURL string      `json:"redirectURL"`
+	HeadersSize int         `json:"headersSize"`
+	BodySize    int         `json:"bodySize"`
+}
+
+// HARHeader represents an HTTP header.
+type HARHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// HARQuery represents a query string parameter.
+type HARQuery struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// HARContent represents the response body content.
+type HARContent struct {
+	Size     int    `json:"size"`
+	MimeType string `json:"mimeType"`
+}
+
+// HARTimings represents the timing information.
+type HARTimings struct {
+	Send    float64 `json:"send"`
+	Wait    float64 `json:"wait"`
+	Receive float64 `json:"receive"`
+}
+
+// CaptureHAR captures network activity and returns it as a HAR log.
+func (c *Client) CaptureHAR(ctx context.Context, targetID string, duration time.Duration) (*HARLog, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Network domain
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Network domain: %w", err)
+	}
+
+	// Subscribe to network events
+	requestCh := c.subscribeEvent(sessionID, "Network.requestWillBeSent")
+	responseCh := c.subscribeEvent(sessionID, "Network.responseReceived")
+	loadingFinishedCh := c.subscribeEvent(sessionID, "Network.loadingFinished")
+
+	defer func() {
+		c.unsubscribeEvent(sessionID, "Network.requestWillBeSent", requestCh)
+		c.unsubscribeEvent(sessionID, "Network.responseReceived", responseCh)
+		c.unsubscribeEvent(sessionID, "Network.loadingFinished", loadingFinishedCh)
+		disableCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		c.CallSession(disableCtx, sessionID, "Network.disable", nil)
+	}()
+
+	// Track requests and responses
+	type requestInfo struct {
+		startTime time.Time
+		method    string
+		url       string
+		headers   map[string]string
+	}
+	type responseInfo struct {
+		status   int
+		mimeType string
+		headers  map[string]string
+	}
+	requests := make(map[string]*requestInfo)
+	responses := make(map[string]*responseInfo)
+	timings := make(map[string]float64) // requestID -> duration in ms
+
+	timeout := time.After(duration)
+
+	for {
+		select {
+		case params, ok := <-requestCh:
+			if !ok {
+				goto done
+			}
+			var event struct {
+				RequestID string `json:"requestId"`
+				Timestamp float64 `json:"timestamp"`
+				Request   struct {
+					URL     string            `json:"url"`
+					Method  string            `json:"method"`
+					Headers map[string]string `json:"headers"`
+				} `json:"request"`
+			}
+			if err := json.Unmarshal(params, &event); err != nil {
+				continue
+			}
+			requests[event.RequestID] = &requestInfo{
+				startTime: time.Now(),
+				method:    event.Request.Method,
+				url:       event.Request.URL,
+				headers:   event.Request.Headers,
+			}
+
+		case params, ok := <-responseCh:
+			if !ok {
+				goto done
+			}
+			var event struct {
+				RequestID string `json:"requestId"`
+				Response  struct {
+					Status   int               `json:"status"`
+					MimeType string            `json:"mimeType"`
+					Headers  map[string]string `json:"headers"`
+				} `json:"response"`
+			}
+			if err := json.Unmarshal(params, &event); err != nil {
+				continue
+			}
+			responses[event.RequestID] = &responseInfo{
+				status:   event.Response.Status,
+				mimeType: event.Response.MimeType,
+				headers:  event.Response.Headers,
+			}
+
+		case params, ok := <-loadingFinishedCh:
+			if !ok {
+				goto done
+			}
+			var event struct {
+				RequestID string  `json:"requestId"`
+				Timestamp float64 `json:"timestamp"`
+			}
+			if err := json.Unmarshal(params, &event); err != nil {
+				continue
+			}
+			if req, ok := requests[event.RequestID]; ok {
+				timings[event.RequestID] = float64(time.Since(req.startTime).Milliseconds())
+			}
+
+		case <-timeout:
+			goto done
+
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case <-c.closeCh:
+			goto done
+		}
+	}
+
+done:
+	// Build HAR log
+	har := &HARLog{}
+	har.Log.Version = "1.2"
+	har.Log.Creator = HARCreator{Name: "cdp-cli", Version: "1.0"}
+	har.Log.Entries = make([]HAREntry, 0)
+
+	for requestID, req := range requests {
+		entry := HAREntry{
+			StartedDateTime: req.startTime.Format(time.RFC3339Nano),
+			Time:            timings[requestID],
+			Request: HARRequest{
+				Method:      req.method,
+				URL:         req.url,
+				HTTPVersion: "HTTP/1.1",
+				Headers:     make([]HARHeader, 0),
+				QueryString: make([]HARQuery, 0),
+				HeadersSize: -1,
+				BodySize:    -1,
+			},
+			Response: HARResponse{
+				Status:      0,
+				StatusText:  "",
+				HTTPVersion: "HTTP/1.1",
+				Headers:     make([]HARHeader, 0),
+				Content:     HARContent{Size: -1, MimeType: ""},
+				RedirectURL: "",
+				HeadersSize: -1,
+				BodySize:    -1,
+			},
+			Timings: HARTimings{
+				Send:    -1,
+				Wait:    -1,
+				Receive: -1,
+			},
+		}
+
+		// Add request headers
+		for name, value := range req.headers {
+			entry.Request.Headers = append(entry.Request.Headers, HARHeader{Name: name, Value: value})
+		}
+
+		// Add response if available
+		if resp, ok := responses[requestID]; ok {
+			entry.Response.Status = resp.status
+			entry.Response.Content.MimeType = resp.mimeType
+			for name, value := range resp.headers {
+				entry.Response.Headers = append(entry.Response.Headers, HARHeader{Name: name, Value: value})
+			}
+		}
+
+		har.Log.Entries = append(har.Log.Entries, entry)
+	}
+
+	return har, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

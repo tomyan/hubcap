@@ -217,6 +217,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdShadow(cfg, remaining[1], remaining[2])
+	case "har":
+		return cmdHar(cfg, remaining[1:])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -954,6 +956,24 @@ func cmdNetwork(cfg *Config, args []string) int {
 			return ExitSuccess
 		}
 	}
+}
+
+func cmdHar(cfg *Config, args []string) int {
+	// Parse har-specific flags
+	fs := flag.NewFlagSet("har", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	duration := fs.Duration("duration", 5*time.Second, "How long to capture")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.CaptureHAR(ctx, target.ID, *duration)
+	})
 }
 
 func cmdCookies(cfg *Config, args []string) int {

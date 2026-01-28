@@ -4038,3 +4038,48 @@ func TestRun_Shadow_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Har_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a URL that makes a network request
+	cfg := testConfig()
+	targetURL := fmt.Sprintf("http://localhost:%d/json", testChromePort)
+	code := run([]string{"--target", tabID, "goto", targetURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get HAR for a short duration
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "har", "--duration", "500ms"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Verify HAR structure
+	if _, ok := result["log"]; !ok {
+		t.Errorf("expected HAR log field")
+	}
+}
+
+func TestRun_Har_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"har"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

@@ -318,6 +318,10 @@
 - `cdp shadow <host-selector> <inner-selector>` - query inside shadow DOM
 - Pierces shadow boundaries for web component testing
 
+### Slice 90: HAR export ✅
+- `cdp har [--duration <d>]` - capture network activity as HAR format
+- Returns HTTP Archive 1.2 format with requests/responses
+
 ## Next Slices
 
 ## Test Command
@@ -330,7 +334,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (86 commands)
+## Commands Implemented (87 commands)
 ```
 # Browser info
 cdp version
@@ -424,6 +428,7 @@ cdp session <key> [value] [--clear]
 cdp console [--duration <duration>]
 cdp network [--duration <duration>]
 cdp errors [--duration <duration>]
+cdp har [--duration <duration>]
 
 # Dialog handling
 cdp dialog [accept|dismiss] [--text <prompt>]
