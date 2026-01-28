@@ -3360,3 +3360,65 @@ func TestRun_Throttle_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Meta_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with meta tags
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><head><meta charset="UTF-8"><meta name="description" content="Test Description"><meta name="viewport" content="width=device-width"></head><body></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get meta tags
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "meta"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	tags, ok := result["tags"].([]interface{})
+	if !ok {
+		t.Fatalf("expected tags array, got %T", result["tags"])
+	}
+
+	if len(tags) < 2 {
+		t.Errorf("expected at least 2 meta tags, got %d", len(tags))
+	}
+
+	// Check that we have the description tag
+	foundDescription := false
+	for _, tag := range tags {
+		m := tag.(map[string]interface{})
+		if m["name"] == "description" && m["content"] == "Test Description" {
+			foundDescription = true
+			break
+		}
+	}
+	if !foundDescription {
+		t.Errorf("expected to find description meta tag")
+	}
+}
+
+func TestRun_Meta_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"meta"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

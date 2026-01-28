@@ -353,6 +353,8 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitIdle(cfg, remaining[1:])
 	case "links":
 		return cmdLinks(cfg)
+	case "meta":
+		return cmdMeta(cfg)
 	case "upload":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp upload <selector> <file>...")
@@ -1622,6 +1624,20 @@ type LinksResult struct {
 	Links []LinkInfo `json:"links"`
 }
 
+// MetaInfo represents a single meta tag.
+type MetaInfo struct {
+	Name       string `json:"name,omitempty"`
+	Property   string `json:"property,omitempty"`
+	Content    string `json:"content,omitempty"`
+	Charset    string `json:"charset,omitempty"`
+	HTTPEquiv  string `json:"httpEquiv,omitempty"`
+}
+
+// MetaResult is returned by the meta command.
+type MetaResult struct {
+	Tags []MetaInfo `json:"tags"`
+}
+
 type StylesResult struct {
 	Selector string            `json:"selector"`
 	Styles   map[string]string `json:"styles"`
@@ -1800,6 +1816,42 @@ func cmdLinks(cfg *Config) int {
 		}
 
 		return LinksResult{Links: links}, nil
+	})
+}
+
+func cmdMeta(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.Eval(ctx, target.ID, `
+			Array.from(document.querySelectorAll('meta')).map(m => ({
+				name: m.getAttribute('name') || '',
+				property: m.getAttribute('property') || '',
+				content: m.getAttribute('content') || '',
+				charset: m.getAttribute('charset') || '',
+				httpEquiv: m.getAttribute('http-equiv') || ''
+			}))
+		`)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse the result
+		tags := []MetaInfo{}
+		if arr, ok := result.Value.([]interface{}); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]interface{}); ok {
+					tag := MetaInfo{
+						Name:      fmt.Sprintf("%v", m["name"]),
+						Property:  fmt.Sprintf("%v", m["property"]),
+						Content:   fmt.Sprintf("%v", m["content"]),
+						Charset:   fmt.Sprintf("%v", m["charset"]),
+						HTTPEquiv: fmt.Sprintf("%v", m["httpEquiv"]),
+					}
+					tags = append(tags, tag)
+				}
+			}
+		}
+
+		return MetaResult{Tags: tags}, nil
 	})
 }
 

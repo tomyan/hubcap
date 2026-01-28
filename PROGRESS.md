@@ -271,6 +271,10 @@
 - `cdp throttle --disable` - disable network throttling
 - Presets: slow3g, fast3g, 4g, wifi
 
+### Slice 79: Meta tags ✅
+- `cdp meta` - get all meta tags from the page
+- Returns name, property, content, charset, http-equiv attributes
+
 ## Next Slices
 
 ## Test Command
@@ -283,7 +287,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (76 commands)
+## Commands Implemented (77 commands)
 ```
 # Browser info
 cdp version
@@ -396,6 +400,7 @@ cdp a11y
 cdp source
 cdp waitidle [--idle <duration>]
 cdp links
+cdp meta
 ```
 
 ## Known Issues / Deferred Items
