@@ -350,6 +350,10 @@
 - `cdp find <text>` - find text occurrences on the page
 - Returns count and found status
 
+### Slice 98: Set value ✅
+- `cdp setvalue <selector> <value>` - directly set input value
+- Triggers input and change events
+
 ## Next Slices
 
 ## Test Command
@@ -362,7 +366,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (93 commands)
+## Commands Implemented (94 commands)
 ```
 # Browser info
 cdp version
@@ -425,6 +429,7 @@ cdp select <selector> <value>
 cdp check <selector>
 cdp uncheck <selector>
 cdp upload <selector> <file>...
+cdp setvalue <selector> <value>
 
 # Keyboard input
 cdp type <text>

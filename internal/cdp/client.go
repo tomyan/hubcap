@@ -2462,6 +2462,49 @@ func (c *Client) FindText(ctx context.Context, targetID string, text string) (*F
 	return findResult, nil
 }
 
+// SetValueResult represents the result of setting an input value.
+type SetValueResult struct {
+	Selector string `json:"selector"`
+	Value    string `json:"value"`
+}
+
+// SetValue directly sets the value of an input/textarea element.
+func (c *Client) SetValue(ctx context.Context, targetID string, selector string, value string) (*SetValueResult, error) {
+	escapedSelector := strings.ReplaceAll(selector, "'", "\\'")
+	escapedValue := strings.ReplaceAll(value, "'", "\\'")
+	escapedValue = strings.ReplaceAll(escapedValue, "\n", "\\n")
+
+	result, err := c.Eval(ctx, targetID, fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector('%s');
+			if (!el) {
+				return { error: 'Element not found: %s' };
+			}
+			el.value = '%s';
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			el.dispatchEvent(new Event('change', { bubbles: true }));
+			return { selector: '%s', value: el.value };
+		})()
+	`, escapedSelector, escapedSelector, escapedValue, escapedSelector))
+	if err != nil {
+		return nil, fmt.Errorf("setting value: %w", err)
+	}
+
+	setResult := &SetValueResult{Selector: selector, Value: value}
+	if result.Value != nil {
+		if data, ok := result.Value.(map[string]interface{}); ok {
+			if errMsg, ok := data["error"].(string); ok {
+				return nil, fmt.Errorf("%s", errMsg)
+			}
+			if v, ok := data["value"].(string); ok {
+				setResult.Value = v
+			}
+		}
+	}
+
+	return setResult, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

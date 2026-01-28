@@ -240,6 +240,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdFind(cfg, remaining[1])
+	case "setvalue":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp setvalue <selector> <value>")
+			return ExitError
+		}
+		return cmdSetValue(cfg, remaining[1], remaining[2])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1070,6 +1076,12 @@ func cmdScripts(cfg *Config) int {
 func cmdFind(cfg *Config, text string) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		return client.FindText(ctx, target.ID, text)
+	})
+}
+
+func cmdSetValue(cfg *Config, selector string, value string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.SetValue(ctx, target.ID, selector, value)
 	})
 }
 
