@@ -330,6 +330,10 @@
 - `cdp stylesheets` - get all stylesheets on the page
 - Returns stylesheet info including URL, disabled state, rule count
 
+### Slice 93: Screenshot to base64 ✅
+- `cdp screenshot --base64` - return screenshot as base64 data
+- Useful for embedding in HTML, markdown, or JSON pipelines
+
 ## Next Slices
 
 ## Test Command
@@ -363,7 +367,7 @@ cdp title
 cdp url
 
 # Screenshots & PDF
-cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>]
+cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>] [--base64]
 cdp pdf --output <file> [--landscape] [--background]
 
 # JavaScript execution

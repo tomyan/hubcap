@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -576,14 +577,22 @@ type ElementScreenshotResult struct {
 	Bounds   *cdp.BoundingBox `json:"bounds,omitempty"`
 }
 
+// Base64ScreenshotResult is returned by the screenshot command with --base64.
+type Base64ScreenshotResult struct {
+	Format string `json:"format"`
+	Size   int    `json:"size"`
+	Data   string `json:"data"`
+}
+
 func cmdScreenshot(cfg *Config, args []string) int {
 	// Parse screenshot-specific flags
 	fs := flag.NewFlagSet("screenshot", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
-	output := fs.String("output", "", "Output file path (required)")
+	output := fs.String("output", "", "Output file path")
 	format := fs.String("format", "png", "Image format: png, jpeg, webp")
 	quality := fs.Int("quality", 80, "JPEG/WebP quality (0-100)")
 	selector := fs.String("selector", "", "CSS selector for element screenshot")
+	base64Flag := fs.Bool("base64", false, "Return base64 data instead of writing to file")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -592,8 +601,9 @@ func cmdScreenshot(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	if *output == "" {
+	if *output == "" && !*base64Flag {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>]")
+		fmt.Fprintln(cfg.Stderr, "       cdp screenshot --base64 [--format png|jpeg|webp] [--quality 0-100]")
 		return ExitError
 	}
 
@@ -617,6 +627,15 @@ func cmdScreenshot(cfg *Config, args []string) int {
 
 		if err != nil {
 			return nil, err
+		}
+
+		// Return base64 if requested
+		if *base64Flag {
+			return Base64ScreenshotResult{
+				Format: *format,
+				Size:   len(data),
+				Data:   base64.StdEncoding.EncodeToString(data),
+			}, nil
 		}
 
 		if err := os.WriteFile(*output, data, 0644); err != nil {

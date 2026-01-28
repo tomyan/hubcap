@@ -4177,3 +4177,42 @@ func TestRun_Stylesheets_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Screenshot_Base64(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "data:text/html,<html><body style='background:blue'>Hello</body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Take screenshot with base64 output
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "screenshot", "--base64"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Verify base64 data
+	if data, ok := result["data"].(string); !ok || len(data) == 0 {
+		t.Errorf("expected non-empty data field")
+	}
+
+	if format, ok := result["format"].(string); !ok || format != "png" {
+		t.Errorf("expected format png, got %v", result["format"])
+	}
+}
