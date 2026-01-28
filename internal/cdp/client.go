@@ -2527,6 +2527,32 @@ func (c *Client) GetURL(ctx context.Context, targetID string) (string, error) {
 	return fmt.Sprintf("%v", result.Value), nil
 }
 
+// WaitForURL waits for the page URL to contain the given pattern.
+func (c *Client) WaitForURL(ctx context.Context, targetID string, pattern string, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 100 * time.Millisecond
+
+	for time.Now().Before(deadline) {
+		url, err := c.GetURL(ctx, targetID)
+		if err != nil {
+			return "", err
+		}
+
+		if strings.Contains(url, pattern) {
+			return url, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(pollInterval):
+			// Continue polling
+		}
+	}
+
+	return "", fmt.Errorf("timeout waiting for URL to contain %q", pattern)
+}
+
 // GetAttribute returns the value of an attribute for an element.
 func (c *Client) GetAttribute(ctx context.Context, targetID string, selector string, name string) (string, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

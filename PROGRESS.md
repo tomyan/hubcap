@@ -310,6 +310,10 @@
 - `cdp drag <source> <dest>` - drag from one element to another
 - Uses Input.dispatchMouseEvent for mouse drag simulation
 
+### Slice 88: Wait for URL ✅
+- `cdp waiturl <pattern> [--timeout <duration>]` - wait for URL to contain pattern
+- Useful for waiting after redirects or navigation
+
 ## Next Slices
 
 ## Test Command
@@ -322,7 +326,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (84 commands)
+## Commands Implemented (85 commands)
 ```
 # Browser info
 cdp version
@@ -397,6 +401,7 @@ cdp wait <selector> [--timeout <duration>]
 cdp waitload [--timeout <duration>]
 cdp waitnav [--timeout <duration>]
 cdp waitfn <expression> [--timeout <duration>]
+cdp waiturl <pattern> [--timeout <duration>]
 
 # Viewport
 cdp viewport <width> <height>

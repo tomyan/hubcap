@@ -205,6 +205,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdDrag(cfg, remaining[1], remaining[2])
+	case "waiturl":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp waiturl <pattern> [--timeout <duration>]")
+			return ExitError
+		}
+		return cmdWaitURL(cfg, remaining[1], remaining[2:])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -2565,6 +2571,34 @@ func cmdWaitNav(cfg *Config, args []string) int {
 			return nil, err
 		}
 		return WaitNavResult{Navigated: true}, nil
+	})
+}
+
+// WaitURLResult is returned by the waiturl command.
+type WaitURLResult struct {
+	Pattern string `json:"pattern"`
+	URL     string `json:"url"`
+}
+
+func cmdWaitURL(cfg *Config, pattern string, args []string) int {
+	// Parse waiturl-specific flags
+	fs := flag.NewFlagSet("waiturl", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		url, err := client.WaitForURL(ctx, target.ID, pattern, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return WaitURLResult{Pattern: pattern, URL: url}, nil
 	})
 }
 

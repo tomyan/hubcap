@@ -3897,3 +3897,83 @@ func TestRun_Drag_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_WaitURL_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"waiturl"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_WaitURL_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a known URL
+	cfg := testConfig()
+	targetURL := fmt.Sprintf("http://localhost:%d/json", testChromePort)
+	code := run([]string{"--target", tabID, "goto", targetURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Wait for URL containing "json"
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "waiturl", "json", "--timeout", "2s"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["url"]; !ok {
+		t.Errorf("expected url field in result")
+	}
+}
+
+func TestRun_WaitURL_Timeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "data:text/html,<html></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Wait for URL that won't match (should timeout)
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "waiturl", "nonexistent-pattern-xyz", "--timeout", "500ms"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d for timeout, got %d", ExitError, code)
+	}
+}
+
+func TestRun_WaitURL_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"waiturl", "pattern"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
