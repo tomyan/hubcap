@@ -2337,6 +2337,84 @@ func (c *Client) WaitForText(ctx context.Context, targetID string, text string, 
 	return fmt.Errorf("timeout waiting for text %q", text)
 }
 
+// ScriptInfo represents information about a script element.
+type ScriptInfo struct {
+	Src    string `json:"src"`
+	Type   string `json:"type"`
+	Async  bool   `json:"async"`
+	Defer  bool   `json:"defer"`
+	Inline bool   `json:"inline"`
+}
+
+// ScriptsResult represents all scripts on the page.
+type ScriptsResult struct {
+	Scripts []ScriptInfo `json:"scripts"`
+}
+
+// GetScripts returns all script elements on the page.
+func (c *Client) GetScripts(ctx context.Context, targetID string) (*ScriptsResult, error) {
+	result, err := c.Eval(ctx, targetID, `
+		(function() {
+			const scripts = [];
+			const elements = document.querySelectorAll('script');
+			for (const el of elements) {
+				scripts.push({
+					src: el.src || '',
+					type: el.type || '',
+					async: el.async,
+					defer: el.defer,
+					inline: !el.src
+				});
+			}
+			return scripts;
+		})()
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("getting scripts: %w", err)
+	}
+
+	scripts := &ScriptsResult{
+		Scripts: make([]ScriptInfo, 0),
+	}
+
+	if result.Value == nil {
+		return scripts, nil
+	}
+
+	scriptsData, ok := result.Value.([]interface{})
+	if !ok {
+		return scripts, nil
+	}
+
+	for _, item := range scriptsData {
+		script, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		info := ScriptInfo{}
+		if src, ok := script["src"].(string); ok {
+			info.Src = src
+		}
+		if typ, ok := script["type"].(string); ok {
+			info.Type = typ
+		}
+		if async, ok := script["async"].(bool); ok {
+			info.Async = async
+		}
+		if deferred, ok := script["defer"].(bool); ok {
+			info.Defer = deferred
+		}
+		if inline, ok := script["inline"].(bool); ok {
+			info.Inline = inline
+		}
+
+		scripts.Scripts = append(scripts.Scripts, info)
+	}
+
+	return scripts, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

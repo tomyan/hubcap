@@ -342,6 +342,10 @@
 - `cdp waittext <text> [--timeout <duration>]` - wait for text to appear
 - Polls body.innerText until text is found or timeout
 
+### Slice 96: Scripts list ✅
+- `cdp scripts` - get all script elements on the page
+- Returns src, type, async, defer, and inline status
+
 ## Next Slices
 
 ## Test Command
@@ -354,7 +358,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (91 commands)
+## Commands Implemented (92 commands)
 ```
 # Browser info
 cdp version
@@ -397,6 +401,7 @@ cdp layout <selector> [--depth <n>]
 cdp forms
 cdp images
 cdp highlight <selector> [--hide]
+cdp scripts
 cdp shadow <host> <inner>
 
 # Click actions

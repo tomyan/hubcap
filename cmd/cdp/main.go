@@ -232,6 +232,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdWaitText(cfg, remaining[1], remaining[2:])
+	case "scripts":
+		return cmdScripts(cfg)
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1050,6 +1052,12 @@ func cmdWaitText(cfg *Config, text string, args []string) int {
 			return nil, err
 		}
 		return WaitTextResult{Text: text, Found: true}, nil
+	})
+}
+
+func cmdScripts(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetScripts(ctx, target.ID)
 	})
 }
 
