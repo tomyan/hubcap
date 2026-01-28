@@ -338,6 +338,10 @@
 - `cdp info` - get combined page information
 - Returns title, URL, readyState, characterSet, contentType
 
+### Slice 95: Wait for text ✅
+- `cdp waittext <text> [--timeout <duration>]` - wait for text to appear
+- Polls body.innerText until text is found or timeout
+
 ## Next Slices
 
 ## Test Command
@@ -350,7 +354,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (90 commands)
+## Commands Implemented (91 commands)
 ```
 # Browser info
 cdp version
@@ -428,6 +432,7 @@ cdp waitload [--timeout <duration>]
 cdp waitnav [--timeout <duration>]
 cdp waitfn <expression> [--timeout <duration>]
 cdp waiturl <pattern> [--timeout <duration>]
+cdp waittext <text> [--timeout <duration>]
 
 # Viewport
 cdp viewport <width> <height>

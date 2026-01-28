@@ -226,6 +226,12 @@ func run(args []string, cfg *Config) int {
 		return cmdStylesheets(cfg)
 	case "info":
 		return cmdInfo(cfg)
+	case "waittext":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp waittext <text> [--timeout <duration>]")
+			return ExitError
+		}
+		return cmdWaitText(cfg, remaining[1], remaining[2:])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -1016,6 +1022,34 @@ func cmdStylesheets(cfg *Config) int {
 func cmdInfo(cfg *Config) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		return client.GetPageInfo(ctx, target.ID)
+	})
+}
+
+// WaitTextResult is returned by the waittext command.
+type WaitTextResult struct {
+	Text  string `json:"text"`
+	Found bool   `json:"found"`
+}
+
+func cmdWaitText(cfg *Config, text string, args []string) int {
+	// Parse waittext-specific flags
+	fs := flag.NewFlagSet("waittext", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.WaitForText(ctx, target.ID, text, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return WaitTextResult{Text: text, Found: true}, nil
 	})
 }
 

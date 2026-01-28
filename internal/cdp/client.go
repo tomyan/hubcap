@@ -2308,6 +2308,35 @@ func (c *Client) GetPageInfo(ctx context.Context, targetID string) (*PageInfo, e
 	return info, nil
 }
 
+// WaitForText waits for text to appear on the page.
+func (c *Client) WaitForText(ctx context.Context, targetID string, text string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 100 * time.Millisecond
+
+	escapedText := strings.ReplaceAll(text, "'", "\\'")
+
+	for time.Now().Before(deadline) {
+		result, err := c.Eval(ctx, targetID, fmt.Sprintf(
+			"document.body && document.body.innerText.includes('%s')", escapedText))
+		if err != nil {
+			return err
+		}
+
+		if result.Value == true {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+			// Continue polling
+		}
+	}
+
+	return fmt.Errorf("timeout waiting for text %q", text)
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
