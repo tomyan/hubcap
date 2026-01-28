@@ -5820,6 +5820,40 @@ func (c *Client) DispatchEvent(ctx context.Context, targetID string, selector st
 	}, nil
 }
 
+// SelectionResult contains the currently selected text on the page.
+type SelectionResult struct {
+	Text string `json:"text"`
+}
+
+// GetSelection returns the currently selected text on the page.
+func (c *Client) GetSelection(ctx context.Context, targetID string) (*SelectionResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    "window.getSelection().toString()",
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting selection: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value string `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	return &SelectionResult{
+		Text: evalResp.Result.Value,
+	}, nil
+}
+
 // TripleClick triple-clicks on an element specified by selector.
 // This is typically used to select an entire paragraph.
 func (c *Client) TripleClick(ctx context.Context, targetID string, selector string) error {

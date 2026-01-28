@@ -391,6 +391,11 @@
 - Uses JavaScript Event constructor with bubbles/cancelable
 - Useful for testing custom event handlers
 
+### Slice 107: Get selection text ✅
+- `cdp selection` - get currently selected text
+- Uses window.getSelection().toString()
+- Useful for verifying text selection after interactions
+
 ## Next Slices
 
 ## Test Command
@@ -403,7 +408,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (101 commands)
+## Commands Implemented (102 commands)
 ```
 # Browser info
 cdp version
@@ -458,6 +463,7 @@ cdp dblclick <selector>
 cdp tripleclick <selector>
 cdp rightclick <selector>
 cdp dispatch <selector> <eventType>
+cdp selection
 cdp hover <selector>
 cdp tap <selector>
 cdp mouse <x> <y>

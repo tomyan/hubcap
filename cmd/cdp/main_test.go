@@ -4950,3 +4950,55 @@ func TestRun_Dispatch_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Selection_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create a page with text and select some of it
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<p id="text">Hello World Test</p>';
+		// Programmatically select "World"
+		const range = document.createRange();
+		const textNode = document.getElementById('text').firstChild;
+		range.setStart(textNode, 6);
+		range.setEnd(textNode, 11);
+		window.getSelection().removeAllRanges();
+		window.getSelection().addRange(range);
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page and selection")
+	}
+
+	// Get the selected text
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "selection"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["text"] != "World" {
+		t.Errorf("expected text: World, got %v", result["text"])
+	}
+}
+
+func TestRun_Selection_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"selection"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
