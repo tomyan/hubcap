@@ -5577,3 +5577,66 @@ func (c *Client) WaitForGone(ctx context.Context, targetID string, selector stri
 		}
 	}
 }
+
+// WaitRequestResult contains the result of waiting for a network request.
+type WaitRequestResult struct {
+	Found     bool   `json:"found"`
+	URL       string `json:"url"`
+	Method    string `json:"method"`
+	RequestID string `json:"requestId"`
+}
+
+// WaitForRequest waits for a network request with a URL containing the pattern.
+func (c *Client) WaitForRequest(ctx context.Context, targetID string, pattern string, timeout time.Duration) (*WaitRequestResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Network domain
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling network: %w", err)
+	}
+
+	// Subscribe to request events
+	requestCh := c.subscribeEvent(sessionID, "Network.requestWillBeSent")
+	defer c.unsubscribeEvent(sessionID, "Network.requestWillBeSent", requestCh)
+
+	// Create timeout context
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			if timeoutCtx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("timeout waiting for request matching %q", pattern)
+			}
+			return nil, timeoutCtx.Err()
+		case params, ok := <-requestCh:
+			if !ok {
+				return nil, fmt.Errorf("event channel closed")
+			}
+			var event struct {
+				RequestID string `json:"requestId"`
+				Request   struct {
+					URL    string `json:"url"`
+					Method string `json:"method"`
+				} `json:"request"`
+			}
+			if err := json.Unmarshal(params, &event); err != nil {
+				continue
+			}
+			// Check if URL contains the pattern
+			if strings.Contains(event.Request.URL, pattern) {
+				return &WaitRequestResult{
+					Found:     true,
+					URL:       event.Request.URL,
+					Method:    event.Request.Method,
+					RequestID: event.RequestID,
+				}, nil
+			}
+		}
+	}
+}

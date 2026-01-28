@@ -366,6 +366,11 @@
 - `cdp mouse <x> <y>` - move mouse without clicking
 - Uses Input.dispatchMouseEvent with mouseMoved type
 
+### Slice 102: Wait for network request ✅
+- `cdp waitrequest <pattern> [--timeout <duration>]` - wait for network request matching pattern
+- Subscribes to Network.requestWillBeSent events
+- Returns request info when URL contains the pattern
+
 ## Next Slices
 
 ## Test Command
@@ -378,7 +383,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (96 commands)
+## Commands Implemented (97 commands)
 ```
 # Browser info
 cdp version
@@ -461,6 +466,7 @@ cdp waitnav [--timeout <duration>]
 cdp waitfn <expression> [--timeout <duration>]
 cdp waiturl <pattern> [--timeout <duration>]
 cdp waittext <text> [--timeout <duration>]
+cdp waitrequest <pattern> [--timeout <duration>]
 
 # Viewport
 cdp viewport <width> <height>

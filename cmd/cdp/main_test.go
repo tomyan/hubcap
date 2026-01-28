@@ -4628,3 +4628,67 @@ func TestRun_Mouse_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_WaitRequest_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"waitrequest"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_WaitRequest_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to Chrome's json endpoint first
+	cfg := testConfig()
+	targetURL := fmt.Sprintf("http://localhost:%d/json", testChromePort)
+	code := run([]string{"--target", tabID, "goto", targetURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Schedule a reload via JavaScript that will happen while we wait
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "eval", "setTimeout(() => location.reload(), 300)"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to schedule reload")
+	}
+
+	// Wait for a request containing "json" (will be triggered by the delayed reload)
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "waitrequest", "json", "--timeout", "5s"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["found"] != true {
+		t.Errorf("expected found: true, got %v", result["found"])
+	}
+}
+
+func TestRun_WaitRequest_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"waitrequest", "pattern"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

@@ -482,6 +482,8 @@ func run(args []string, cfg *Config) int {
 		return cmdEvalFrame(cfg, remaining[1], remaining[2])
 	case "waitgone":
 		return cmdWaitGone(cfg, remaining[1:])
+	case "waitrequest":
+		return cmdWaitRequest(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -3069,5 +3071,33 @@ func cmdWaitGone(cfg *Config, args []string) int {
 			return nil, err
 		}
 		return WaitGoneResult{Gone: true, Selector: selector}, nil
+	})
+}
+
+func cmdWaitRequest(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("waitrequest", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp waitrequest <pattern> [--timeout <duration>]")
+		return ExitError
+	}
+	pattern := remaining[0]
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.WaitForRequest(ctx, target.ID, pattern, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	})
 }
