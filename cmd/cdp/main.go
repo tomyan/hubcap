@@ -219,6 +219,8 @@ func run(args []string, cfg *Config) int {
 		return cmdShadow(cfg, remaining[1], remaining[2])
 	case "har":
 		return cmdHar(cfg, remaining[1:])
+	case "coverage":
+		return cmdCoverage(cfg)
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -973,6 +975,12 @@ func cmdHar(cfg *Config, args []string) int {
 
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		return client.CaptureHAR(ctx, target.ID, *duration)
+	})
+}
+
+func cmdCoverage(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetCoverage(ctx, target.ID)
 	})
 }
 

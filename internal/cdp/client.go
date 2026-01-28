@@ -2062,6 +2062,103 @@ done:
 	return har, nil
 }
 
+// CoverageResult represents JavaScript code coverage data.
+type CoverageResult struct {
+	Scripts []ScriptCoverage `json:"scripts"`
+}
+
+// ScriptCoverage represents coverage for a single script.
+type ScriptCoverage struct {
+	ScriptID string          `json:"scriptId"`
+	URL      string          `json:"url"`
+	Ranges   []CoverageRange `json:"ranges"`
+}
+
+// CoverageRange represents a covered range in the script.
+type CoverageRange struct {
+	StartOffset int `json:"startOffset"`
+	EndOffset   int `json:"endOffset"`
+	Count       int `json:"count"`
+}
+
+// GetCoverage returns JavaScript code coverage data.
+func (c *Client) GetCoverage(ctx context.Context, targetID string) (*CoverageResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Profiler domain
+	_, err = c.CallSession(ctx, sessionID, "Profiler.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Profiler domain: %w", err)
+	}
+
+	// Start precise coverage
+	_, err = c.CallSession(ctx, sessionID, "Profiler.startPreciseCoverage", map[string]interface{}{
+		"callCount": true,
+		"detailed":  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("starting coverage: %w", err)
+	}
+
+	// Get coverage data
+	result, err := c.CallSession(ctx, sessionID, "Profiler.takePreciseCoverage", nil)
+	if err != nil {
+		return nil, fmt.Errorf("taking coverage: %w", err)
+	}
+
+	// Stop coverage collection
+	c.CallSession(ctx, sessionID, "Profiler.stopPreciseCoverage", nil)
+	c.CallSession(ctx, sessionID, "Profiler.disable", nil)
+
+	var resp struct {
+		Result []struct {
+			ScriptID  string `json:"scriptId"`
+			URL       string `json:"url"`
+			Functions []struct {
+				FunctionName string `json:"functionName"`
+				Ranges       []struct {
+					StartOffset int `json:"startOffset"`
+					EndOffset   int `json:"endOffset"`
+					Count       int `json:"count"`
+				} `json:"ranges"`
+			} `json:"functions"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("parsing coverage response: %w", err)
+	}
+
+	coverage := &CoverageResult{
+		Scripts: make([]ScriptCoverage, 0, len(resp.Result)),
+	}
+
+	for _, script := range resp.Result {
+		sc := ScriptCoverage{
+			ScriptID: script.ScriptID,
+			URL:      script.URL,
+			Ranges:   make([]CoverageRange, 0),
+		}
+
+		// Flatten function ranges into script ranges
+		for _, fn := range script.Functions {
+			for _, r := range fn.Ranges {
+				sc.Ranges = append(sc.Ranges, CoverageRange{
+					StartOffset: r.StartOffset,
+					EndOffset:   r.EndOffset,
+					Count:       r.Count,
+				})
+			}
+		}
+
+		coverage.Scripts = append(coverage.Scripts, sc)
+	}
+
+	return coverage, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

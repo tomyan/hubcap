@@ -322,6 +322,10 @@
 - `cdp har [--duration <d>]` - capture network activity as HAR format
 - Returns HTTP Archive 1.2 format with requests/responses
 
+### Slice 91: JavaScript coverage ✅
+- `cdp coverage` - get JavaScript code coverage
+- Uses Profiler domain for precise coverage data
+
 ## Next Slices
 
 ## Test Command
@@ -334,7 +338,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (87 commands)
+## Commands Implemented (88 commands)
 ```
 # Browser info
 cdp version
@@ -458,6 +462,7 @@ cdp waitidle [--idle <duration>]
 cdp links
 cdp meta
 cdp tables
+cdp coverage
 ```
 
 ## Known Issues / Deferred Items

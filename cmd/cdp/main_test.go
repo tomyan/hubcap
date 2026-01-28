@@ -4083,3 +4083,52 @@ func TestRun_Har_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Coverage_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with some JavaScript
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><body><script>
+		function used() { return 1; }
+		function unused() { return 2; }
+		used();
+	</script></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get coverage
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "coverage"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Verify coverage structure
+	if _, ok := result["scripts"]; !ok {
+		t.Errorf("expected scripts field in result")
+	}
+}
+
+func TestRun_Coverage_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"coverage"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
