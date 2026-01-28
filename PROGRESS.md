@@ -257,6 +257,10 @@
 - `cdp frames` - list all frames (including nested iframes)
 - `cdp evalframe <frame-id> <expression>` - evaluate JS in specific frame
 
+### Slice 76: Wait for gone ✅
+- `cdp waitgone <selector> [--timeout <duration>]` - wait for element removal
+- Useful for waiting for loading spinners to disappear
+
 ## Next Slices
 
 ## Test Command
@@ -269,7 +273,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (73 commands)
+## Commands Implemented (74 commands)
 ```
 # Browser info
 cdp version

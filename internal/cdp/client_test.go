@@ -2989,3 +2989,98 @@ func TestClient_EvalInFrame(t *testing.T) {
 		t.Errorf("expected 'Frame Content Here', got %v", result.Value)
 	}
 }
+
+func TestClient_WaitForGone_ImmediatelyGone(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab without the element
+	tabID, err := client.NewTab(ctx, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Element doesn't exist, should return immediately
+	err = client.WaitForGone(ctx, tabID, "#nonexistent", 5*time.Second)
+	if err != nil {
+		t.Fatalf("WaitForGone failed: %v", err)
+	}
+}
+
+func TestClient_WaitForGone_DelayedRemoval(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with element that gets removed after delay
+	dataURL := `data:text/html,<html><body>
+		<div id="loading">Loading...</div>
+		<script>setTimeout(() => document.getElementById('loading').remove(), 300);</script>
+	</body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Wait for element to be removed
+	err = client.WaitForGone(ctx, tabID, "#loading", 5*time.Second)
+	if err != nil {
+		t.Fatalf("WaitForGone failed: %v", err)
+	}
+}
+
+func TestClient_WaitForGone_Timeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with element that never gets removed
+	dataURL := `data:text/html,<html><body><div id="permanent">Always here</div></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Should timeout
+	err = client.WaitForGone(ctx, tabID, "#permanent", 200*time.Millisecond)
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Errorf("expected timeout error, got: %v", err)
+	}
+}

@@ -3970,3 +3970,50 @@ func (c *Client) EvalInFrame(ctx context.Context, targetID string, frameID strin
 		Value: evalResp.Result.Value,
 	}, nil
 }
+
+// WaitForGone waits for an element to be removed from the DOM.
+func (c *Client) WaitForGone(ctx context.Context, targetID string, selector string, timeout time.Duration) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	deadline := time.Now().Add(timeout)
+	pollInterval := 50 * time.Millisecond
+
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for %q to be removed", selector)
+		}
+
+		// Check if element exists
+		result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+			"expression":    fmt.Sprintf(`document.querySelector(%q) === null`, selector),
+			"returnByValue": true,
+		})
+		if err != nil {
+			return fmt.Errorf("checking selector: %w", err)
+		}
+
+		var evalResp struct {
+			Result struct {
+				Value bool `json:"value"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(result, &evalResp); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+
+		// Element is gone
+		if evalResp.Result.Value {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+			// Continue polling
+		}
+	}
+}

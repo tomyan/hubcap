@@ -3081,3 +3081,52 @@ func TestRun_EvalFrame_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_WaitGone_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"waitgone"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_WaitGone_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Element doesn't exist, should return immediately
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "waitgone", "#nonexistent", "--timeout", "5s"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["gone"] != true {
+		t.Errorf("expected gone: true, got %v", result["gone"])
+	}
+}
+
+func TestRun_WaitGone_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"waitgone", "#test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

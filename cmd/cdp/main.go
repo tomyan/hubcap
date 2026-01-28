@@ -89,7 +89,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw, upload, exists, waitnav, value, waitfn, forms, highlight, images, scrollbottom, scrolltop, frames, evalframe")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw, upload, exists, waitnav, value, waitfn, forms, highlight, images, scrollbottom, scrolltop, frames, evalframe, waitgone")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -393,6 +393,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdEvalFrame(cfg, remaining[1], remaining[2])
+	case "waitgone":
+		return cmdWaitGone(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -2239,5 +2241,39 @@ func cmdEvalFrame(cfg *Config, frameID, expression string) int {
 			return nil, err
 		}
 		return EvalFrameResult{FrameID: frameID, Type: result.Type, Value: result.Value}, nil
+	})
+}
+
+// WaitGoneResult is returned by the waitgone command.
+type WaitGoneResult struct {
+	Gone     bool   `json:"gone"`
+	Selector string `json:"selector"`
+}
+
+func cmdWaitGone(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("waitgone", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp waitgone <selector> [--timeout <duration>]")
+		return ExitError
+	}
+	selector := remaining[0]
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.WaitForGone(ctx, target.ID, selector, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return WaitGoneResult{Gone: true, Selector: selector}, nil
 	})
 }
