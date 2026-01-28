@@ -1976,6 +1976,76 @@ func (c *Client) ClearSessionStorage(ctx context.Context, targetID string) error
 	return err
 }
 
+// NetworkConditions represents network throttling settings.
+type NetworkConditions struct {
+	Offline            bool    `json:"offline"`
+	Latency            float64 `json:"latency"`             // Milliseconds
+	DownloadThroughput float64 `json:"downloadThroughput"`  // Bytes per second (-1 = disabled)
+	UploadThroughput   float64 `json:"uploadThroughput"`    // Bytes per second (-1 = disabled)
+}
+
+// NetworkPresets contains common network condition presets.
+var NetworkPresets = map[string]NetworkConditions{
+	"slow3g": {
+		Offline:            false,
+		Latency:            2000,
+		DownloadThroughput: 50000,  // 50 KB/s
+		UploadThroughput:   25000,  // 25 KB/s
+	},
+	"fast3g": {
+		Offline:            false,
+		Latency:            563,
+		DownloadThroughput: 180000, // 180 KB/s
+		UploadThroughput:   84375,  // ~84 KB/s
+	},
+	"4g": {
+		Offline:            false,
+		Latency:            170,
+		DownloadThroughput: 1500000, // 1.5 MB/s
+		UploadThroughput:   750000,  // 750 KB/s
+	},
+	"wifi": {
+		Offline:            false,
+		Latency:            28,
+		DownloadThroughput: 3750000, // 3.75 MB/s
+		UploadThroughput:   1875000, // 1.875 MB/s
+	},
+}
+
+// EmulateNetworkConditions sets network throttling conditions.
+func (c *Client) EmulateNetworkConditions(ctx context.Context, targetID string, conditions NetworkConditions) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Network domain first
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Network domain: %w", err)
+	}
+
+	params := map[string]interface{}{
+		"offline":            conditions.Offline,
+		"latency":            conditions.Latency,
+		"downloadThroughput": conditions.DownloadThroughput,
+		"uploadThroughput":   conditions.UploadThroughput,
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Network.emulateNetworkConditions", params)
+	return err
+}
+
+// DisableNetworkThrottling disables network throttling.
+func (c *Client) DisableNetworkThrottling(ctx context.Context, targetID string) error {
+	return c.EmulateNetworkConditions(ctx, targetID, NetworkConditions{
+		Offline:            false,
+		Latency:            0,
+		DownloadThroughput: -1, // Disabled
+		UploadThroughput:   -1, // Disabled
+	})
+}
+
 // HandleDialog sets up automatic dialog handling.
 // action can be "accept" or "dismiss".
 // promptText is the text to enter for prompts (optional).

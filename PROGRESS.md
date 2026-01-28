@@ -266,6 +266,11 @@
 - `cdp session <key> <value>` - set sessionStorage value
 - `cdp session --clear` - clear sessionStorage
 
+### Slice 78: Network throttling ✅
+- `cdp throttle <preset>` - apply network throttling preset
+- `cdp throttle --disable` - disable network throttling
+- Presets: slow3g, fast3g, 4g, wifi
+
 ## Next Slices
 
 ## Test Command
@@ -278,7 +283,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (75 commands)
+## Commands Implemented (76 commands)
 ```
 # Browser info
 cdp version
@@ -383,6 +388,7 @@ cdp offline <true|false>
 # Network interception
 cdp intercept [--response] [--pattern <url>] [--replace old:new] [--disable]
 cdp block <pattern>... [--disable]
+cdp throttle <preset> [--disable]
 
 # Performance & debugging
 cdp metrics

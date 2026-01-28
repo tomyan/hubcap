@@ -325,6 +325,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdOffline(cfg, remaining[1])
+	case "throttle":
+		return cmdThrottle(cfg, remaining[1:])
 	case "styles":
 		if len(remaining) < 2 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp styles <selector>")
@@ -1856,6 +1858,70 @@ func cmdOffline(cfg *Config, offlineStr string) int {
 			return nil, err
 		}
 		return OfflineResult{Offline: offline}, nil
+	})
+}
+
+// ThrottleResult is returned by the throttle command.
+type ThrottleResult struct {
+	Preset  string `json:"preset,omitempty"`
+	Enabled bool   `json:"enabled,omitempty"`
+}
+
+// ThrottleDisabledResult is returned when throttling is disabled.
+type ThrottleDisabledResult struct {
+	Disabled bool `json:"disabled"`
+}
+
+func cmdThrottle(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("throttle", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	disable := fs.Bool("disable", false, "Disable network throttling")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+
+	if *disable {
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.DisableNetworkThrottling(ctx, target.ID)
+			if err != nil {
+				return nil, err
+			}
+			return ThrottleDisabledResult{Disabled: true}, nil
+		})
+	}
+
+	if len(remaining) == 0 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp throttle <preset> | --disable")
+		fmt.Fprintln(cfg.Stderr, "\nAvailable presets:")
+		for name := range cdp.NetworkPresets {
+			fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
+		}
+		return ExitError
+	}
+
+	preset := remaining[0]
+	conditions, ok := cdp.NetworkPresets[preset]
+	if !ok {
+		fmt.Fprintf(cfg.Stderr, "error: unknown preset %q\n", preset)
+		fmt.Fprintln(cfg.Stderr, "\nAvailable presets:")
+		for name := range cdp.NetworkPresets {
+			fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.EmulateNetworkConditions(ctx, target.ID, conditions)
+		if err != nil {
+			return nil, err
+		}
+		return ThrottleResult{Preset: preset, Enabled: true}, nil
 	})
 }
 
