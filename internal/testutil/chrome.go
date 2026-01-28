@@ -21,6 +21,12 @@ type ChromeInstance struct {
 // StartChrome starts a headless Chrome instance on the specified port.
 // Returns a ChromeInstance that must be stopped with Stop().
 func StartChrome(port int) (*ChromeInstance, error) {
+	// Kill any stale Chrome processes that might be using this port
+	// This handles cases where previous test runs didn't clean up properly
+	killStale := exec.Command("pkill", "-9", "-f", fmt.Sprintf("remote-debugging-port=%d", port))
+	killStale.Run() // Best effort, ignore errors
+	time.Sleep(200 * time.Millisecond) // Give processes time to die
+
 	// Find Chrome binary
 	chromePath := findChrome()
 	if chromePath == "" {
@@ -78,10 +84,20 @@ func StartChrome(port int) (*ChromeInstance, error) {
 // Stop terminates the Chrome instance and cleans up.
 func (c *ChromeInstance) Stop() error {
 	if c.cmd != nil && c.cmd.Process != nil {
+		// Kill the main process
 		c.cmd.Process.Kill()
 		c.cmd.Wait()
+
+		// Also kill any orphaned child processes using the data directory
+		// Chrome spawns many child processes that can become orphaned
+		if c.dataDir != "" {
+			killCmd := exec.Command("pkill", "-9", "-f", c.dataDir)
+			killCmd.Run() // Best effort, ignore errors
+		}
 	}
 	if c.dataDir != "" {
+		// Give processes a moment to die before removing the directory
+		time.Sleep(100 * time.Millisecond)
 		os.RemoveAll(c.dataDir)
 	}
 	return nil
