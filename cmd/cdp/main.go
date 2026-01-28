@@ -506,6 +506,12 @@ func run(args []string, cfg *Config) int {
 		return cmdDispatch(cfg, remaining[1], remaining[2])
 	case "selection":
 		return cmdSelection(cfg)
+	case "caret":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp caret <selector>")
+			return ExitError
+		}
+		return cmdCaret(cfg, remaining[1])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -3190,6 +3196,16 @@ func cmdDispatch(cfg *Config, selector, eventType string) int {
 func cmdSelection(cfg *Config) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		result, err := client.GetSelection(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
+}
+
+func cmdCaret(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.GetCaretPosition(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
 		}

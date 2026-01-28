@@ -5854,6 +5854,64 @@ func (c *Client) GetSelection(ctx context.Context, targetID string) (*SelectionR
 	}, nil
 }
 
+// CaretPositionResult contains the caret position in an input element.
+type CaretPositionResult struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// GetCaretPosition returns the caret (cursor) position in an input or textarea element.
+func (c *Client) GetCaretPosition(ctx context.Context, targetID string, selector string) (*CaretPositionResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use JavaScript to get caret position
+	jsExpr := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) {
+				return {error: 'element not found'};
+			}
+			if (typeof el.selectionStart !== 'number') {
+				return {error: 'element does not support selection'};
+			}
+			return {start: el.selectionStart, end: el.selectionEnd};
+		})()
+	`, selector)
+
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    jsExpr,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting caret position: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value struct {
+				Error string `json:"error"`
+				Start int    `json:"start"`
+				End   int    `json:"end"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	if evalResp.Result.Value.Error != "" {
+		return nil, fmt.Errorf("%s", evalResp.Result.Value.Error)
+	}
+
+	return &CaretPositionResult{
+		Start: evalResp.Result.Value.Start,
+		End:   evalResp.Result.Value.End,
+	}, nil
+}
+
 // TripleClick triple-clicks on an element specified by selector.
 // This is typically used to select an entire paragraph.
 func (c *Client) TripleClick(ctx context.Context, targetID string, selector string) error {

@@ -396,6 +396,11 @@
 - Uses window.getSelection().toString()
 - Useful for verifying text selection after interactions
 
+### Slice 108: Get caret position ✅
+- `cdp caret <selector>` - get cursor position in input/textarea
+- Returns start and end positions of selection range
+- Useful for verifying input cursor position
+
 ## Next Slices
 
 ## Test Command
@@ -408,7 +413,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (102 commands)
+## Commands Implemented (103 commands)
 ```
 # Browser info
 cdp version
@@ -464,6 +469,7 @@ cdp tripleclick <selector>
 cdp rightclick <selector>
 cdp dispatch <selector> <eventType>
 cdp selection
+cdp caret <selector>
 cdp hover <selector>
 cdp tap <selector>
 cdp mouse <x> <y>

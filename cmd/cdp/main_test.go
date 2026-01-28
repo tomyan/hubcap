@@ -5002,3 +5002,65 @@ func TestRun_Selection_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Caret_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"caret"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Caret_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create a page with an input field
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<input id="input" value="Hello World" />';
+		const input = document.getElementById('input');
+		input.focus();
+		input.setSelectionRange(5, 5);
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page")
+	}
+
+	// Get the caret position
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "caret", "#input"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Caret position should be 5
+	if result["start"] != float64(5) {
+		t.Errorf("expected start: 5, got %v", result["start"])
+	}
+}
+
+func TestRun_Caret_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"caret", "#input"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
