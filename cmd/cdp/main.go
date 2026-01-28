@@ -355,6 +355,8 @@ func run(args []string, cfg *Config) int {
 		return cmdLinks(cfg)
 	case "meta":
 		return cmdMeta(cfg)
+	case "tables":
+		return cmdTables(cfg)
 	case "upload":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp upload <selector> <file>...")
@@ -1638,6 +1640,18 @@ type MetaResult struct {
 	Tags []MetaInfo `json:"tags"`
 }
 
+// TableInfo represents a single table.
+type TableInfo struct {
+	ID      string     `json:"id,omitempty"`
+	Headers []string   `json:"headers"`
+	Rows    [][]string `json:"rows"`
+}
+
+// TablesResult is returned by the tables command.
+type TablesResult struct {
+	Tables []TableInfo `json:"tables"`
+}
+
 type StylesResult struct {
 	Selector string            `json:"selector"`
 	Styles   map[string]string `json:"styles"`
@@ -1852,6 +1866,68 @@ func cmdMeta(cfg *Config) int {
 		}
 
 		return MetaResult{Tags: tags}, nil
+	})
+}
+
+func cmdTables(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.Eval(ctx, target.ID, `
+			Array.from(document.querySelectorAll('table')).map(table => {
+				const headers = Array.from(table.querySelectorAll('thead th, thead td, tr:first-child th')).map(th => th.textContent.trim());
+				const bodyRows = table.querySelectorAll('tbody tr');
+				const rows = Array.from(bodyRows.length > 0 ? bodyRows : table.querySelectorAll('tr')).map(tr => {
+					// Skip header row if no tbody
+					if (bodyRows.length === 0 && tr.querySelector('th')) return null;
+					return Array.from(tr.querySelectorAll('td, th')).map(cell => cell.textContent.trim());
+				}).filter(r => r !== null);
+				return {
+					id: table.id || '',
+					headers: headers,
+					rows: rows
+				};
+			})
+		`)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse the result
+		tables := []TableInfo{}
+		if arr, ok := result.Value.([]interface{}); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]interface{}); ok {
+					tableInfo := TableInfo{
+						ID:      fmt.Sprintf("%v", m["id"]),
+						Headers: []string{},
+						Rows:    [][]string{},
+					}
+
+					// Parse headers
+					if headers, ok := m["headers"].([]interface{}); ok {
+						for _, h := range headers {
+							tableInfo.Headers = append(tableInfo.Headers, fmt.Sprintf("%v", h))
+						}
+					}
+
+					// Parse rows
+					if rows, ok := m["rows"].([]interface{}); ok {
+						for _, row := range rows {
+							if cells, ok := row.([]interface{}); ok {
+								rowData := []string{}
+								for _, cell := range cells {
+									rowData = append(rowData, fmt.Sprintf("%v", cell))
+								}
+								tableInfo.Rows = append(tableInfo.Rows, rowData)
+							}
+						}
+					}
+
+					tables = append(tables, tableInfo)
+				}
+			}
+		}
+
+		return TablesResult{Tables: tables}, nil
 	})
 }
 

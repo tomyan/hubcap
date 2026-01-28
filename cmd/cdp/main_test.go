@@ -3422,3 +3422,68 @@ func TestRun_Meta_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Tables_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with a table
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><body><table id="data"><thead><tr><th>Name</th><th>Age</th></tr></thead><tbody><tr><td>Alice</td><td>30</td></tr><tr><td>Bob</td><td>25</td></tr></tbody></table></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get tables
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "tables"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	tables, ok := result["tables"].([]interface{})
+	if !ok {
+		t.Fatalf("expected tables array, got %T", result["tables"])
+	}
+
+	if len(tables) != 1 {
+		t.Errorf("expected 1 table, got %d", len(tables))
+	}
+
+	// Check the table structure
+	table := tables[0].(map[string]interface{})
+	if table["id"] != "data" {
+		t.Errorf("expected table id 'data', got %v", table["id"])
+	}
+
+	headers := table["headers"].([]interface{})
+	if len(headers) != 2 {
+		t.Errorf("expected 2 headers, got %d", len(headers))
+	}
+
+	rows := table["rows"].([]interface{})
+	if len(rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(rows))
+	}
+}
+
+func TestRun_Tables_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"tables"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

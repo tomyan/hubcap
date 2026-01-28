@@ -275,6 +275,10 @@
 - `cdp meta` - get all meta tags from the page
 - Returns name, property, content, charset, http-equiv attributes
 
+### Slice 80: Tables extraction ✅
+- `cdp tables` - extract all tables from the page
+- Returns id, headers, and rows for each table
+
 ## Next Slices
 
 ## Test Command
@@ -287,7 +291,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (77 commands)
+## Commands Implemented (78 commands)
 ```
 # Browser info
 cdp version
@@ -401,6 +405,7 @@ cdp source
 cdp waitidle [--idle <duration>]
 cdp links
 cdp meta
+cdp tables
 ```
 
 ## Known Issues / Deferred Items
