@@ -285,6 +285,8 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitLoad(cfg, remaining[1:])
 	case "storage":
 		return cmdStorage(cfg, remaining[1:])
+	case "session":
+		return cmdSession(cfg, remaining[1:])
 	case "dialog":
 		return cmdDialog(cfg, remaining[1:])
 	case "run":
@@ -1438,6 +1440,59 @@ func cmdStorage(cfg *Config, args []string) int {
 	value := remaining[1]
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		err := client.SetLocalStorage(ctx, target.ID, key, value)
+		if err != nil {
+			return nil, err
+		}
+		return StorageSetResult{Key: key, Value: value, Set: true}, nil
+	})
+}
+
+func cmdSession(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("session", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	clear := fs.Bool("clear", false, "Clear all sessionStorage")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+
+	if *clear {
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.ClearSessionStorage(ctx, target.ID)
+			if err != nil {
+				return nil, err
+			}
+			return StorageClearResult{Cleared: true}, nil
+		})
+	}
+
+	if len(remaining) == 0 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp session <key> [value] | --clear")
+		return ExitError
+	}
+
+	key := remaining[0]
+
+	if len(remaining) == 1 {
+		// Get
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			value, err := client.GetSessionStorage(ctx, target.ID, key)
+			if err != nil {
+				return nil, err
+			}
+			return StorageResult{Key: key, Value: value}, nil
+		})
+	}
+
+	// Set
+	value := remaining[1]
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetSessionStorage(ctx, target.ID, key, value)
 		if err != nil {
 			return nil, err
 		}

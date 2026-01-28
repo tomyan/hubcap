@@ -3130,3 +3130,132 @@ func TestRun_WaitGone_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Session_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"session"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Session_GetSet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with an origin (sessionStorage requires origin)
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", fmt.Sprintf("http://localhost:%d/json", testChromePort)}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate for session storage test")
+	}
+
+	// Set a session storage value
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "session", "testKey", "testValue"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var setResult map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &setResult); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+	if setResult["set"] != true {
+		t.Errorf("expected set: true, got %v", setResult["set"])
+	}
+
+	// Get the session storage value
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "session", "testKey"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout = cfg.Stdout.(*bytes.Buffer).String()
+	var getResult map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &getResult); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+	if getResult["value"] != "testValue" {
+		t.Errorf("expected value: testValue, got %v", getResult["value"])
+	}
+}
+
+func TestRun_Session_Clear(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with an origin (sessionStorage requires origin)
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", fmt.Sprintf("http://localhost:%d/json", testChromePort)}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate for session storage test")
+	}
+
+	// Set a session storage value first
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "session", "clearKey", "clearValue"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to set session storage")
+	}
+
+	// Clear all session storage
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "session", "--clear"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+	if result["cleared"] != true {
+		t.Errorf("expected cleared: true, got %v", result["cleared"])
+	}
+
+	// Verify value is gone
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "session", "clearKey"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to get session storage after clear")
+	}
+
+	stdout = cfg.Stdout.(*bytes.Buffer).String()
+	var getResult map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &getResult); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+	// After clear, value should be empty string (null from JS becomes "")
+	if getResult["value"] != "" {
+		t.Errorf("expected empty value after clear, got %v", getResult["value"])
+	}
+}
+
+func TestRun_Session_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"session", "key"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

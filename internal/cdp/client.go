@@ -1947,6 +1947,35 @@ func (c *Client) ClearLocalStorage(ctx context.Context, targetID string) error {
 	return err
 }
 
+// GetSessionStorage gets a value from sessionStorage.
+func (c *Client) GetSessionStorage(ctx context.Context, targetID string, key string) (string, error) {
+	js := fmt.Sprintf(`sessionStorage.getItem(%q)`, key)
+	result, err := c.Eval(ctx, targetID, js)
+	if err != nil {
+		return "", err
+	}
+	if result.Value == nil {
+		return "", nil
+	}
+	if s, ok := result.Value.(string); ok {
+		return s, nil
+	}
+	return fmt.Sprintf("%v", result.Value), nil
+}
+
+// SetSessionStorage sets a value in sessionStorage.
+func (c *Client) SetSessionStorage(ctx context.Context, targetID string, key, value string) error {
+	js := fmt.Sprintf(`sessionStorage.setItem(%q, %q); true`, key, value)
+	_, err := c.Eval(ctx, targetID, js)
+	return err
+}
+
+// ClearSessionStorage clears all sessionStorage.
+func (c *Client) ClearSessionStorage(ctx context.Context, targetID string) error {
+	_, err := c.Eval(ctx, targetID, `sessionStorage.clear(); true`)
+	return err
+}
+
 // HandleDialog sets up automatic dialog handling.
 // action can be "accept" or "dismiss".
 // promptText is the text to enter for prompts (optional).

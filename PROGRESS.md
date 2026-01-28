@@ -261,6 +261,11 @@
 - `cdp waitgone <selector> [--timeout <duration>]` - wait for element removal
 - Useful for waiting for loading spinners to disappear
 
+### Slice 77: Session storage ✅
+- `cdp session <key>` - get sessionStorage value
+- `cdp session <key> <value>` - set sessionStorage value
+- `cdp session --clear` - clear sessionStorage
+
 ## Next Slices
 
 ## Test Command
@@ -273,7 +278,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (74 commands)
+## Commands Implemented (75 commands)
 ```
 # Browser info
 cdp version
@@ -355,6 +360,9 @@ cdp cookies [--set name=value] [--domain <domain>] [--delete <name>] [--clear]
 
 # Local storage
 cdp storage <key> [value] [--clear]
+
+# Session storage
+cdp session <key> [value] [--clear]
 
 # Streaming/monitoring
 cdp console [--duration <duration>]
