@@ -4879,3 +4879,74 @@ func TestRun_Tripleclick_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Dispatch_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"dispatch", "#btn"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Dispatch_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Create a page with a button listening for custom event
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "eval", `
+		document.body.innerHTML = '<button id="btn">Test</button>';
+		window.eventReceived = false;
+		document.getElementById('btn').addEventListener('customEvent', () => window.eventReceived = true);
+	`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to create page")
+	}
+
+	// Dispatch custom event
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "dispatch", "#btn", "customEvent"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["dispatched"] != true {
+		t.Errorf("expected dispatched: true, got %v", result["dispatched"])
+	}
+
+	// Verify the event was received
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "eval", "window.eventReceived"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to verify event")
+	}
+	stdout = cfg.Stdout.(*bytes.Buffer).String()
+	if !strings.Contains(stdout, "true") {
+		t.Errorf("expected event to be received, got: %s", stdout)
+	}
+}
+
+func TestRun_Dispatch_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"dispatch", "#btn", "click"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

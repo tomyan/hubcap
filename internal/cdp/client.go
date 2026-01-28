@@ -5762,6 +5762,64 @@ func (c *Client) GetComputedStyle(ctx context.Context, targetID string, selector
 	}, nil
 }
 
+// DispatchEventResult contains the result of dispatching a custom event.
+type DispatchEventResult struct {
+	Dispatched bool   `json:"dispatched"`
+	EventType  string `json:"eventType"`
+	Selector   string `json:"selector"`
+}
+
+// DispatchEvent dispatches a custom event on an element.
+func (c *Client) DispatchEvent(ctx context.Context, targetID string, selector string, eventType string) (*DispatchEventResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use JavaScript to dispatch the event
+	jsExpr := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) {
+				return {error: 'element not found'};
+			}
+			const event = new Event(%q, {bubbles: true, cancelable: true});
+			el.dispatchEvent(event);
+			return {dispatched: true};
+		})()
+	`, selector, eventType)
+
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    jsExpr,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("dispatching event: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value struct {
+				Error      string `json:"error"`
+				Dispatched bool   `json:"dispatched"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	if evalResp.Result.Value.Error != "" {
+		return nil, fmt.Errorf("%s", evalResp.Result.Value.Error)
+	}
+
+	return &DispatchEventResult{
+		Dispatched: true,
+		EventType:  eventType,
+		Selector:   selector,
+	}, nil
+}
+
 // TripleClick triple-clicks on an element specified by selector.
 // This is typically used to select an entire paragraph.
 func (c *Client) TripleClick(ctx context.Context, targetID string, selector string) error {

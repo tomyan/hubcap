@@ -498,6 +498,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdTripleClick(cfg, remaining[1])
+	case "dispatch":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp dispatch <selector> <eventType>")
+			return ExitError
+		}
+		return cmdDispatch(cfg, remaining[1], remaining[2])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -3166,5 +3172,15 @@ func cmdTripleClick(cfg *Config, selector string) int {
 			return nil, err
 		}
 		return TripleClickResult{Clicked: true, Selector: selector}, nil
+	})
+}
+
+func cmdDispatch(cfg *Config, selector, eventType string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.DispatchEvent(ctx, target.ID, selector, eventType)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	})
 }

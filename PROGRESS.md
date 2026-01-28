@@ -386,6 +386,11 @@
 - Dispatches three clicks with clickCount 1, 2, 3
 - Useful for selecting entire text blocks
 
+### Slice 106: Dispatch custom event ✅
+- `cdp dispatch <selector> <eventType>` - dispatch custom event
+- Uses JavaScript Event constructor with bubbles/cancelable
+- Useful for testing custom event handlers
+
 ## Next Slices
 
 ## Test Command
@@ -398,7 +403,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (100 commands)
+## Commands Implemented (101 commands)
 ```
 # Browser info
 cdp version
@@ -452,6 +457,7 @@ cdp clickat <x> <y>
 cdp dblclick <selector>
 cdp tripleclick <selector>
 cdp rightclick <selector>
+cdp dispatch <selector> <eventType>
 cdp hover <selector>
 cdp tap <selector>
 cdp mouse <x> <y>
