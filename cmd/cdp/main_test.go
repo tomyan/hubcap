@@ -3977,3 +3977,64 @@ func TestRun_WaitURL_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Shadow_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"shadow"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Shadow_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with a shadow DOM element
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><body><div id="host"></div><script>
+		const host = document.getElementById('host');
+		const shadow = host.attachShadow({mode: 'open'});
+		shadow.innerHTML = '<span id="inner">Shadow Content</span>';
+	</script></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Query shadow DOM element
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "shadow", "#host", "#inner"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["tagName"] != "SPAN" {
+		t.Errorf("expected tagName SPAN, got %v", result["tagName"])
+	}
+}
+
+func TestRun_Shadow_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"shadow", "#host", "#inner"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

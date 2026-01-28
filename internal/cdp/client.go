@@ -677,6 +677,136 @@ func (c *Client) Query(ctx context.Context, targetID string, selector string) (*
 	}, nil
 }
 
+// QueryShadow finds an element inside a shadow DOM.
+// hostSelector is the CSS selector for the shadow host element.
+// innerSelector is the CSS selector to query within the shadow root.
+func (c *Client) QueryShadow(ctx context.Context, targetID string, hostSelector string, innerSelector string) (*QueryResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return nil, fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Find the shadow host element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": hostSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying host selector: %w", err)
+	}
+
+	var hostResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &hostResp); err != nil {
+		return nil, fmt.Errorf("parsing host query response: %w", err)
+	}
+
+	if hostResp.NodeID == 0 {
+		return nil, fmt.Errorf("shadow host not found: %s", hostSelector)
+	}
+
+	// Describe the host node to get its shadow root
+	descResult, err := c.CallSession(ctx, sessionID, "DOM.describeNode", map[string]interface{}{
+		"nodeId": hostResp.NodeID,
+		"depth":  1,
+		"pierce": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describing host node: %w", err)
+	}
+
+	var descResp struct {
+		Node struct {
+			ShadowRoots []struct {
+				NodeID   int    `json:"nodeId"`
+				NodeType int    `json:"nodeType"`
+				NodeName string `json:"nodeName"`
+			} `json:"shadowRoots"`
+		} `json:"node"`
+	}
+	if err := json.Unmarshal(descResult, &descResp); err != nil {
+		return nil, fmt.Errorf("parsing describe response: %w", err)
+	}
+
+	if len(descResp.Node.ShadowRoots) == 0 {
+		return nil, fmt.Errorf("no shadow root found on element: %s", hostSelector)
+	}
+
+	shadowRootID := descResp.Node.ShadowRoots[0].NodeID
+
+	// Query within the shadow root
+	innerResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   shadowRootID,
+		"selector": innerSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying shadow selector: %w", err)
+	}
+
+	var innerResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(innerResult, &innerResp); err != nil {
+		return nil, fmt.Errorf("parsing shadow query response: %w", err)
+	}
+
+	if innerResp.NodeID == 0 {
+		return &QueryResult{NodeID: 0}, nil
+	}
+
+	// Describe the inner node to get tag name and attributes
+	innerDescResult, err := c.CallSession(ctx, sessionID, "DOM.describeNode", map[string]interface{}{
+		"nodeId": innerResp.NodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describing inner node: %w", err)
+	}
+
+	var innerDescResp struct {
+		Node struct {
+			NodeName   string   `json:"nodeName"`
+			Attributes []string `json:"attributes"`
+		} `json:"node"`
+	}
+	if err := json.Unmarshal(innerDescResult, &innerDescResp); err != nil {
+		return nil, fmt.Errorf("parsing inner describe response: %w", err)
+	}
+
+	// Parse attributes
+	attrs := make(map[string]string)
+	for i := 0; i+1 < len(innerDescResp.Node.Attributes); i += 2 {
+		attrs[innerDescResp.Node.Attributes[i]] = innerDescResp.Node.Attributes[i+1]
+	}
+
+	return &QueryResult{
+		NodeID:     innerResp.NodeID,
+		TagName:    innerDescResp.Node.NodeName,
+		Attributes: attrs,
+	}, nil
+}
+
 // Click clicks on the first element matching a CSS selector.
 func (c *Client) Click(ctx context.Context, targetID string, selector string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

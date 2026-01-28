@@ -314,6 +314,10 @@
 - `cdp waiturl <pattern> [--timeout <duration>]` - wait for URL to contain pattern
 - Useful for waiting after redirects or navigation
 
+### Slice 89: Shadow DOM query ✅
+- `cdp shadow <host-selector> <inner-selector>` - query inside shadow DOM
+- Pierces shadow boundaries for web component testing
+
 ## Next Slices
 
 ## Test Command
@@ -326,7 +330,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (85 commands)
+## Commands Implemented (86 commands)
 ```
 # Browser info
 cdp version
@@ -368,6 +372,7 @@ cdp layout <selector> [--depth <n>]
 cdp forms
 cdp images
 cdp highlight <selector> [--hide]
+cdp shadow <host> <inner>
 
 # Click actions
 cdp click <selector>

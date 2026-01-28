@@ -211,6 +211,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdWaitURL(cfg, remaining[1], remaining[2:])
+	case "shadow":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp shadow <host-selector> <inner-selector>")
+			return ExitError
+		}
+		return cmdShadow(cfg, remaining[1], remaining[2])
 	case "attr":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
@@ -636,6 +642,31 @@ func cmdEval(cfg *Config, expression string) int {
 func cmdQuery(cfg *Config, selector string) int {
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		return client.Query(ctx, target.ID, selector)
+	})
+}
+
+// ShadowResult is returned by the shadow command.
+type ShadowResult struct {
+	HostSelector  string            `json:"hostSelector"`
+	InnerSelector string            `json:"innerSelector"`
+	NodeID        int               `json:"nodeId"`
+	TagName       string            `json:"tagName"`
+	Attributes    map[string]string `json:"attributes"`
+}
+
+func cmdShadow(cfg *Config, hostSelector, innerSelector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.QueryShadow(ctx, target.ID, hostSelector, innerSelector)
+		if err != nil {
+			return nil, err
+		}
+		return ShadowResult{
+			HostSelector:  hostSelector,
+			InnerSelector: innerSelector,
+			NodeID:        result.NodeID,
+			TagName:       result.TagName,
+			Attributes:    result.Attributes,
+		}, nil
 	})
 }
 
