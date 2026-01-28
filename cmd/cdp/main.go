@@ -343,6 +343,13 @@ func run(args []string, cfg *Config) int {
 		return cmdThrottle(cfg, remaining[1:])
 	case "media":
 		return cmdMedia(cfg, remaining[1:])
+	case "permission":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp permission <name> <granted|denied|prompt>")
+			fmt.Fprintln(cfg.Stderr, "\nPermission names: geolocation, notifications, camera, microphone, midi, push")
+			return ExitError
+		}
+		return cmdPermission(cfg, remaining[1], remaining[2])
 	case "styles":
 		if len(remaining) < 2 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp styles <selector>")
@@ -2212,6 +2219,29 @@ func cmdMedia(cfg *Config, args []string) int {
 			ReducedMotion: *reducedMotion,
 			ForcedColors:  *forcedColors,
 		}, nil
+	})
+}
+
+// PermissionResult is returned by the permission command.
+type PermissionResult struct {
+	Permission string `json:"permission"`
+	State      string `json:"state"`
+}
+
+func cmdPermission(cfg *Config, permission, state string) int {
+	// Validate state
+	validStates := map[string]bool{"granted": true, "denied": true, "prompt": true}
+	if !validStates[state] {
+		fmt.Fprintf(cfg.Stderr, "error: invalid state %q (use granted, denied, or prompt)\n", state)
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetPermission(ctx, target.ID, permission, state)
+		if err != nil {
+			return nil, err
+		}
+		return PermissionResult{Permission: permission, State: state}, nil
 	})
 }
 

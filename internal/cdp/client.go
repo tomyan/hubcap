@@ -3715,6 +3715,53 @@ func (c *Client) SetGeolocation(ctx context.Context, targetID string, latitude, 
 	return nil
 }
 
+// SetPermission sets the state of a permission for the page origin.
+// permission: geolocation, notifications, midi, midi-sysex, push, camera, microphone, etc.
+// state: granted, denied, prompt
+func (c *Client) SetPermission(ctx context.Context, targetID string, permission, state string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Get the current URL to extract origin
+	evalResult, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    "window.location.origin",
+		"returnByValue": true,
+	})
+	if err != nil {
+		return fmt.Errorf("getting page origin: %w", err)
+	}
+
+	var result struct {
+		Result struct {
+			Value string `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(evalResult, &result); err != nil {
+		return fmt.Errorf("parsing origin: %w", err)
+	}
+
+	origin := result.Result.Value
+	if origin == "" || origin == "null" {
+		return fmt.Errorf("page has no origin (navigate to a URL first)")
+	}
+
+	// Use Browser.setPermission (browser-level command)
+	_, err = c.Call(ctx, "Browser.setPermission", map[string]interface{}{
+		"permission": map[string]interface{}{
+			"name": permission,
+		},
+		"setting": state,
+		"origin":  origin,
+	})
+	if err != nil {
+		return fmt.Errorf("setting permission: %w", err)
+	}
+
+	return nil
+}
+
 // SetUserAgent sets a custom user agent for the specified target.
 func (c *Client) SetUserAgent(ctx context.Context, targetID string, userAgent string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

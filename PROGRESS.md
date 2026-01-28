@@ -296,6 +296,11 @@
 - Options: --color-scheme, --reduced-motion, --forced-colors
 - Uses Emulation.setEmulatedMedia CDP method
 
+### Slice 85: Permissions ✅
+- `cdp permission <name> <granted|denied|prompt>` - set permission state
+- Supports: geolocation, notifications, camera, microphone, midi, push
+- Uses Browser.setPermission CDP method
+
 ## Next Slices
 
 ## Test Command
@@ -308,7 +313,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (82 commands)
+## Commands Implemented (83 commands)
 ```
 # Browser info
 cdp version
@@ -413,6 +418,7 @@ cdp useragent <string>
 cdp geolocation <latitude> <longitude>
 cdp offline <true|false>
 cdp media [--color-scheme] [--reduced-motion] [--forced-colors]
+cdp permission <name> <state>
 
 # Network interception
 cdp intercept [--response] [--pattern <url>] [--replace old:new] [--disable]
