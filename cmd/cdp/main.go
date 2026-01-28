@@ -512,6 +512,38 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdCaret(cfg, remaining[1])
+	case "responsebody":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp responsebody <requestId>")
+			return ExitError
+		}
+		return cmdResponseBody(cfg, remaining[1])
+	case "listeners":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp listeners <selector>")
+			return ExitError
+		}
+		return cmdListeners(cfg, remaining[1])
+	case "csscoverage":
+		return cmdCSSCoverage(cfg)
+	case "domsnapshot":
+		return cmdDOMSnapshot(cfg)
+	case "swipe":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp swipe <selector> <left|right|up|down>")
+			return ExitError
+		}
+		return cmdSwipe(cfg, remaining[1], remaining[2])
+	case "pinch":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp pinch <selector> <in|out>")
+			return ExitError
+		}
+		return cmdPinch(cfg, remaining[1], remaining[2])
+	case "heapsnapshot":
+		return cmdHeapSnapshot(cfg, remaining[1:])
+	case "trace":
+		return cmdTrace(cfg, remaining[1:])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -3210,5 +3242,132 @@ func cmdCaret(cfg *Config, selector string) int {
 			return nil, err
 		}
 		return result, nil
+	})
+}
+
+func cmdResponseBody(cfg *Config, requestID string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetResponseBody(ctx, target.ID, requestID)
+	})
+}
+
+func cmdListeners(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetEventListeners(ctx, target.ID, selector)
+	})
+}
+
+func cmdCSSCoverage(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetCSSCoverage(ctx, target.ID)
+	})
+}
+
+func cmdDOMSnapshot(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.GetDOMSnapshot(ctx, target.ID)
+	})
+}
+
+// SwipeCLIResult wraps swipe result for CLI output.
+type SwipeCLIResult struct {
+	Swiped    bool   `json:"swiped"`
+	Direction string `json:"direction"`
+	Selector  string `json:"selector"`
+}
+
+func cmdSwipe(cfg *Config, selector, direction string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.Swipe(ctx, target.ID, selector, direction)
+	})
+}
+
+func cmdPinch(cfg *Config, selector, direction string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return client.Pinch(ctx, target.ID, selector, direction)
+	})
+}
+
+// HeapSnapshotCLIResult wraps heap snapshot result for CLI output.
+type HeapSnapshotCLIResult struct {
+	File string `json:"file"`
+	Size int    `json:"size"`
+}
+
+func cmdHeapSnapshot(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("heapsnapshot", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	output := fs.String("output", "", "Output file path")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *output == "" {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp heapsnapshot --output <file>")
+		return ExitError
+	}
+
+	outputFile := *output
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		data, err := client.TakeHeapSnapshot(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := os.WriteFile(outputFile, data, 0644); err != nil {
+			return nil, fmt.Errorf("writing file: %w", err)
+		}
+
+		return HeapSnapshotCLIResult{
+			File: outputFile,
+			Size: len(data),
+		}, nil
+	})
+}
+
+// TraceCLIResult wraps trace result for CLI output.
+type TraceCLIResult struct {
+	File string `json:"file"`
+	Size int    `json:"size"`
+}
+
+func cmdTrace(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("trace", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	output := fs.String("output", "", "Output file path")
+	duration := fs.Duration("duration", 1*time.Second, "Trace duration")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *output == "" {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp trace --duration <d> --output <file>")
+		return ExitError
+	}
+
+	outputFile := *output
+	traceDuration := *duration
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		data, err := client.CaptureTrace(ctx, target.ID, traceDuration)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := os.WriteFile(outputFile, data, 0644); err != nil {
+			return nil, fmt.Errorf("writing file: %w", err)
+		}
+
+		return TraceCLIResult{
+			File: outputFile,
+			Size: len(data),
+		}, nil
 	})
 }

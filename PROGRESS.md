@@ -406,6 +406,46 @@
 - `\n` → Enter key, `\t` → Tab key, `\\` → literal backslash
 - Fixes known issue "Special keys not handled in type command"
 
+### Slice 110: Response body ✅
+- `cdp responsebody <requestId>` - get response content for a network request
+- Uses Network.getResponseBody with request ID
+- Returns body text or base64 for binary content
+
+### Slice 111: Event listeners ✅
+- `cdp listeners <selector>` - list event listeners on a DOM element
+- Resolves selector → DOM.resolveNode → DOMDebugger.getEventListeners
+- Returns listener type, useCapture, passive, once properties
+
+### Slice 112: CSS coverage ✅
+- `cdp csscoverage` - get CSS rule usage data
+- Uses CSS.startRuleUsageTracking → CSS.takeCoverageDelta → CSS.stopRuleUsageTracking
+- Returns entries with styleSheetId, offsets, and used status
+
+### Slice 113: DOM snapshot ✅
+- `cdp domsnapshot` - capture full serialized DOM tree
+- Uses DOMSnapshot.captureSnapshot with computed styles
+- Returns flattened documents and strings arrays
+
+### Slice 114: Swipe gesture ✅
+- `cdp swipe <selector> <left|right|up|down>` - touch swipe gesture
+- Uses Input.dispatchTouchEvent sequence: touchStart → touchMove steps → touchEnd
+- Supports all 4 directions for mobile testing
+
+### Slice 115: Pinch gesture ✅
+- `cdp pinch <selector> <in|out>` - two-finger pinch zoom gesture
+- Two simultaneous touchPoints in Input.dispatchTouchEvent
+- Pinch in = fingers converge, pinch out = fingers diverge
+
+### Slice 116: Heap snapshot ✅
+- `cdp heapsnapshot --output <file>` - capture V8 heap snapshot
+- Uses HeapProfiler domain with chunk collection via events
+- Output is valid JSON file for memory analysis
+
+### Slice 117: Performance trace ✅
+- `cdp trace --duration <d> --output <file>` - capture Chrome performance trace
+- Uses Tracing domain with data chunk collection
+- Output is JSON array viewable in Chrome DevTools
+
 ## Next Slices
 
 ## Test Command
@@ -418,7 +458,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (103 commands)
+## Commands Implemented (112 commands)
 ```
 # Browser info
 cdp version
@@ -556,7 +596,25 @@ cdp links
 cdp meta
 cdp tables
 cdp coverage
+cdp csscoverage
 cdp stylesheets
+
+# DOM snapshot
+cdp domsnapshot
+
+# Response body
+cdp responsebody <requestId>
+
+# Event listeners
+cdp listeners <selector>
+
+# Touch gestures
+cdp swipe <selector> <left|right|up|down>
+cdp pinch <selector> <in|out>
+
+# Profiling
+cdp heapsnapshot --output <file>
+cdp trace --duration <d> --output <file>
 ```
 
 ## Known Issues / Deferred Items

@@ -6126,3 +6126,699 @@ func (c *Client) TripleClick(ctx context.Context, targetID string, selector stri
 
 	return nil
 }
+
+// ResponseBodyResult contains the response body for a network request.
+type ResponseBodyResult struct {
+	Body          string `json:"body"`
+	Base64Encoded bool   `json:"base64Encoded"`
+}
+
+// GetResponseBody retrieves the response body for a network request by its request ID.
+func (c *Client) GetResponseBody(ctx context.Context, targetID string, requestID string) (*ResponseBodyResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Network domain
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling network: %w", err)
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Network.getResponseBody", map[string]interface{}{
+		"requestId": requestID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting response body: %w", err)
+	}
+
+	var resp struct {
+		Body          string `json:"body"`
+		Base64Encoded bool   `json:"base64Encoded"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("parsing response body: %w", err)
+	}
+
+	return &ResponseBodyResult{
+		Body:          resp.Body,
+		Base64Encoded: resp.Base64Encoded,
+	}, nil
+}
+
+// EventListenerInfo contains information about an event listener.
+type EventListenerInfo struct {
+	Type       string `json:"type"`
+	UseCapture bool   `json:"useCapture"`
+	Passive    bool   `json:"passive"`
+	Once       bool   `json:"once"`
+	ScriptID   string `json:"scriptId,omitempty"`
+	LineNumber int    `json:"lineNumber"`
+	ColumnNumber int  `json:"columnNumber"`
+}
+
+// EventListenersResult contains the list of event listeners on an element.
+type EventListenersResult struct {
+	Listeners []EventListenerInfo `json:"listeners"`
+}
+
+// GetEventListeners returns the event listeners attached to a DOM element.
+func (c *Client) GetEventListeners(ctx context.Context, targetID string, selector string) (*EventListenersResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return nil, fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query for element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return nil, fmt.Errorf("parsing query response: %w", err)
+	}
+	if queryResp.NodeID == 0 {
+		return nil, fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Resolve node to get remote object ID
+	resolveResult, err := c.CallSession(ctx, sessionID, "DOM.resolveNode", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolving node: %w", err)
+	}
+
+	var resolveResp struct {
+		Object struct {
+			ObjectID string `json:"objectId"`
+		} `json:"object"`
+	}
+	if err := json.Unmarshal(resolveResult, &resolveResp); err != nil {
+		return nil, fmt.Errorf("parsing resolve response: %w", err)
+	}
+
+	// Get event listeners using DOMDebugger
+	listenersResult, err := c.CallSession(ctx, sessionID, "DOMDebugger.getEventListeners", map[string]interface{}{
+		"objectId": resolveResp.Object.ObjectID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting event listeners: %w", err)
+	}
+
+	var listenersResp struct {
+		Listeners []struct {
+			Type         string `json:"type"`
+			UseCapture   bool   `json:"useCapture"`
+			Passive      bool   `json:"passive"`
+			Once         bool   `json:"once"`
+			ScriptID     string `json:"scriptId"`
+			LineNumber   int    `json:"lineNumber"`
+			ColumnNumber int    `json:"columnNumber"`
+		} `json:"listeners"`
+	}
+	if err := json.Unmarshal(listenersResult, &listenersResp); err != nil {
+		return nil, fmt.Errorf("parsing listeners response: %w", err)
+	}
+
+	result := &EventListenersResult{
+		Listeners: make([]EventListenerInfo, len(listenersResp.Listeners)),
+	}
+	for i, l := range listenersResp.Listeners {
+		result.Listeners[i] = EventListenerInfo{
+			Type:         l.Type,
+			UseCapture:   l.UseCapture,
+			Passive:      l.Passive,
+			Once:         l.Once,
+			ScriptID:     l.ScriptID,
+			LineNumber:   l.LineNumber,
+			ColumnNumber: l.ColumnNumber,
+		}
+	}
+
+	return result, nil
+}
+
+// CSSCoverageEntry represents a CSS rule usage entry.
+type CSSCoverageEntry struct {
+	StyleSheetID string `json:"styleSheetId"`
+	StartOffset  int    `json:"startOffset"`
+	EndOffset    int    `json:"endOffset"`
+	Used         bool   `json:"used"`
+}
+
+// CSSCoverageResult contains CSS coverage data.
+type CSSCoverageResult struct {
+	Entries []CSSCoverageEntry `json:"entries"`
+}
+
+// GetCSSCoverage captures CSS rule usage data.
+func (c *Client) GetCSSCoverage(ctx context.Context, targetID string) (*CSSCoverageResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable DOM domain first (required by CSS domain)
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Enable CSS domain
+	_, err = c.CallSession(ctx, sessionID, "CSS.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling CSS domain: %w", err)
+	}
+
+	// Start rule usage tracking
+	_, err = c.CallSession(ctx, sessionID, "CSS.startRuleUsageTracking", nil)
+	if err != nil {
+		return nil, fmt.Errorf("starting rule usage tracking: %w", err)
+	}
+
+	// Take coverage delta
+	result, err := c.CallSession(ctx, sessionID, "CSS.takeCoverageDelta", nil)
+	if err != nil {
+		return nil, fmt.Errorf("taking coverage delta: %w", err)
+	}
+
+	// Stop tracking and disable
+	c.CallSession(ctx, sessionID, "CSS.stopRuleUsageTracking", nil)
+	c.CallSession(ctx, sessionID, "CSS.disable", nil)
+
+	var resp struct {
+		Coverage []struct {
+			StyleSheetID string `json:"styleSheetId"`
+			StartOffset  int    `json:"startOffset"`
+			EndOffset    int    `json:"endOffset"`
+			Used         bool   `json:"used"`
+		} `json:"coverage"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("parsing coverage response: %w", err)
+	}
+
+	entries := make([]CSSCoverageEntry, len(resp.Coverage))
+	for i, c := range resp.Coverage {
+		entries[i] = CSSCoverageEntry{
+			StyleSheetID: c.StyleSheetID,
+			StartOffset:  c.StartOffset,
+			EndOffset:    c.EndOffset,
+			Used:         c.Used,
+		}
+	}
+
+	return &CSSCoverageResult{Entries: entries}, nil
+}
+
+// DOMSnapshotResult contains a DOM snapshot.
+type DOMSnapshotResult struct {
+	Documents []json.RawMessage `json:"documents"`
+	Strings   []string          `json:"strings"`
+}
+
+// GetDOMSnapshot captures a full serialized DOM tree.
+func (c *Client) GetDOMSnapshot(ctx context.Context, targetID string) (*DOMSnapshotResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "DOMSnapshot.captureSnapshot", map[string]interface{}{
+		"computedStyles": []string{"display", "visibility", "opacity"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("capturing DOM snapshot: %w", err)
+	}
+
+	var resp struct {
+		Documents []json.RawMessage `json:"documents"`
+		Strings   []string          `json:"strings"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("parsing snapshot response: %w", err)
+	}
+
+	return &DOMSnapshotResult{
+		Documents: resp.Documents,
+		Strings:   resp.Strings,
+	}, nil
+}
+
+// SwipeResult contains the result of a swipe gesture.
+type SwipeResult struct {
+	Swiped    bool   `json:"swiped"`
+	Direction string `json:"direction"`
+	Selector  string `json:"selector"`
+}
+
+// Swipe performs a touch swipe gesture on an element.
+func (c *Client) Swipe(ctx context.Context, targetID string, selector string, direction string) (*SwipeResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return nil, fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query for element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return nil, fmt.Errorf("parsing query response: %w", err)
+	}
+	if queryResp.NodeID == 0 {
+		return nil, fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get element bounding box
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return nil, fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return nil, fmt.Errorf("invalid box model")
+	}
+	cx := (content[0] + content[2] + content[4] + content[6]) / 4
+	cy := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Calculate swipe delta based on direction
+	var dx, dy float64
+	swipeDist := 100.0
+	switch direction {
+	case "left":
+		dx, dy = -swipeDist, 0
+	case "right":
+		dx, dy = swipeDist, 0
+	case "up":
+		dx, dy = 0, -swipeDist
+	case "down":
+		dx, dy = 0, swipeDist
+	default:
+		return nil, fmt.Errorf("invalid direction: %s (use left, right, up, down)", direction)
+	}
+
+	// touchStart at center
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+		"type": "touchStart",
+		"touchPoints": []map[string]interface{}{
+			{"x": cx, "y": cy},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("dispatching touchStart: %w", err)
+	}
+
+	// Intermediate touchMove steps for smooth swipe
+	steps := 5
+	for i := 1; i <= steps; i++ {
+		frac := float64(i) / float64(steps)
+		_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+			"type": "touchMove",
+			"touchPoints": []map[string]interface{}{
+				{"x": cx + dx*frac, "y": cy + dy*frac},
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("dispatching touchMove: %w", err)
+		}
+	}
+
+	// touchEnd
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+		"type":        "touchEnd",
+		"touchPoints": []map[string]interface{}{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("dispatching touchEnd: %w", err)
+	}
+
+	return &SwipeResult{
+		Swiped:    true,
+		Direction: direction,
+		Selector:  selector,
+	}, nil
+}
+
+// PinchResult contains the result of a pinch gesture.
+type PinchResult struct {
+	Pinched   bool   `json:"pinched"`
+	Direction string `json:"direction"`
+	Selector  string `json:"selector"`
+}
+
+// Pinch performs a two-finger pinch gesture on an element.
+func (c *Client) Pinch(ctx context.Context, targetID string, selector string, direction string) (*PinchResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return nil, fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query for element
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return nil, fmt.Errorf("parsing query response: %w", err)
+	}
+	if queryResp.NodeID == 0 {
+		return nil, fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Get element bounding box
+	boxResult, err := c.CallSession(ctx, sessionID, "DOM.getBoxModel", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting box model: %w", err)
+	}
+
+	var boxResp struct {
+		Model struct {
+			Content []float64 `json:"content"`
+		} `json:"model"`
+	}
+	if err := json.Unmarshal(boxResult, &boxResp); err != nil {
+		return nil, fmt.Errorf("parsing box model response: %w", err)
+	}
+
+	content := boxResp.Model.Content
+	if len(content) < 8 {
+		return nil, fmt.Errorf("invalid box model")
+	}
+	cx := (content[0] + content[2] + content[4] + content[6]) / 4
+	cy := (content[1] + content[3] + content[5] + content[7]) / 4
+
+	// Two-finger pinch: fingers start/end at different offsets
+	var startOffset, endOffset float64
+	switch direction {
+	case "in":
+		startOffset, endOffset = 50, 10 // fingers converge
+	case "out":
+		startOffset, endOffset = 10, 50 // fingers diverge
+	default:
+		return nil, fmt.Errorf("invalid direction: %s (use in, out)", direction)
+	}
+
+	// touchStart with two fingers
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+		"type": "touchStart",
+		"touchPoints": []map[string]interface{}{
+			{"x": cx - startOffset, "y": cy},
+			{"x": cx + startOffset, "y": cy},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("dispatching touchStart: %w", err)
+	}
+
+	// Intermediate steps
+	steps := 5
+	for i := 1; i <= steps; i++ {
+		frac := float64(i) / float64(steps)
+		offset := startOffset + (endOffset-startOffset)*frac
+		_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+			"type": "touchMove",
+			"touchPoints": []map[string]interface{}{
+				{"x": cx - offset, "y": cy},
+				{"x": cx + offset, "y": cy},
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("dispatching touchMove: %w", err)
+		}
+	}
+
+	// touchEnd
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchTouchEvent", map[string]interface{}{
+		"type":        "touchEnd",
+		"touchPoints": []map[string]interface{}{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("dispatching touchEnd: %w", err)
+	}
+
+	return &PinchResult{
+		Pinched:   true,
+		Direction: direction,
+		Selector:  selector,
+	}, nil
+}
+
+// HeapSnapshotResult contains metadata about a captured heap snapshot.
+type HeapSnapshotResult struct {
+	File string `json:"file"`
+	Size int    `json:"size"`
+}
+
+// TakeHeapSnapshot captures a V8 heap snapshot and writes it to a file.
+func (c *Client) TakeHeapSnapshot(ctx context.Context, targetID string) ([]byte, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable HeapProfiler
+	_, err = c.CallSession(ctx, sessionID, "HeapProfiler.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling HeapProfiler: %w", err)
+	}
+
+	// Subscribe to chunk events before taking snapshot
+	chunkCh := c.subscribeEvent(sessionID, "HeapProfiler.addHeapSnapshotChunk")
+
+	// Collect chunks in a goroutine
+	var chunks []string
+	var chunksMu sync.Mutex
+	chunksDone := make(chan struct{})
+
+	go func() {
+		defer close(chunksDone)
+		for params := range chunkCh {
+			var chunk struct {
+				Chunk string `json:"chunk"`
+			}
+			if err := json.Unmarshal(params, &chunk); err == nil {
+				chunksMu.Lock()
+				chunks = append(chunks, chunk.Chunk)
+				chunksMu.Unlock()
+			}
+		}
+	}()
+
+	// Take the snapshot (blocks until complete)
+	_, err = c.CallSession(ctx, sessionID, "HeapProfiler.takeHeapSnapshot", map[string]interface{}{
+		"reportProgress": false,
+	})
+
+	// Unsubscribe closes the channel, which signals the goroutine to finish
+	c.unsubscribeEvent(sessionID, "HeapProfiler.addHeapSnapshotChunk", chunkCh)
+	<-chunksDone
+
+	// Disable HeapProfiler
+	c.CallSession(ctx, sessionID, "HeapProfiler.disable", nil)
+
+	if err != nil {
+		return nil, fmt.Errorf("taking heap snapshot: %w", err)
+	}
+
+	// Assemble chunks
+	chunksMu.Lock()
+	defer chunksMu.Unlock()
+
+	var buf strings.Builder
+	for _, chunk := range chunks {
+		buf.WriteString(chunk)
+	}
+
+	return []byte(buf.String()), nil
+}
+
+// TraceResult contains metadata about a captured trace.
+type TraceResult struct {
+	File string `json:"file"`
+	Size int    `json:"size"`
+}
+
+// CaptureTrace captures a Chrome performance trace for the given duration.
+func (c *Client) CaptureTrace(ctx context.Context, targetID string, duration time.Duration) ([]byte, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Subscribe to tracing events
+	dataCh := c.subscribeEvent(sessionID, "Tracing.dataCollected")
+	defer c.unsubscribeEvent(sessionID, "Tracing.dataCollected", dataCh)
+
+	completeCh := c.subscribeEvent(sessionID, "Tracing.tracingComplete")
+	defer c.unsubscribeEvent(sessionID, "Tracing.tracingComplete", completeCh)
+
+	// Collect trace data chunks
+	var traceEvents []json.RawMessage
+	var traceEventsMu sync.Mutex
+	collectDone := make(chan struct{})
+
+	go func() {
+		for {
+			select {
+			case params, ok := <-dataCh:
+				if !ok {
+					return
+				}
+				var data struct {
+					Value []json.RawMessage `json:"value"`
+				}
+				if err := json.Unmarshal(params, &data); err == nil {
+					traceEventsMu.Lock()
+					traceEvents = append(traceEvents, data.Value...)
+					traceEventsMu.Unlock()
+				}
+			case <-collectDone:
+				return
+			}
+		}
+	}()
+
+	// Start tracing
+	_, err = c.CallSession(ctx, sessionID, "Tracing.start", map[string]interface{}{
+		"categories": "-*,devtools.timeline,v8.execute,disabled-by-default-devtools.timeline",
+	})
+	if err != nil {
+		close(collectDone)
+		return nil, fmt.Errorf("starting trace: %w", err)
+	}
+
+	// Wait for the specified duration
+	time.Sleep(duration)
+
+	// End tracing
+	_, err = c.CallSession(ctx, sessionID, "Tracing.end", nil)
+	if err != nil {
+		close(collectDone)
+		return nil, fmt.Errorf("ending trace: %w", err)
+	}
+
+	// Wait for tracing complete event
+	select {
+	case <-completeCh:
+	case <-time.After(10 * time.Second):
+	case <-ctx.Done():
+		close(collectDone)
+		return nil, ctx.Err()
+	}
+
+	close(collectDone)
+	time.Sleep(100 * time.Millisecond)
+
+	// Build JSON array from collected events
+	traceEventsMu.Lock()
+	defer traceEventsMu.Unlock()
+
+	traceData, err := json.Marshal(traceEvents)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling trace data: %w", err)
+	}
+
+	return traceData, nil
+}
