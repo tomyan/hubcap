@@ -2159,6 +2159,100 @@ func (c *Client) GetCoverage(ctx context.Context, targetID string) (*CoverageRes
 	return coverage, nil
 }
 
+// StylesheetInfo represents information about a stylesheet.
+type StylesheetInfo struct {
+	StyleSheetID string `json:"styleSheetId"`
+	SourceURL    string `json:"sourceURL"`
+	Title        string `json:"title"`
+	Disabled     bool   `json:"disabled"`
+	IsInline     bool   `json:"isInline"`
+	Length       int    `json:"length"`
+}
+
+// StylesheetsResult represents all stylesheets on the page.
+type StylesheetsResult struct {
+	Stylesheets []StylesheetInfo `json:"stylesheets"`
+}
+
+// GetStylesheets returns all stylesheets on the page.
+func (c *Client) GetStylesheets(ctx context.Context, targetID string) (*StylesheetsResult, error) {
+	// Use JavaScript to get stylesheet information from document.styleSheets
+	result, err := c.Eval(ctx, targetID, `
+		(function() {
+			const sheets = [];
+			for (let i = 0; i < document.styleSheets.length; i++) {
+				const sheet = document.styleSheets[i];
+				let cssText = '';
+				let ruleCount = 0;
+				try {
+					if (sheet.cssRules) {
+						ruleCount = sheet.cssRules.length;
+					}
+				} catch (e) {
+					// CORS restrictions may prevent access to cssRules
+				}
+				sheets.push({
+					styleSheetId: i.toString(),
+					sourceURL: sheet.href || '',
+					title: sheet.title || '',
+					disabled: sheet.disabled,
+					isInline: !sheet.href,
+					length: ruleCount
+				});
+			}
+			return sheets;
+		})()
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("getting stylesheets: %w", err)
+	}
+
+	stylesheets := &StylesheetsResult{
+		Stylesheets: make([]StylesheetInfo, 0),
+	}
+
+	if result.Value == nil {
+		return stylesheets, nil
+	}
+
+	// Parse the result array
+	sheetsData, ok := result.Value.([]interface{})
+	if !ok {
+		return stylesheets, nil
+	}
+
+	for _, item := range sheetsData {
+		sheet, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		info := StylesheetInfo{}
+		if id, ok := sheet["styleSheetId"].(string); ok {
+			info.StyleSheetID = id
+		}
+		if url, ok := sheet["sourceURL"].(string); ok {
+			info.SourceURL = url
+		}
+		if title, ok := sheet["title"].(string); ok {
+			info.Title = title
+		}
+		if disabled, ok := sheet["disabled"].(bool); ok {
+			info.Disabled = disabled
+		}
+		if isInline, ok := sheet["isInline"].(bool); ok {
+			info.IsInline = isInline
+		}
+		if length, ok := sheet["length"].(float64); ok {
+			info.Length = int(length)
+		}
+
+		stylesheets.Stylesheets = append(stylesheets.Stylesheets, info)
+	}
+
+	return stylesheets, nil
+}
+
 // GetCookies returns all cookies for the page.
 func (c *Client) GetCookies(ctx context.Context, targetID string) ([]Cookie, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

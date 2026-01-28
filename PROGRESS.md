@@ -326,6 +326,10 @@
 - `cdp coverage` - get JavaScript code coverage
 - Uses Profiler domain for precise coverage data
 
+### Slice 92: CSS stylesheets ✅
+- `cdp stylesheets` - get all stylesheets on the page
+- Returns stylesheet info including URL, disabled state, rule count
+
 ## Next Slices
 
 ## Test Command
@@ -338,7 +342,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (88 commands)
+## Commands Implemented (89 commands)
 ```
 # Browser info
 cdp version
@@ -463,6 +467,7 @@ cdp links
 cdp meta
 cdp tables
 cdp coverage
+cdp stylesheets
 ```
 
 ## Known Issues / Deferred Items

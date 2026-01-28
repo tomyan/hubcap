@@ -4132,3 +4132,48 @@ func TestRun_Coverage_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Stylesheets_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page with some CSS
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><head><style>.test { color: red; }</style></head><body></body></html>`
+	code := run([]string{"--target", tabID, "goto", dataURL}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate")
+	}
+
+	// Get stylesheets
+	cfg = testConfig()
+	code = run([]string{"--target", tabID, "stylesheets"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Verify stylesheets structure
+	if _, ok := result["stylesheets"]; !ok {
+		t.Errorf("expected stylesheets field in result")
+	}
+}
+
+func TestRun_Stylesheets_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"stylesheets"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
