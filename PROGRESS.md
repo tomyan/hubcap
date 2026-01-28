@@ -253,6 +253,10 @@
 - `cdp scrollbottom` - scroll to bottom of page
 - `cdp scrolltop` - scroll to top of page
 
+### Slice 75: Frame support ✅
+- `cdp frames` - list all frames (including nested iframes)
+- `cdp evalframe <frame-id> <expression>` - evaluate JS in specific frame
+
 ## Next Slices
 
 ## Test Command
@@ -265,7 +269,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (71 commands)
+## Commands Implemented (73 commands)
 ```
 # Browser info
 cdp version

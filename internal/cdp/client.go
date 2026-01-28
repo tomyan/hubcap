@@ -3845,3 +3845,128 @@ func (c *Client) ScrollToTop(ctx context.Context, targetID string) error {
 
 	return nil
 }
+
+// FrameInfo contains information about a frame.
+type FrameInfo struct {
+	ID       string `json:"id"`
+	ParentID string `json:"parentId,omitempty"`
+	Name     string `json:"name,omitempty"`
+	URL      string `json:"url"`
+}
+
+// frameTreeNode represents a node in the frame tree (used for recursive parsing).
+type frameTreeNode struct {
+	Frame struct {
+		ID       string `json:"id"`
+		ParentID string `json:"parentId"`
+		Name     string `json:"name"`
+		URL      string `json:"url"`
+	} `json:"frame"`
+	ChildFrames []frameTreeNode `json:"childFrames"`
+}
+
+// collectFrames recursively collects all frames from the frame tree.
+func collectFrames(node frameTreeNode, frames *[]FrameInfo) {
+	*frames = append(*frames, FrameInfo{
+		ID:       node.Frame.ID,
+		ParentID: node.Frame.ParentID,
+		Name:     node.Frame.Name,
+		URL:      node.Frame.URL,
+	})
+	for _, child := range node.ChildFrames {
+		collectFrames(child, frames)
+	}
+}
+
+// GetFrames returns all frames in the page (including nested iframes).
+func (c *Client) GetFrames(ctx context.Context, targetID string) ([]FrameInfo, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Page domain
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Get frame tree
+	result, err := c.CallSession(ctx, sessionID, "Page.getFrameTree", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting frame tree: %w", err)
+	}
+
+	var resp struct {
+		FrameTree frameTreeNode `json:"frameTree"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, fmt.Errorf("parsing frame tree: %w", err)
+	}
+
+	// Collect all frames recursively
+	var frames []FrameInfo
+	collectFrames(resp.FrameTree, &frames)
+
+	return frames, nil
+}
+
+// EvalInFrame evaluates JavaScript in a specific frame.
+func (c *Client) EvalInFrame(ctx context.Context, targetID string, frameID string, expression string) (*EvalResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create isolated world for the frame to execute in
+	result, err := c.CallSession(ctx, sessionID, "Page.createIsolatedWorld", map[string]interface{}{
+		"frameId": frameID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating isolated world: %w", err)
+	}
+
+	var worldResp struct {
+		ExecutionContextID int64 `json:"executionContextId"`
+	}
+	if err := json.Unmarshal(result, &worldResp); err != nil {
+		return nil, fmt.Errorf("parsing world response: %w", err)
+	}
+
+	// Execute in that context
+	result, err = c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":       expression,
+		"contextId":        worldResp.ExecutionContextID,
+		"returnByValue":    true,
+		"awaitPromise":     true,
+		"userGesture":      true,
+		"replMode":         false,
+		"allowUnsafeEvalBlockedByCSP": false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluating in frame: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Type        string      `json:"type"`
+			Value       interface{} `json:"value"`
+			Description string      `json:"description,omitempty"`
+		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails,omitempty"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing eval response: %w", err)
+	}
+
+	if evalResp.ExceptionDetails != nil {
+		return nil, fmt.Errorf("JS error: %s", evalResp.ExceptionDetails.Text)
+	}
+
+	return &EvalResult{
+		Type:  evalResp.Result.Type,
+		Value: evalResp.Result.Value,
+	}, nil
+}

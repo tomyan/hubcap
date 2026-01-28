@@ -2884,3 +2884,108 @@ func TestClient_ScrollToBottomAndTop(t *testing.T) {
 		t.Error("expected to have scrolled back to top")
 	}
 }
+
+func TestClient_GetFrames(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with iframe
+	dataURL := `data:text/html,<html><body>
+		<h1>Main Page</h1>
+		<iframe id="frame1" name="testframe" srcdoc="<html><body><div id='in-frame'>Inside Frame</div></body></html>"></iframe>
+	</body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(500 * time.Millisecond) // Wait for iframe to load
+
+	// Get frames
+	frames, err := client.GetFrames(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to get frames: %v", err)
+	}
+
+	// Should have at least 2 frames (main + iframe)
+	if len(frames) < 2 {
+		t.Errorf("expected at least 2 frames, got %d", len(frames))
+	}
+
+	// Check that we have the named frame
+	var foundNamedFrame bool
+	for _, f := range frames {
+		if f.Name == "testframe" {
+			foundNamedFrame = true
+			break
+		}
+	}
+	if !foundNamedFrame {
+		t.Error("expected to find frame named 'testframe'")
+	}
+}
+
+func TestClient_EvalInFrame(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with iframe containing specific content
+	dataURL := `data:text/html,<html><body>
+		<div id="main-content">Main Page Content</div>
+		<iframe id="frame1" name="testframe" srcdoc="<html><body><div id='frame-content'>Frame Content Here</div></body></html>"></iframe>
+	</body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(500 * time.Millisecond) // Wait for iframe to load
+
+	// Get frames to find the iframe's frame ID
+	frames, err := client.GetFrames(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to get frames: %v", err)
+	}
+
+	var frameID string
+	for _, f := range frames {
+		if f.Name == "testframe" {
+			frameID = f.ID
+			break
+		}
+	}
+	if frameID == "" {
+		t.Fatal("could not find testframe")
+	}
+
+	// Evaluate JS in the iframe
+	result, err := client.EvalInFrame(ctx, tabID, frameID, "document.getElementById('frame-content').innerText")
+	if err != nil {
+		t.Fatalf("failed to eval in frame: %v", err)
+	}
+
+	text, ok := result.Value.(string)
+	if !ok || text != "Frame Content Here" {
+		t.Errorf("expected 'Frame Content Here', got %v", result.Value)
+	}
+}

@@ -3014,3 +3014,70 @@ func TestRun_ScrollTop_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Frames_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab with iframe
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create iframe
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<iframe name="testframe" srcdoc="<div>inside</div>"></iframe>'`}, cfg)
+	time.Sleep(500 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "frames"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	count, ok := result["count"].(float64)
+	if !ok || count < 2 {
+		t.Errorf("expected at least 2 frames, got %v", result["count"])
+	}
+}
+
+func TestRun_Frames_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"frames"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_EvalFrame_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"evalframe"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	code = run([]string{"evalframe", "frame-id"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_EvalFrame_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"evalframe", "frame-id", "1+1"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}

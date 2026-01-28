@@ -89,7 +89,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw, upload, exists, waitnav, value, waitfn, forms, highlight, images, scrollbottom, scrolltop")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw, upload, exists, waitnav, value, waitfn, forms, highlight, images, scrollbottom, scrolltop, frames, evalframe")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -385,6 +385,14 @@ func run(args []string, cfg *Config) int {
 		return cmdScrollBottom(cfg)
 	case "scrolltop":
 		return cmdScrollTop(cfg)
+	case "frames":
+		return cmdFrames(cfg)
+	case "evalframe":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp evalframe <frame-id> <expression>")
+			return ExitError
+		}
+		return cmdEvalFrame(cfg, remaining[1], remaining[2])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -2198,5 +2206,38 @@ func cmdScrollTop(cfg *Config) int {
 			return nil, err
 		}
 		return ScrollTopResult{Scrolled: true}, nil
+	})
+}
+
+// FramesResult is returned by the frames command.
+type FramesResult struct {
+	Frames []cdp.FrameInfo `json:"frames"`
+	Count  int             `json:"count"`
+}
+
+func cmdFrames(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		frames, err := client.GetFrames(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return FramesResult{Frames: frames, Count: len(frames)}, nil
+	})
+}
+
+// EvalFrameResult is returned by the evalframe command.
+type EvalFrameResult struct {
+	FrameID string      `json:"frameId"`
+	Type    string      `json:"type"`
+	Value   interface{} `json:"value"`
+}
+
+func cmdEvalFrame(cfg *Config, frameID, expression string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.EvalInFrame(ctx, target.ID, frameID, expression)
+		if err != nil {
+			return nil, err
+		}
+		return EvalFrameResult{FrameID: frameID, Type: result.Type, Value: result.Value}, nil
 	})
 }
