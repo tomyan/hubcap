@@ -5640,3 +5640,69 @@ func (c *Client) WaitForRequest(ctx context.Context, targetID string, pattern st
 		}
 	}
 }
+
+// WaitResponseResult contains the result of waiting for a network response.
+type WaitResponseResult struct {
+	Found     bool   `json:"found"`
+	URL       string `json:"url"`
+	Status    int    `json:"status"`
+	MimeType  string `json:"mimeType,omitempty"`
+	RequestID string `json:"requestId"`
+}
+
+// WaitForResponse waits for a network response with a URL containing the pattern.
+func (c *Client) WaitForResponse(ctx context.Context, targetID string, pattern string, timeout time.Duration) (*WaitResponseResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Network domain
+	_, err = c.CallSession(ctx, sessionID, "Network.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling network: %w", err)
+	}
+
+	// Subscribe to response events
+	responseCh := c.subscribeEvent(sessionID, "Network.responseReceived")
+	defer c.unsubscribeEvent(sessionID, "Network.responseReceived", responseCh)
+
+	// Create timeout context
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			if timeoutCtx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("timeout waiting for response matching %q", pattern)
+			}
+			return nil, timeoutCtx.Err()
+		case params, ok := <-responseCh:
+			if !ok {
+				return nil, fmt.Errorf("event channel closed")
+			}
+			var event struct {
+				RequestID string `json:"requestId"`
+				Response  struct {
+					URL      string `json:"url"`
+					Status   int    `json:"status"`
+					MimeType string `json:"mimeType"`
+				} `json:"response"`
+			}
+			if err := json.Unmarshal(params, &event); err != nil {
+				continue
+			}
+			// Check if URL contains the pattern
+			if strings.Contains(event.Response.URL, pattern) {
+				return &WaitResponseResult{
+					Found:     true,
+					URL:       event.Response.URL,
+					Status:    event.Response.Status,
+					MimeType:  event.Response.MimeType,
+					RequestID: event.RequestID,
+				}, nil
+			}
+		}
+	}
+}

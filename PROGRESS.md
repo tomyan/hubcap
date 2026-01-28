@@ -371,6 +371,11 @@
 - Subscribes to Network.requestWillBeSent events
 - Returns request info when URL contains the pattern
 
+### Slice 103: Wait for network response ✅
+- `cdp waitresponse <pattern> [--timeout <duration>]` - wait for network response matching pattern
+- Subscribes to Network.responseReceived events
+- Returns response info (URL, status, mimeType) when URL contains the pattern
+
 ## Next Slices
 
 ## Test Command
@@ -383,7 +388,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (97 commands)
+## Commands Implemented (98 commands)
 ```
 # Browser info
 cdp version
@@ -467,6 +472,7 @@ cdp waitfn <expression> [--timeout <duration>]
 cdp waiturl <pattern> [--timeout <duration>]
 cdp waittext <text> [--timeout <duration>]
 cdp waitrequest <pattern> [--timeout <duration>]
+cdp waitresponse <pattern> [--timeout <duration>]
 
 # Viewport
 cdp viewport <width> <height>
