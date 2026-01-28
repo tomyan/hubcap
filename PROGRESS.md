@@ -279,6 +279,10 @@
 - `cdp tables` - extract all tables from the page
 - Returns id, headers, and rows for each table
 
+### Slice 81: Click at coordinates ✅
+- `cdp clickat <x> <y>` - click at specific x, y coordinates
+- Uses Input.dispatchMouseEvent CDP method
+
 ## Next Slices
 
 ## Test Command
@@ -291,7 +295,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (78 commands)
+## Commands Implemented (79 commands)
 ```
 # Browser info
 cdp version
@@ -336,6 +340,7 @@ cdp highlight <selector> [--hide]
 
 # Click actions
 cdp click <selector>
+cdp clickat <x> <y>
 cdp dblclick <selector>
 cdp rightclick <selector>
 cdp hover <selector>

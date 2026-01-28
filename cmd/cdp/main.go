@@ -128,6 +128,12 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdClick(cfg, remaining[1])
+	case "clickat":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp clickat <x> <y>")
+			return ExitError
+		}
+		return cmdClickAt(cfg, remaining[1], remaining[2])
 	case "fill":
 		if len(remaining) < 3 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp fill <selector> <text>")
@@ -615,6 +621,34 @@ func cmdClick(cfg *Config, selector string) int {
 			return nil, err
 		}
 		return ClickResult{Clicked: true, Selector: selector}, nil
+	})
+}
+
+// ClickAtResult is returned by the clickat command.
+type ClickAtResult struct {
+	Clicked bool    `json:"clicked"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+}
+
+func cmdClickAt(cfg *Config, xStr, yStr string) int {
+	x, err := strconv.ParseFloat(xStr, 64)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: invalid x coordinate: %v\n", err)
+		return ExitError
+	}
+	y, err := strconv.ParseFloat(yStr, 64)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: invalid y coordinate: %v\n", err)
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.ClickAt(ctx, target.ID, x, y)
+		if err != nil {
+			return nil, err
+		}
+		return ClickAtResult{Clicked: true, X: x, Y: y}, nil
 	})
 }
 

@@ -785,6 +785,48 @@ func (c *Client) Click(ctx context.Context, targetID string, selector string) er
 	return nil
 }
 
+// ClickAt clicks at specific x, y coordinates.
+func (c *Client) ClickAt(ctx context.Context, targetID string, x, y float64) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Dispatch mouse events: move, press, release
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseMoved: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mousePressed",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mousePressed: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Input.dispatchMouseEvent", map[string]interface{}{
+		"type":       "mouseReleased",
+		"x":          x,
+		"y":          y,
+		"button":     "left",
+		"clickCount": 1,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatching mouseReleased: %w", err)
+	}
+
+	return nil
+}
+
 // Fill fills an input element with text.
 func (c *Client) Fill(ctx context.Context, targetID string, selector string, text string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
