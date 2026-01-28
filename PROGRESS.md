@@ -291,6 +291,11 @@
 - `cdp tap <selector>` - perform touch tap on element
 - Uses Input.dispatchTouchEvent CDP method
 
+### Slice 84: Media emulation ✅
+- `cdp media [options]` - emulate CSS media features
+- Options: --color-scheme, --reduced-motion, --forced-colors
+- Uses Emulation.setEmulatedMedia CDP method
+
 ## Next Slices
 
 ## Test Command
@@ -303,7 +308,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (81 commands)
+## Commands Implemented (82 commands)
 ```
 # Browser info
 cdp version
@@ -407,6 +412,7 @@ cdp emulate <device>
 cdp useragent <string>
 cdp geolocation <latitude> <longitude>
 cdp offline <true|false>
+cdp media [--color-scheme] [--reduced-motion] [--forced-colors]
 
 # Network interception
 cdp intercept [--response] [--pattern <url>] [--replace old:new] [--disable]

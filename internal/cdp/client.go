@@ -3648,6 +3648,54 @@ func (c *Client) SetOfflineMode(ctx context.Context, targetID string, offline bo
 	return nil
 }
 
+// MediaFeatures represents CSS media features to emulate.
+type MediaFeatures struct {
+	ColorScheme   string // "light", "dark", or "" for no preference
+	ReducedMotion string // "reduce", "no-preference", or "" for no preference
+	ForcedColors  string // "active", "none", or "" for no preference
+}
+
+// SetEmulatedMedia sets emulated media features.
+func (c *Client) SetEmulatedMedia(ctx context.Context, targetID string, features MediaFeatures) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Build features array
+	mediaFeatures := []map[string]interface{}{}
+
+	if features.ColorScheme != "" {
+		mediaFeatures = append(mediaFeatures, map[string]interface{}{
+			"name":  "prefers-color-scheme",
+			"value": features.ColorScheme,
+		})
+	}
+
+	if features.ReducedMotion != "" {
+		mediaFeatures = append(mediaFeatures, map[string]interface{}{
+			"name":  "prefers-reduced-motion",
+			"value": features.ReducedMotion,
+		})
+	}
+
+	if features.ForcedColors != "" {
+		mediaFeatures = append(mediaFeatures, map[string]interface{}{
+			"name":  "forced-colors",
+			"value": features.ForcedColors,
+		})
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Emulation.setEmulatedMedia", map[string]interface{}{
+		"features": mediaFeatures,
+	})
+	if err != nil {
+		return fmt.Errorf("setting emulated media: %w", err)
+	}
+
+	return nil
+}
+
 // SetGeolocation overrides the geolocation for the specified target.
 func (c *Client) SetGeolocation(ctx context.Context, targetID string, latitude, longitude, accuracy float64) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

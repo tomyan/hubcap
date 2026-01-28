@@ -341,6 +341,8 @@ func run(args []string, cfg *Config) int {
 		return cmdOffline(cfg, remaining[1])
 	case "throttle":
 		return cmdThrottle(cfg, remaining[1:])
+	case "media":
+		return cmdMedia(cfg, remaining[1:])
 	case "styles":
 		if len(remaining) < 2 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp styles <selector>")
@@ -2165,6 +2167,51 @@ func cmdThrottle(cfg *Config, args []string) int {
 			return nil, err
 		}
 		return ThrottleResult{Preset: preset, Enabled: true}, nil
+	})
+}
+
+// MediaResult is returned by the media command.
+type MediaResult struct {
+	ColorScheme   string `json:"colorScheme,omitempty"`
+	ReducedMotion string `json:"reducedMotion,omitempty"`
+	ForcedColors  string `json:"forcedColors,omitempty"`
+}
+
+func cmdMedia(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("media", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	colorScheme := fs.String("color-scheme", "", "prefers-color-scheme (light, dark)")
+	reducedMotion := fs.String("reduced-motion", "", "prefers-reduced-motion (reduce, no-preference)")
+	forcedColors := fs.String("forced-colors", "", "forced-colors (active, none)")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *colorScheme == "" && *reducedMotion == "" && *forcedColors == "" {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp media [--color-scheme <light|dark>] [--reduced-motion <reduce|no-preference>] [--forced-colors <active|none>]")
+		return ExitError
+	}
+
+	features := cdp.MediaFeatures{
+		ColorScheme:   *colorScheme,
+		ReducedMotion: *reducedMotion,
+		ForcedColors:  *forcedColors,
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.SetEmulatedMedia(ctx, target.ID, features)
+		if err != nil {
+			return nil, err
+		}
+		return MediaResult{
+			ColorScheme:   *colorScheme,
+			ReducedMotion: *reducedMotion,
+			ForcedColors:  *forcedColors,
+		}, nil
 	})
 }
 

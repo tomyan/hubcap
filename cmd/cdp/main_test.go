@@ -3649,3 +3649,79 @@ func TestRun_Tap_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestRun_Media_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"media"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "usage:") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+}
+
+func TestRun_Media_ColorScheme(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Set color scheme to dark
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "media", "--color-scheme", "dark"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["colorScheme"] != "dark" {
+		t.Errorf("expected colorScheme: dark, got %v", result["colorScheme"])
+	}
+}
+
+func TestRun_Media_ReducedMotion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Set reduced motion
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "media", "--reduced-motion", "reduce"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["reducedMotion"] != "reduce" {
+		t.Errorf("expected reducedMotion: reduce, got %v", result["reducedMotion"])
+	}
+}
+
+func TestRun_Media_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"media", "--color-scheme", "dark"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
