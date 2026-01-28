@@ -395,6 +395,65 @@ func (c *Client) Navigate(ctx context.Context, targetID string, url string) (*Na
 	}, nil
 }
 
+// NavigateAndWait navigates to a URL and waits for the page load event.
+func (c *Client) NavigateAndWait(ctx context.Context, targetID string, url string) (*NavigateResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enable Page domain on the session
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Subscribe to load event before navigating
+	loadCh := c.subscribeEvent(sessionID, "Page.loadEventFired")
+	defer c.unsubscribeEvent(sessionID, "Page.loadEventFired", loadCh)
+
+	// Navigate
+	navResult, err := c.CallSession(ctx, sessionID, "Page.navigate", map[string]string{
+		"url": url,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("navigating: %w", err)
+	}
+
+	var navResp struct {
+		FrameID   string `json:"frameId"`
+		LoaderID  string `json:"loaderId"`
+		ErrorText string `json:"errorText"`
+	}
+	if err := json.Unmarshal(navResult, &navResp); err != nil {
+		return nil, fmt.Errorf("parsing navigate response: %w", err)
+	}
+
+	if navResp.ErrorText != "" {
+		return &NavigateResult{
+			FrameID:   navResp.FrameID,
+			ErrorText: navResp.ErrorText,
+			URL:       url,
+		}, nil
+	}
+
+	// Wait for load event with timeout
+	select {
+	case <-loadCh:
+		// Load completed
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(30 * time.Second):
+		return nil, fmt.Errorf("timeout waiting for page load")
+	}
+
+	return &NavigateResult{
+		FrameID:  navResp.FrameID,
+		LoaderID: navResp.LoaderID,
+		URL:      url,
+	}, nil
+}
+
 // GoBack navigates back in history.
 func (c *Client) GoBack(ctx context.Context, targetID string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

@@ -304,6 +304,35 @@ func TestRun_Goto_NoChrome(t *testing.T) {
 	}
 }
 
+func TestRun_Goto_Wait(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate with --wait flag
+	cfg := testConfig()
+	dataURL := `data:text/html,<html><body><script>document.body.innerHTML='loaded';</script></body></html>`
+	code := run([]string{"--target", tabID, "goto", "--wait", dataURL}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	// Verify loaded field is true
+	if result["loaded"] != true {
+		t.Errorf("expected loaded: true, got %v", result["loaded"])
+	}
+}
+
 func TestRun_Screenshot_MissingOutput(t *testing.T) {
 	cfg := testConfig()
 	code := run([]string{"screenshot"}, cfg)

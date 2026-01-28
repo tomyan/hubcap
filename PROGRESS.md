@@ -354,6 +354,10 @@
 - `cdp setvalue <selector> <value>` - directly set input value
 - Triggers input and change events
 
+### Slice 99: Goto with wait ✅
+- `cdp goto --wait <url>` - navigate and wait for page load
+- Uses Page.loadEventFired event for reliable load detection
+
 ## Next Slices
 
 ## Test Command
@@ -373,7 +377,7 @@ cdp version
 cdp tabs
 
 # Navigation
-cdp goto <url>
+cdp goto [--wait] <url>
 cdp back
 cdp forward
 cdp reload [--bypass-cache]
@@ -501,7 +505,7 @@ cdp stylesheets
 
 ## Known Issues / Deferred Items
 - ~~Sessions not detached after use (minor resource leak)~~ **FIXED: Sessions now cached and detached on close**
-- Navigate doesn't wait for actual load completion
+- ~~Navigate doesn't wait for actual load completion~~ **FIXED: Use `goto --wait` to wait for load**
 - ~~Tests must run sequentially (-p 1) because they share Chrome instance~~ **FIXED: Each package now has its own Chrome instance**
 - Special keys (Enter, Tab, etc.) not handled in type command
 - No modifier key support (Ctrl, Alt, Shift) in type command

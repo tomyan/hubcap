@@ -105,10 +105,10 @@ func run(args []string, cfg *Config) int {
 		return cmdTabs(cfg)
 	case "goto":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp goto <url>")
+			fmt.Fprintln(cfg.Stderr, "usage: cdp goto [--wait] <url>")
 			return ExitError
 		}
-		return cmdGoto(cfg, remaining[1])
+		return cmdGoto(cfg, remaining[1:])
 	case "screenshot":
 		return cmdScreenshot(cfg, remaining[1:])
 	case "eval":
@@ -585,8 +585,48 @@ func cmdTabs(cfg *Config) int {
 	})
 }
 
-func cmdGoto(cfg *Config, url string) int {
+// GotoWaitResult is returned by the goto command with --wait.
+type GotoWaitResult struct {
+	URL      string `json:"url"`
+	FrameID  string `json:"frameId,omitempty"`
+	LoaderID string `json:"loaderId,omitempty"`
+	Loaded   bool   `json:"loaded"`
+}
+
+func cmdGoto(cfg *Config, args []string) int {
+	// Parse goto-specific flags
+	fs := flag.NewFlagSet("goto", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	wait := fs.Bool("wait", false, "Wait for page load to complete")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp goto [--wait] <url>")
+		return ExitError
+	}
+
+	url := remaining[0]
+
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		if *wait {
+			result, err := client.NavigateAndWait(ctx, target.ID, url)
+			if err != nil {
+				return nil, err
+			}
+			return GotoWaitResult{
+				URL:      url,
+				FrameID:  result.FrameID,
+				LoaderID: result.LoaderID,
+				Loaded:   true,
+			}, nil
+		}
 		return client.Navigate(ctx, target.ID, url)
 	})
 }
