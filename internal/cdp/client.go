@@ -3762,6 +3762,44 @@ func (c *Client) SetPermission(ctx context.Context, targetID string, permission,
 	return nil
 }
 
+// WriteClipboard writes text to the clipboard.
+func (c *Client) WriteClipboard(ctx context.Context, targetID string, text string) error {
+	// First grant clipboard-write permission
+	err := c.SetPermission(ctx, targetID, "clipboard-write", "granted")
+	if err != nil {
+		// Permission might fail on some origins, try anyway
+	}
+
+	js := fmt.Sprintf(`navigator.clipboard.writeText(%q).then(() => true)`, text)
+	_, err = c.Eval(ctx, targetID, js)
+	if err != nil {
+		return fmt.Errorf("writing to clipboard: %w", err)
+	}
+	return nil
+}
+
+// ReadClipboard reads text from the clipboard.
+func (c *Client) ReadClipboard(ctx context.Context, targetID string) (string, error) {
+	// First grant clipboard-read permission
+	err := c.SetPermission(ctx, targetID, "clipboard-read", "granted")
+	if err != nil {
+		// Permission might fail on some origins, try anyway
+	}
+
+	result, err := c.Eval(ctx, targetID, `navigator.clipboard.readText()`)
+	if err != nil {
+		return "", fmt.Errorf("reading from clipboard: %w", err)
+	}
+
+	if result.Value == nil {
+		return "", nil
+	}
+	if s, ok := result.Value.(string); ok {
+		return s, nil
+	}
+	return fmt.Sprintf("%v", result.Value), nil
+}
+
 // SetUserAgent sets a custom user agent for the specified target.
 func (c *Client) SetUserAgent(ctx context.Context, targetID string, userAgent string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)

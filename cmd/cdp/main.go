@@ -350,6 +350,8 @@ func run(args []string, cfg *Config) int {
 			return ExitError
 		}
 		return cmdPermission(cfg, remaining[1], remaining[2])
+	case "clipboard":
+		return cmdClipboard(cfg, remaining[1:])
 	case "styles":
 		if len(remaining) < 2 {
 			fmt.Fprintln(cfg.Stderr, "usage: cdp styles <selector>")
@@ -2242,6 +2244,55 @@ func cmdPermission(cfg *Config, permission, state string) int {
 			return nil, err
 		}
 		return PermissionResult{Permission: permission, State: state}, nil
+	})
+}
+
+// ClipboardWriteResult is returned by clipboard write command.
+type ClipboardWriteResult struct {
+	Written bool   `json:"written"`
+	Text    string `json:"text"`
+}
+
+// ClipboardReadResult is returned by clipboard read command.
+type ClipboardReadResult struct {
+	Text string `json:"text"`
+}
+
+func cmdClipboard(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("clipboard", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	write := fs.String("write", "", "Text to write to clipboard")
+	read := fs.Bool("read", false, "Read from clipboard")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *write == "" && !*read {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp clipboard --write <text> | --read")
+		return ExitError
+	}
+
+	if *write != "" {
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.WriteClipboard(ctx, target.ID, *write)
+			if err != nil {
+				return nil, err
+			}
+			return ClipboardWriteResult{Written: true, Text: *write}, nil
+		})
+	}
+
+	// Read
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		text, err := client.ReadClipboard(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return ClipboardReadResult{Text: text}, nil
 	})
 }
 

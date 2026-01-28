@@ -301,6 +301,11 @@
 - Supports: geolocation, notifications, camera, microphone, midi, push
 - Uses Browser.setPermission CDP method
 
+### Slice 86: Clipboard ✅
+- `cdp clipboard --write <text>` - write text to clipboard
+- `cdp clipboard --read` - read text from clipboard
+- Uses navigator.clipboard API with permission grants
+
 ## Next Slices
 
 ## Test Command
@@ -313,7 +318,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (83 commands)
+## Commands Implemented (84 commands)
 ```
 # Browser info
 cdp version
@@ -419,6 +424,7 @@ cdp geolocation <latitude> <longitude>
 cdp offline <true|false>
 cdp media [--color-scheme] [--reduced-motion] [--forced-colors]
 cdp permission <name> <state>
+cdp clipboard [--write <text>] [--read]
 
 # Network interception
 cdp intercept [--response] [--pattern <url>] [--replace old:new] [--disable]
