@@ -186,7 +186,8 @@ func TestRun_Version_CustomPort(t *testing.T) {
 	}
 
 	cfg := testConfig()
-	code := run([]string{"-port", "9222", "version"}, cfg)
+	// Use testChromePort (the port our test Chrome runs on)
+	code := run([]string{"-port", fmt.Sprintf("%d", testChromePort), "version"}, cfg)
 	if code != ExitSuccess {
 		t.Errorf("expected exit code %d, got %d", ExitSuccess, code)
 	}
@@ -2455,6 +2456,560 @@ func TestRun_Links_NoChrome(t *testing.T) {
 	cfg := testConfig()
 	cfg.Port = 1 // Invalid port
 	code := run([]string{"links"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Upload_MissingArgs(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"upload"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+
+	code = run([]string{"upload", "#file-input"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Upload_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create file input
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<input type="file" id="file-input">'`}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a temp file to upload
+	tmpFile, err := os.CreateTemp("", "cdp-test-upload-*.txt")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("test content")
+	tmpFile.Close()
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "upload", "#file-input", tmpFile.Name()}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["uploaded"] != true {
+		t.Errorf("expected uploaded: true, got %v", result["uploaded"])
+	}
+}
+
+func TestRun_Upload_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"upload", "#file-input", "/tmp/test.txt"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Exists_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"exists"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Exists_Found(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create element
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<div id="test-element">Test</div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "exists", "#test-element"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["exists"] != true {
+		t.Errorf("expected exists: true, got %v", result["exists"])
+	}
+}
+
+func TestRun_Exists_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "exists", "#nonexistent-element"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["exists"] != false {
+		t.Errorf("expected exists: false, got %v", result["exists"])
+	}
+}
+
+func TestRun_Exists_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"exists", "#test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_WaitNav_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 15 * time.Second
+
+	// Create a link
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<a id="nav-link" href="about:blank">Navigate</a>'`}, cfg)
+	time.Sleep(100 * time.Millisecond)
+
+	// Start waitnav in background
+	done := make(chan int, 1)
+	go func() {
+		navCfg := testConfig()
+		navCfg.Stdout = &bytes.Buffer{}
+		navCfg.Stderr = &bytes.Buffer{}
+		code := run([]string{"--target", tabID, "--timeout", "10s", "waitnav", "--timeout", "10s"}, navCfg)
+		done <- code
+	}()
+
+	// Give waitnav time to start
+	time.Sleep(200 * time.Millisecond)
+
+	// Click the link to trigger navigation
+	run([]string{"--target", tabID, "click", "#nav-link"}, cfg)
+
+	// Wait for waitnav to complete
+	select {
+	case code := <-done:
+		if code != ExitSuccess {
+			t.Errorf("expected exit code %d, got %d", ExitSuccess, code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("waitnav timed out")
+	}
+}
+
+func TestRun_WaitNav_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"waitnav"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Value_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"value"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Value_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create input with value
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<input id="test-input" value="test value">'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "value", "#test-input"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["value"] != "test value" {
+		t.Errorf("expected value: 'test value', got %v", result["value"])
+	}
+}
+
+func TestRun_Value_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"value", "#test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_WaitFn_MissingExpression(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"waitfn"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_WaitFn_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Set up a variable that's already true
+	run([]string{"--target", tabID, "eval", `window.testReady = true`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "waitfn", "window.testReady", "--timeout", "5s"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["completed"] != true {
+		t.Errorf("expected completed: true, got %v", result["completed"])
+	}
+}
+
+func TestRun_WaitFn_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"waitfn", "true"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Forms_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create form
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<form id="test-form"><input name="field1" type="text"></form>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "forms"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	count, ok := result["count"].(float64)
+	if !ok || count != 1 {
+		t.Errorf("expected count: 1, got %v", result["count"])
+	}
+}
+
+func TestRun_Forms_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"forms"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Highlight_MissingSelector(t *testing.T) {
+	cfg := testConfig()
+	code := run([]string{"highlight"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Highlight_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create element
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<div id="test-element">Test</div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "highlight", "#test-element"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["highlighted"] != true {
+		t.Errorf("expected highlighted: true, got %v", result["highlighted"])
+	}
+}
+
+func TestRun_Highlight_Hide(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "highlight", "--hide"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["hidden"] != true {
+		t.Errorf("expected hidden: true, got %v", result["hidden"])
+	}
+}
+
+func TestRun_Highlight_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"highlight", "#test"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_Images_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Create images
+	run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<img src="test.png" alt="Test 1"><img src="test2.jpg" alt="Test 2">'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "images"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	count, ok := result["count"].(float64)
+	if !ok || count != 2 {
+		t.Errorf("expected count: 2, got %v", result["count"])
+	}
+}
+
+func TestRun_Images_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"images"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_ScrollBottom_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "scrollbottom"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["scrolled"] != true {
+		t.Errorf("expected scrolled: true, got %v", result["scrolled"])
+	}
+}
+
+func TestRun_ScrollBottom_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"scrollbottom"}, cfg)
+	if code != ExitConnFailed {
+		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
+	}
+}
+
+func TestRun_ScrollTop_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create isolated tab for this test
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"--target", tabID, "scrolltop"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["scrolled"] != true {
+		t.Errorf("expected scrolled: true, got %v", result["scrolled"])
+	}
+}
+
+func TestRun_ScrollTop_NoChrome(t *testing.T) {
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port
+	code := run([]string{"scrolltop"}, cfg)
 	if code != ExitConnFailed {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}

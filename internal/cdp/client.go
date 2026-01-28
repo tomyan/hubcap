@@ -3375,3 +3375,473 @@ func (c *Client) Emulate(ctx context.Context, targetID string, device DeviceInfo
 
 	return nil
 }
+
+// UploadFile sets files for a file input element.
+func (c *Client) UploadFile(ctx context.Context, targetID string, selector string, files []string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM domain: %w", err)
+	}
+
+	// Get document root
+	docResult, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(docResult, &docResp); err != nil {
+		return fmt.Errorf("parsing document response: %w", err)
+	}
+
+	// Query selector
+	queryResult, err := c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(queryResult, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("element not found: %s", selector)
+	}
+
+	// Set files on the input element
+	_, err = c.CallSession(ctx, sessionID, "DOM.setFileInputFiles", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+		"files":  files,
+	})
+	if err != nil {
+		return fmt.Errorf("setting files: %w", err)
+	}
+
+	return nil
+}
+
+// Exists checks if an element matching the selector exists.
+func (c *Client) Exists(ctx context.Context, targetID string, selector string) (bool, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return false, err
+	}
+
+	// Enable Runtime domain
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return false, fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	// Use JavaScript to check if element exists
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    fmt.Sprintf(`document.querySelector(%q) !== null`, selector),
+		"returnByValue": true,
+	})
+	if err != nil {
+		return false, fmt.Errorf("evaluating: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value bool `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return false, fmt.Errorf("parsing eval response: %w", err)
+	}
+
+	return evalResp.Result.Value, nil
+}
+
+// WaitForNavigation waits for a navigation to complete.
+func (c *Client) WaitForNavigation(ctx context.Context, targetID string, timeout time.Duration) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable Page domain
+	_, err = c.CallSession(ctx, sessionID, "Page.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	// Subscribe to frameNavigated event
+	eventCh := c.subscribeEvent(sessionID, "Page.frameNavigated")
+	defer c.unsubscribeEvent(sessionID, "Page.frameNavigated", eventCh)
+
+	// Also subscribe to loadEventFired for full page load
+	loadCh := c.subscribeEvent(sessionID, "Page.loadEventFired")
+	defer c.unsubscribeEvent(sessionID, "Page.loadEventFired", loadCh)
+
+	// Wait for either navigation or timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	select {
+	case <-loadCh:
+		return nil
+	case <-timeoutCtx.Done():
+		return fmt.Errorf("timeout waiting for navigation")
+	}
+}
+
+// GetValue retrieves the value of an input, textarea, or select element.
+func (c *Client) GetValue(ctx context.Context, targetID string, selector string) (string, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return "", err
+	}
+
+	// Use JavaScript to get the value
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression": fmt.Sprintf(`(function() {
+			const el = document.querySelector(%q);
+			if (!el) return {error: 'element not found'};
+			return {value: el.value || ''};
+		})()`, selector),
+		"returnByValue": true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting value: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value struct {
+				Error string `json:"error"`
+				Value string `json:"value"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return "", fmt.Errorf("parsing response: %w", err)
+	}
+
+	if evalResp.Result.Value.Error != "" {
+		return "", fmt.Errorf("selector %q: %s", selector, evalResp.Result.Value.Error)
+	}
+
+	return evalResp.Result.Value.Value, nil
+}
+
+// WaitForFunction waits until a JavaScript expression evaluates to a truthy value.
+func (c *Client) WaitForFunction(ctx context.Context, targetID string, expression string, timeout time.Duration) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	deadline := time.Now().Add(timeout)
+	pollInterval := 50 * time.Millisecond
+
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for function")
+		}
+
+		result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+			"expression":    expression,
+			"returnByValue": true,
+		})
+		if err != nil {
+			return fmt.Errorf("evaluating expression: %w", err)
+		}
+
+		var evalResp struct {
+			Result struct {
+				Value interface{} `json:"value"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(result, &evalResp); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+
+		// Check if value is truthy
+		if isTruthy(evalResp.Result.Value) {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+			// Continue polling
+		}
+	}
+}
+
+// isTruthy checks if a value is truthy in JavaScript terms.
+func isTruthy(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case bool:
+		return val
+	case float64:
+		return val != 0
+	case string:
+		return val != ""
+	case []interface{}:
+		return true
+	case map[string]interface{}:
+		return true
+	default:
+		return true
+	}
+}
+
+// FormInfo contains information about a form on the page.
+type FormInfo struct {
+	ID     string      `json:"id,omitempty"`
+	Name   string      `json:"name,omitempty"`
+	Action string      `json:"action,omitempty"`
+	Method string      `json:"method,omitempty"`
+	Inputs []InputInfo `json:"inputs"`
+}
+
+// InputInfo contains information about a form input.
+type InputInfo struct {
+	Name        string `json:"name,omitempty"`
+	Type        string `json:"type"`
+	ID          string `json:"id,omitempty"`
+	Value       string `json:"value,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+// GetForms returns information about all forms on the page.
+func (c *Client) GetForms(ctx context.Context, targetID string) ([]FormInfo, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression": `(function() {
+			const forms = [];
+			document.querySelectorAll('form').forEach(form => {
+				const inputs = [];
+				form.querySelectorAll('input, textarea, select').forEach(input => {
+					inputs.push({
+						name: input.name || '',
+						type: input.type || input.tagName.toLowerCase(),
+						id: input.id || '',
+						value: input.value || '',
+						placeholder: input.placeholder || '',
+						required: input.required || false
+					});
+				});
+				forms.push({
+					id: form.id || '',
+					name: form.name || '',
+					action: form.action || '',
+					method: form.method || 'get',
+					inputs: inputs
+				});
+			});
+			return forms;
+		})()`,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting forms: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value []FormInfo `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	return evalResp.Result.Value, nil
+}
+
+// Highlight adds a visual highlight to an element for debugging.
+func (c *Client) Highlight(ctx context.Context, targetID string, selector string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	// Enable DOM domain
+	_, err = c.CallSession(ctx, sessionID, "DOM.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling DOM: %w", err)
+	}
+
+	// Get document root
+	result, err := c.CallSession(ctx, sessionID, "DOM.getDocument", nil)
+	if err != nil {
+		return fmt.Errorf("getting document: %w", err)
+	}
+
+	var docResp struct {
+		Root struct {
+			NodeID int64 `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(result, &docResp); err != nil {
+		return fmt.Errorf("parsing document: %w", err)
+	}
+
+	// Query selector
+	result, err = c.CallSession(ctx, sessionID, "DOM.querySelector", map[string]interface{}{
+		"nodeId":   docResp.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("querying selector: %w", err)
+	}
+
+	var queryResp struct {
+		NodeID int64 `json:"nodeId"`
+	}
+	if err := json.Unmarshal(result, &queryResp); err != nil {
+		return fmt.Errorf("parsing query response: %w", err)
+	}
+	if queryResp.NodeID == 0 {
+		return fmt.Errorf("selector %q: element not found", selector)
+	}
+
+	// Highlight the node using Overlay domain
+	_, err = c.CallSession(ctx, sessionID, "Overlay.enable", nil)
+	if err != nil {
+		return fmt.Errorf("enabling Overlay: %w", err)
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Overlay.highlightNode", map[string]interface{}{
+		"nodeId": queryResp.NodeID,
+		"highlightConfig": map[string]interface{}{
+			"showInfo":       true,
+			"showExtensions": true,
+			"contentColor":   map[string]interface{}{"r": 111, "g": 168, "b": 220, "a": 0.66},
+			"paddingColor":   map[string]interface{}{"r": 147, "g": 196, "b": 125, "a": 0.55},
+			"borderColor":    map[string]interface{}{"r": 255, "g": 229, "b": 153, "a": 0.66},
+			"marginColor":    map[string]interface{}{"r": 246, "g": 178, "b": 107, "a": 0.66},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("highlighting node: %w", err)
+	}
+
+	return nil
+}
+
+// HideHighlight removes any element highlight.
+func (c *Client) HideHighlight(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Overlay.hideHighlight", nil)
+	if err != nil {
+		return fmt.Errorf("hiding highlight: %w", err)
+	}
+
+	return nil
+}
+
+// ImageInfo contains information about an image element.
+type ImageInfo struct {
+	Src     string `json:"src"`
+	Alt     string `json:"alt,omitempty"`
+	Width   int    `json:"width,omitempty"`
+	Height  int    `json:"height,omitempty"`
+	Loading string `json:"loading,omitempty"`
+}
+
+// GetImages returns all images on the page.
+func (c *Client) GetImages(ctx context.Context, targetID string) ([]ImageInfo, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression": `(function() {
+			const images = [];
+			document.querySelectorAll('img').forEach(img => {
+				images.push({
+					src: img.src || '',
+					alt: img.alt || '',
+					width: img.naturalWidth || img.width || 0,
+					height: img.naturalHeight || img.height || 0,
+					loading: img.loading || ''
+				});
+			});
+			return images;
+		})()`,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting images: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value []ImageInfo `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	return evalResp.Result.Value, nil
+}
+
+// ScrollToBottom scrolls to the bottom of the page.
+func (c *Client) ScrollToBottom(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression": `window.scrollTo(0, document.body.scrollHeight)`,
+	})
+	if err != nil {
+		return fmt.Errorf("scrolling to bottom: %w", err)
+	}
+
+	return nil
+}
+
+// ScrollToTop scrolls to the top of the page.
+func (c *Client) ScrollToTop(ctx context.Context, targetID string) error {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression": `window.scrollTo(0, 0)`,
+	})
+	if err != nil {
+		return fmt.Errorf("scrolling to top: %w", err)
+	}
+
+	return nil
+}

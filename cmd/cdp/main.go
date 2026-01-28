@@ -89,7 +89,7 @@ func run(args []string, cfg *Config) int {
 	remaining := fs.Args()
 	if len(remaining) < 1 {
 		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
-		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw")
+		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw, upload, exists, waitnav, value, waitfn, forms, highlight, images, scrollbottom, scrolltop")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
 		return ExitError
@@ -349,6 +349,42 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitIdle(cfg, remaining[1:])
 	case "links":
 		return cmdLinks(cfg)
+	case "upload":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp upload <selector> <file>...")
+			return ExitError
+		}
+		return cmdUpload(cfg, remaining[1], remaining[2:])
+	case "exists":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp exists <selector>")
+			return ExitError
+		}
+		return cmdExists(cfg, remaining[1])
+	case "waitnav":
+		return cmdWaitNav(cfg, remaining[1:])
+	case "value":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp value <selector>")
+			return ExitError
+		}
+		return cmdValue(cfg, remaining[1])
+	case "waitfn":
+		return cmdWaitFn(cfg, remaining[1:])
+	case "forms":
+		return cmdForms(cfg)
+	case "highlight":
+		if len(remaining) < 2 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp highlight <selector> [--hide]")
+			return ExitError
+		}
+		return cmdHighlight(cfg, remaining[1:])
+	case "images":
+		return cmdImages(cfg)
+	case "scrollbottom":
+		return cmdScrollBottom(cfg)
+	case "scrolltop":
+		return cmdScrollTop(cfg)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -1945,4 +1981,222 @@ func outputResult(cfg *Config, v interface{}) int {
 		return ExitError
 	}
 	return ExitSuccess
+}
+
+// UploadResult is returned by the upload command.
+type UploadResult struct {
+	Uploaded bool     `json:"uploaded"`
+	Selector string   `json:"selector"`
+	Files    []string `json:"files"`
+}
+
+func cmdUpload(cfg *Config, selector string, files []string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.UploadFile(ctx, target.ID, selector, files)
+		if err != nil {
+			return nil, err
+		}
+		return UploadResult{Uploaded: true, Selector: selector, Files: files}, nil
+	})
+}
+
+// ExistsResult is returned by the exists command.
+type ExistsResult struct {
+	Exists   bool   `json:"exists"`
+	Selector string `json:"selector"`
+}
+
+func cmdExists(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		exists, err := client.Exists(ctx, target.ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return ExistsResult{Exists: exists, Selector: selector}, nil
+	})
+}
+
+// WaitNavResult is returned by the waitnav command.
+type WaitNavResult struct {
+	Navigated bool `json:"navigated"`
+}
+
+func cmdWaitNav(cfg *Config, args []string) int {
+	// Parse waitnav-specific flags
+	fs := flag.NewFlagSet("waitnav", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.WaitForNavigation(ctx, target.ID, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return WaitNavResult{Navigated: true}, nil
+	})
+}
+
+// ValueResult is returned by the value command.
+type ValueResult struct {
+	Selector string `json:"selector"`
+	Value    string `json:"value"`
+}
+
+func cmdValue(cfg *Config, selector string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		value, err := client.GetValue(ctx, target.ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return ValueResult{Selector: selector, Value: value}, nil
+	})
+}
+
+// WaitFnResult is returned by the waitfn command.
+type WaitFnResult struct {
+	Completed  bool   `json:"completed"`
+	Expression string `json:"expression"`
+}
+
+func cmdWaitFn(cfg *Config, args []string) int {
+	// Parse waitfn-specific flags
+	fs := flag.NewFlagSet("waitfn", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp waitfn <expression> [--timeout <duration>]")
+		return ExitError
+	}
+	expression := remaining[0]
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.WaitForFunction(ctx, target.ID, expression, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return WaitFnResult{Completed: true, Expression: expression}, nil
+	})
+}
+
+// FormsResult is returned by the forms command.
+type FormsResult struct {
+	Forms []cdp.FormInfo `json:"forms"`
+	Count int            `json:"count"`
+}
+
+func cmdForms(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		forms, err := client.GetForms(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return FormsResult{Forms: forms, Count: len(forms)}, nil
+	})
+}
+
+// HighlightResult is returned by the highlight command.
+type HighlightResult struct {
+	Highlighted bool   `json:"highlighted"`
+	Selector    string `json:"selector,omitempty"`
+	Hidden      bool   `json:"hidden,omitempty"`
+}
+
+func cmdHighlight(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("highlight", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	hide := fs.Bool("hide", false, "Hide existing highlight")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
+	}
+
+	if *hide {
+		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+			err := client.HideHighlight(ctx, target.ID)
+			if err != nil {
+				return nil, err
+			}
+			return HighlightResult{Hidden: true}, nil
+		})
+	}
+
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		fmt.Fprintln(cfg.Stderr, "usage: cdp highlight <selector> [--hide]")
+		return ExitError
+	}
+	selector := remaining[0]
+
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.Highlight(ctx, target.ID, selector)
+		if err != nil {
+			return nil, err
+		}
+		return HighlightResult{Highlighted: true, Selector: selector}, nil
+	})
+}
+
+// ImagesResult is returned by the images command.
+type ImagesResult struct {
+	Images []cdp.ImageInfo `json:"images"`
+	Count  int             `json:"count"`
+}
+
+func cmdImages(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		images, err := client.GetImages(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return ImagesResult{Images: images, Count: len(images)}, nil
+	})
+}
+
+// ScrollBottomResult is returned by the scrollbottom command.
+type ScrollBottomResult struct {
+	Scrolled bool `json:"scrolled"`
+}
+
+func cmdScrollBottom(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.ScrollToBottom(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return ScrollBottomResult{Scrolled: true}, nil
+	})
+}
+
+// ScrollTopResult is returned by the scrolltop command.
+type ScrollTopResult struct {
+	Scrolled bool `json:"scrolled"`
+}
+
+func cmdScrollTop(cfg *Config) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		err := client.ScrollToTop(ctx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		return ScrollTopResult{Scrolled: true}, nil
+	})
 }

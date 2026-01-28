@@ -2344,3 +2344,543 @@ func TestClient_BlockURLs(t *testing.T) {
 		t.Fatalf("failed to unblock URLs: %v", err)
 	}
 }
+
+func TestClient_Exists_Found(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with an element
+	dataURL := `data:text/html,<html><body><div id="test-element">Hello</div></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Check if element exists
+	exists, err := client.Exists(ctx, tabID, "#test-element")
+	if err != nil {
+		t.Fatalf("failed to check existence: %v", err)
+	}
+	if !exists {
+		t.Error("expected element to exist")
+	}
+}
+
+func TestClient_Exists_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab
+	tabID, err := client.NewTab(ctx, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Check if non-existent element exists
+	exists, err := client.Exists(ctx, tabID, "#nonexistent-element")
+	if err != nil {
+		t.Fatalf("failed to check existence: %v", err)
+	}
+	if exists {
+		t.Error("expected element to not exist")
+	}
+}
+
+func TestClient_WaitForNavigation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with a link that navigates
+	dataURL := `data:text/html,<html><body><a id="link" href="about:blank">Navigate</a></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(200 * time.Millisecond)
+
+	// Start waiting for navigation in a goroutine
+	navDone := make(chan error, 1)
+	go func() {
+		navDone <- client.WaitForNavigation(ctx, tabID, 10*time.Second)
+	}()
+
+	// Give the wait some time to set up
+	time.Sleep(100 * time.Millisecond)
+
+	// Click the link to trigger navigation
+	err = client.Click(ctx, tabID, "#link")
+	if err != nil {
+		t.Fatalf("failed to click link: %v", err)
+	}
+
+	// Wait for navigation to complete
+	select {
+	case err := <-navDone:
+		if err != nil {
+			t.Fatalf("WaitForNavigation failed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("WaitForNavigation timed out")
+	}
+}
+
+func TestClient_UploadFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create a temp file to upload
+	tmpFile, err := os.CreateTemp("", "cdp-test-upload-*.txt")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("test content")
+	tmpFile.Close()
+
+	// Create isolated tab with file input
+	dataURL := `data:text/html,<html><body><input type="file" id="file-input"><script>window.fileName='';document.getElementById('file-input').addEventListener('change',e=>{window.fileName=e.target.files[0]?.name||''});</script></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(200 * time.Millisecond)
+
+	// Upload file
+	err = client.UploadFile(ctx, tabID, "#file-input", []string{tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("failed to upload file: %v", err)
+	}
+
+	// Verify file was selected
+	time.Sleep(100 * time.Millisecond)
+	result, err := client.Eval(ctx, tabID, "window.fileName")
+	if err != nil {
+		t.Fatalf("failed to verify file upload: %v", err)
+	}
+
+	fileName, ok := result.Value.(string)
+	if !ok || fileName == "" {
+		t.Errorf("expected file name to be set, got: %v", result.Value)
+	}
+}
+
+func TestClient_GetValue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with input
+	dataURL := `data:text/html,<html><body><input id="test-input" value="hello world"></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Get value
+	value, err := client.GetValue(ctx, tabID, "#test-input")
+	if err != nil {
+		t.Fatalf("failed to get value: %v", err)
+	}
+	if value != "hello world" {
+		t.Errorf("expected 'hello world', got '%s'", value)
+	}
+}
+
+func TestClient_GetValue_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab
+	tabID, err := client.NewTab(ctx, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Get value of non-existent element
+	_, err = client.GetValue(ctx, tabID, "#nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent element")
+	}
+}
+
+func TestClient_WaitForFunction_ImmediateTrue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab
+	dataURL := `data:text/html,<html><body><script>window.ready = true;</script></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Wait for function that's already true
+	err = client.WaitForFunction(ctx, tabID, "window.ready", 5*time.Second)
+	if err != nil {
+		t.Fatalf("WaitForFunction failed: %v", err)
+	}
+}
+
+func TestClient_WaitForFunction_DelayedTrue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with delayed value
+	dataURL := `data:text/html,<html><body><script>window.ready = false; setTimeout(() => { window.ready = true; }, 300);</script></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Wait for function
+	err = client.WaitForFunction(ctx, tabID, "window.ready", 5*time.Second)
+	if err != nil {
+		t.Fatalf("WaitForFunction failed: %v", err)
+	}
+}
+
+func TestClient_WaitForFunction_Timeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with value that never becomes true
+	dataURL := `data:text/html,<html><body><script>window.ready = false;</script></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Wait for function with short timeout
+	err = client.WaitForFunction(ctx, tabID, "window.ready", 200*time.Millisecond)
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Errorf("expected timeout error, got: %v", err)
+	}
+}
+
+func TestClient_GetForms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with forms
+	dataURL := `data:text/html,<html><body>
+		<form id="login-form" action="/login" method="post">
+			<input name="username" type="text" placeholder="Username" required>
+			<input name="password" type="password" placeholder="Password" required>
+			<button type="submit">Login</button>
+		</form>
+		<form id="search-form" action="/search" method="get">
+			<input name="q" type="search" placeholder="Search">
+		</form>
+	</body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Get forms
+	forms, err := client.GetForms(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to get forms: %v", err)
+	}
+
+	if len(forms) != 2 {
+		t.Errorf("expected 2 forms, got %d", len(forms))
+	}
+
+	// Check first form
+	if forms[0].ID != "login-form" {
+		t.Errorf("expected form id 'login-form', got '%s'", forms[0].ID)
+	}
+	if forms[0].Method != "post" {
+		t.Errorf("expected method 'post', got '%s'", forms[0].Method)
+	}
+	if len(forms[0].Inputs) != 2 { // excludes button
+		t.Errorf("expected 2 inputs, got %d", len(forms[0].Inputs))
+	}
+
+	// Check second form
+	if forms[1].ID != "search-form" {
+		t.Errorf("expected form id 'search-form', got '%s'", forms[1].ID)
+	}
+}
+
+func TestClient_Highlight(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with element
+	dataURL := `data:text/html,<html><body><div id="test-element">Test</div></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Highlight element
+	err = client.Highlight(ctx, tabID, "#test-element")
+	if err != nil {
+		t.Fatalf("failed to highlight: %v", err)
+	}
+
+	// Hide highlight
+	err = client.HideHighlight(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to hide highlight: %v", err)
+	}
+}
+
+func TestClient_Highlight_NotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab
+	tabID, err := client.NewTab(ctx, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Try to highlight non-existent element
+	err = client.Highlight(ctx, tabID, "#nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent element")
+	}
+}
+
+func TestClient_GetImages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with images
+	dataURL := `data:text/html,<html><body>
+		<img src="https://example.com/image1.png" alt="Image 1" width="100" height="100">
+		<img src="https://example.com/image2.jpg" alt="Image 2">
+	</body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Get images
+	images, err := client.GetImages(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to get images: %v", err)
+	}
+
+	if len(images) != 2 {
+		t.Errorf("expected 2 images, got %d", len(images))
+	}
+
+	// Check first image
+	if images[0].Alt != "Image 1" {
+		t.Errorf("expected alt 'Image 1', got '%s'", images[0].Alt)
+	}
+}
+
+func TestClient_ScrollToBottomAndTop(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Create isolated tab with scrollable content
+	dataURL := `data:text/html,<html><body style="height:5000px"><div id="top">Top</div><div style="position:absolute;bottom:0">Bottom</div></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// Scroll to bottom
+	err = client.ScrollToBottom(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to scroll to bottom: %v", err)
+	}
+
+	// Verify we scrolled
+	result, err := client.Eval(ctx, tabID, "window.scrollY > 0")
+	if err != nil {
+		t.Fatalf("failed to check scroll: %v", err)
+	}
+	if result.Value != true {
+		t.Error("expected to have scrolled down")
+	}
+
+	// Scroll to top
+	err = client.ScrollToTop(ctx, tabID)
+	if err != nil {
+		t.Fatalf("failed to scroll to top: %v", err)
+	}
+
+	// Verify we scrolled back to top
+	result, err = client.Eval(ctx, tabID, "window.scrollY === 0")
+	if err != nil {
+		t.Fatalf("failed to check scroll: %v", err)
+	}
+	if result.Value != true {
+		t.Error("expected to have scrolled back to top")
+	}
+}

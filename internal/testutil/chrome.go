@@ -66,8 +66,8 @@ func StartChrome(port int) (*ChromeInstance, error) {
 		dataDir: dataDir,
 	}
 
-	// Wait for Chrome to be ready
-	if err := waitForPort(port, 10*time.Second); err != nil {
+	// Wait for Chrome to be ready (poll quickly, allow longer total time)
+	if err := waitForPort(port, 30*time.Second); err != nil {
 		instance.Stop()
 		return nil, fmt.Errorf("Chrome failed to start: %w", err)
 	}
@@ -131,12 +131,13 @@ func findChrome() string {
 }
 
 // waitForPort waits for a TCP port to become available.
+// Polls quickly (50ms) to minimize startup latency while allowing longer total timeout.
 func waitForPort(port int, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	addr := fmt.Sprintf("localhost:%d", port)
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -144,7 +145,7 @@ func waitForPort(port int, timeout time.Duration) error {
 		case <-ctx.Done():
 			return fmt.Errorf("timeout waiting for port %d", port)
 		case <-ticker.C:
-			conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+			conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
 			if err == nil {
 				conn.Close()
 				return nil

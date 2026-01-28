@@ -216,19 +216,56 @@
 - `cdp links` - get all links on the page
 - Returns href and text for each anchor element
 
+### Slice 65: File upload ✅
+- `cdp upload <selector> <file>...` - upload files to a file input
+- Uses DOM.setFileInputFiles CDP method
+
+### Slice 66: Element exists ✅
+- `cdp exists <selector>` - check if element exists (without waiting)
+- Returns boolean `exists` field
+
+### Slice 67: Wait for navigation ✅
+- `cdp waitnav [--timeout <duration>]` - wait for navigation to complete
+- Subscribes to Page.frameNavigated event
+
+### Slice 68: Get input value ✅
+- `cdp value <selector>` - get value of input/textarea/select
+- Returns the current value property
+
+### Slice 69: Wait for function ✅
+- `cdp waitfn <expression> [--timeout <duration>]` - wait until JS is truthy
+- Polls until expression evaluates to a truthy value
+
+### Slice 70: List forms ✅
+- `cdp forms` - get all forms with their inputs
+- Returns form id, name, action, method, and inputs array
+
+### Slice 71: Highlight element ✅
+- `cdp highlight <selector>` - highlight element for debugging
+- `cdp highlight --hide` - remove highlight
+- Uses Overlay domain for visual highlighting
+
+### Slice 72: List images ✅
+- `cdp images` - get all images on the page
+- Returns src, alt, width, height, loading for each image
+
+### Slice 73-74: Scroll to edges ✅
+- `cdp scrollbottom` - scroll to bottom of page
+- `cdp scrolltop` - scroll to top of page
+
 ## Next Slices
 
 ## Test Command
 ```bash
-# Run tests sequentially (required because tests share Chrome instance)
-go test -p 1 -v ./...
+# Run all tests (each package has its own Chrome instance)
+go test -v ./...
 
 # Run individual package tests
 go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (61 commands)
+## Commands Implemented (71 commands)
 ```
 # Browser info
 cdp version
@@ -260,11 +297,16 @@ cdp query <selector>
 cdp html <selector>
 cdp text <selector>
 cdp attr <selector> <attribute>
+cdp value <selector>
 cdp count <selector>
 cdp visible <selector>
+cdp exists <selector>
 cdp bounds <selector>
 cdp styles <selector>
 cdp layout <selector> [--depth <n>]
+cdp forms
+cdp images
+cdp highlight <selector> [--hide]
 
 # Click actions
 cdp click <selector>
@@ -279,6 +321,7 @@ cdp focus <selector>
 cdp select <selector> <value>
 cdp check <selector>
 cdp uncheck <selector>
+cdp upload <selector> <file>...
 
 # Keyboard input
 cdp type <text>
@@ -287,10 +330,14 @@ cdp press <key>
 # Scrolling
 cdp scrollto <selector>
 cdp scroll <x> <y>
+cdp scrollbottom
+cdp scrolltop
 
 # Waiting
 cdp wait <selector> [--timeout <duration>]
 cdp waitload [--timeout <duration>]
+cdp waitnav [--timeout <duration>]
+cdp waitfn <expression> [--timeout <duration>]
 
 # Viewport
 cdp viewport <width> <height>
@@ -330,9 +377,9 @@ cdp links
 ```
 
 ## Known Issues / Deferred Items
-- Sessions not detached after use (minor resource leak)
-- No --target flag for page selection (always uses first page)
+- ~~Sessions not detached after use (minor resource leak)~~ **FIXED: Sessions now cached and detached on close**
 - Navigate doesn't wait for actual load completion
-- Tests must run sequentially (-p 1) because they share Chrome instance
+- ~~Tests must run sequentially (-p 1) because they share Chrome instance~~ **FIXED: Each package now has its own Chrome instance**
 - Special keys (Enter, Tab, etc.) not handled in type command
 - No modifier key support (Ctrl, Alt, Shift) in type command
+- ~~Long test runs can accumulate tabs causing Chrome memory pressure~~ **FIXED: Tests now use isolated tabs with proper cleanup**
