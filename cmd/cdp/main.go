@@ -486,6 +486,12 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitRequest(cfg, remaining[1:])
 	case "waitresponse":
 		return cmdWaitResponse(cfg, remaining[1:])
+	case "computed":
+		if len(remaining) < 3 {
+			fmt.Fprintln(cfg.Stderr, "usage: cdp computed <selector> <property>")
+			return ExitError
+		}
+		return cmdComputed(cfg, remaining[1], remaining[2])
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
@@ -3125,6 +3131,16 @@ func cmdWaitResponse(cfg *Config, args []string) int {
 
 	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
 		result, err := client.WaitForResponse(ctx, target.ID, pattern, *timeout)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
+}
+
+func cmdComputed(cfg *Config, selector, property string) int {
+	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		result, err := client.GetComputedStyle(ctx, target.ID, selector, property)
 		if err != nil {
 			return nil, err
 		}

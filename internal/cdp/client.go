@@ -5650,6 +5650,12 @@ type WaitResponseResult struct {
 	RequestID string `json:"requestId"`
 }
 
+// ComputedStyleResult contains the computed style value for an element.
+type ComputedStyleResult struct {
+	Property string `json:"property"`
+	Value    string `json:"value"`
+}
+
 // WaitForResponse waits for a network response with a URL containing the pattern.
 func (c *Client) WaitForResponse(ctx context.Context, targetID string, pattern string, timeout time.Duration) (*WaitResponseResult, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
@@ -5705,4 +5711,53 @@ func (c *Client) WaitForResponse(ctx context.Context, targetID string, pattern s
 			}
 		}
 	}
+}
+
+// GetComputedStyle returns the computed style value for a CSS property of an element.
+func (c *Client) GetComputedStyle(ctx context.Context, targetID string, selector string, property string) (*ComputedStyleResult, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use JavaScript to get the computed style
+	jsExpr := fmt.Sprintf(`
+		(function() {
+			const el = document.querySelector(%q);
+			if (!el) {
+				return {error: 'element not found'};
+			}
+			const style = window.getComputedStyle(el);
+			return {value: style.getPropertyValue(%q)};
+		})()
+	`, selector, property)
+
+	result, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    jsExpr,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluating computed style: %w", err)
+	}
+
+	var evalResp struct {
+		Result struct {
+			Value struct {
+				Error string `json:"error"`
+				Value string `json:"value"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(result, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	if evalResp.Result.Value.Error != "" {
+		return nil, fmt.Errorf("%s", evalResp.Result.Value.Error)
+	}
+
+	return &ComputedStyleResult{
+		Property: property,
+		Value:    evalResp.Result.Value.Value,
+	}, nil
 }

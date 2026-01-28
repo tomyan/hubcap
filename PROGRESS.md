@@ -376,6 +376,11 @@
 - Subscribes to Network.responseReceived events
 - Returns response info (URL, status, mimeType) when URL contains the pattern
 
+### Slice 104: Get computed style ✅
+- `cdp computed <selector> <property>` - get computed CSS style value
+- Uses window.getComputedStyle() to get resolved CSS values
+- Returns property name and computed value
+
 ## Next Slices
 
 ## Test Command
@@ -388,7 +393,7 @@ go test -v ./cmd/cdp
 go test -v ./internal/cdp
 ```
 
-## Commands Implemented (98 commands)
+## Commands Implemented (99 commands)
 ```
 # Browser info
 cdp version
@@ -421,6 +426,7 @@ cdp query <selector>
 cdp html <selector>
 cdp text <selector>
 cdp attr <selector> <attribute>
+cdp computed <selector> <property>
 cdp value <selector>
 cdp count <selector>
 cdp visible <selector>
