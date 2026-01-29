@@ -47,9 +47,9 @@ When disabled:
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| No patterns provided and `--disable` not set | 1 | `error: at least one pattern or --disable required` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
-| Timeout waiting for response | 3 | `error: timeout` |
+| No patterns provided and `--disable` not set | 1 | `usage: hubcap block <pattern>... [--disable]` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 
@@ -74,7 +74,7 @@ hubcap block --disable
 Block third-party scripts, then take a screenshot to measure visual impact:
 
 ```
-hubcap block "*cdn.third-party.com*" && hubcap screenshot --full page-no-thirdparty.png
+hubcap block "*cdn.third-party.com*" && hubcap screenshot --output page-no-thirdparty.png
 ```
 
 ## See also
