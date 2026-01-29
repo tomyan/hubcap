@@ -58,9 +58,7 @@ hubcap -target E3B0C44298FC1C14 close
 Open a page, take a screenshot, then close the tab:
 
 ```
-hubcap new "https://example.com"
-hubcap screenshot > page.png
-hubcap close
+hubcap new "https://example.com" && hubcap screenshot --output page.png && hubcap close
 ```
 
 ## See also
