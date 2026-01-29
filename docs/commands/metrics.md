@@ -70,11 +70,7 @@ hubcap metrics | jq '.metrics.JSHeapUsedSize / 1048576 | round | tostring + " MB
 Monitor DOM node count before and after an action:
 
 ```
-BEFORE=$(hubcap metrics | jq '.metrics.Nodes')
-hubcap click "#load-more"
-hubcap waitidle
-AFTER=$(hubcap metrics | jq '.metrics.Nodes')
-echo "Nodes added: $(( AFTER - BEFORE ))"
+BEFORE=$(hubcap metrics | jq '.metrics.Nodes') && hubcap click "#load-more" && hubcap waitidle && AFTER=$(hubcap metrics | jq '.metrics.Nodes') && echo "Nodes added: $(( AFTER - BEFORE ))"
 ```
 
 ## See also

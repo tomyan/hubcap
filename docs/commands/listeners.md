@@ -22,28 +22,33 @@ None.
 
 ## Output
 
-Returns an array of event listener objects.
+Returns an object containing an array of event listener objects.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| type | string | The event type (e.g., "click", "input") |
-| useCapture | boolean | Whether the listener uses capture phase |
-| passive | boolean | Whether the listener is passive |
-| once | boolean | Whether the listener fires only once |
-| handler | string | The handler function source |
+| listeners | array | Array of event listener objects |
+| listeners[].type | string | The event type (e.g., "click", "input") |
+| listeners[].useCapture | boolean | Whether the listener uses capture phase |
+| listeners[].passive | boolean | Whether the listener is passive |
+| listeners[].once | boolean | Whether the listener fires only once |
+| listeners[].scriptId | string | Script identifier where the listener is defined |
+| listeners[].lineNumber | number | Line number in the script |
+| listeners[].columnNumber | number | Column number in the script |
 
 ```json
-[
-  {"type":"click","useCapture":false,"passive":false,"once":false,"handler":"function() { ... }"},
-  {"type":"input","useCapture":false,"passive":true,"once":false,"handler":"function(e) { ... }"}
-]
+{
+  "listeners": [
+    {"type":"click","useCapture":false,"passive":false,"once":false,"scriptId":"32","lineNumber":10,"columnNumber":2},
+    {"type":"input","useCapture":false,"passive":true,"once":false,"scriptId":"32","lineNumber":15,"columnNumber":2}
+  ]
+}
 ```
 
 ## Errors
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Element not found | 1 | `error: element not found: <sel>` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 
@@ -58,7 +63,7 @@ hubcap listeners '#submit'
 List listeners and filter to just click handlers:
 
 ```
-hubcap listeners '#submit' | jq '[.[] | select(.type == "click")]'
+hubcap listeners '#submit' | jq '[.listeners[] | select(.type == "click")]'
 ```
 
 ## See also

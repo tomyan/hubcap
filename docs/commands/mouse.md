@@ -38,9 +38,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Invalid coordinate (non-numeric or out of range) | 1 | `invalid coordinate` |
-| Chrome not connected | 2 | `chrome: not connected` |
-| Operation timed out | 3 | `timeout` |
+| Invalid x coordinate | 1 | `invalid x coordinate: ...` |
+| Invalid y coordinate | 1 | `invalid y coordinate: ...` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

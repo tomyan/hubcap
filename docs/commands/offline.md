@@ -36,9 +36,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Missing or invalid argument | 1 | `error: argument must be "true" or "false"` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
-| Timeout waiting for response | 3 | `error: timeout` |
+| Missing argument | 1 | `usage: hubcap offline <true\|false>` |
+| Invalid argument | 1 | `error: invalid value, use 'true' or 'false'` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

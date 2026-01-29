@@ -35,16 +35,16 @@ None.
 Only fields for the flags you specify appear in the output.
 
 ```json
-{"colorScheme":"dark","reducedMotion":"","forcedColors":""}
+{"colorScheme":"dark"}
 ```
 
 ## Errors
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| No flag specified | 1 | `error: at least one media flag required` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
-| Timeout waiting for response | 3 | `error: timeout` |
+| No flag specified | 1 | `usage: hubcap media [--color-scheme <light\|dark>] [--reduced-motion <reduce\|no-preference>] [--forced-colors <active\|none>]` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

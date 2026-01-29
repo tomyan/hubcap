@@ -38,9 +38,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Invalid state value | 1 | `error: state must be "granted", "denied", or "prompt"` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
-| Timeout waiting for response | 3 | `error: timeout` |
+| Missing arguments | 1 | `usage: hubcap permission <name> <granted\|denied\|prompt>` |
+| Invalid state value | 1 | `error: invalid state "<value>" (use granted, denied, or prompt)` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

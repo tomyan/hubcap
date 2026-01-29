@@ -37,7 +37,7 @@ None.
 
 | Condition            | Exit code | Stderr                        |
 |----------------------|-----------|-------------------------------|
-| Chrome not connected | 2         | `error: chrome not connected` |
+| Chrome not connected | 2         | `error: connecting to Chrome: ...` |
 | Tab creation timeout | 3         | `error: timeout`              |
 
 ## Examples
@@ -57,8 +57,7 @@ hubcap new https://example.com
 Open a tab and capture its ID for later use (chaining):
 
 ```
-TAB_ID=$(hubcap new https://example.com | jq -r '.targetId')
-hubcap -target "$TAB_ID" title
+TAB_ID=$(hubcap new https://example.com | jq -r '.targetId') && hubcap -target "$TAB_ID" title
 ```
 
 ## See also

@@ -49,8 +49,8 @@ Response line:
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
-| Duration parse failure | 1 | `error: invalid duration "<value>"` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Invalid flag value | 1 | `invalid value "..." for flag -duration: ...` |
 
 ## Examples
 

@@ -40,9 +40,9 @@ None.
 
 | Condition            | Exit code | Stderr                          |
 |----------------------|-----------|---------------------------------|
-| Missing --output     | 1         | `error: --output flag required` |
-| Chrome not connected | 2         | `error: chrome not connected`   |
-| Export timeout       | 3         | `error: pdf export timeout`     |
+| Missing --output     | 1         | `usage: hubcap pdf --output <file> [--landscape] [--background]` |
+| Chrome not connected | 2         | `error: connecting to Chrome: ...` |
+| Timeout              | 3         | `error: timeout`                |
 
 ## Examples
 

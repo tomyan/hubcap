@@ -36,17 +36,11 @@ None.
   "tags": [
     {
       "name": "description",
-      "property": "",
-      "content": "An example page for testing.",
-      "charset": "",
-      "httpEquiv": ""
+      "content": "An example page for testing."
     },
     {
-      "name": "",
       "property": "og:title",
-      "content": "Example Domain",
-      "charset": "",
-      "httpEquiv": ""
+      "content": "Example Domain"
     }
   ]
 }
@@ -76,8 +70,7 @@ hubcap meta | jq -r '.tags[] | select(.name=="description") | .content'
 Audit Open Graph tags by chaining with `jq`:
 
 ```
-hubcap goto "https://example.com"
-hubcap meta | jq '[.tags[] | select(.property | startswith("og:"))]'
+hubcap goto "https://example.com" && hubcap meta | jq '[.tags[] | select(.property | startswith("og:"))]'
 ```
 
 ## See also
