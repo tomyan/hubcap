@@ -29,7 +29,7 @@ None.
 |-------|------|-------------|
 | `selector` | string | The selector that was queried |
 | `attribute` | string | The attribute name that was read |
-| `value` | string | The attribute's value, or `null` if not present |
+| `value` | string | The attribute's value, or empty string if not present |
 
 ```json
 {"selector":"#link","attribute":"href","value":"https://example.com"}
@@ -39,7 +39,7 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Element not found | 1 | `error: element not found: <sel>` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 
