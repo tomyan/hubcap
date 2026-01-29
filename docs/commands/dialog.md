@@ -32,16 +32,23 @@ hubcap dialog <action> [--text <prompt-text>]
 | promptText | string | The text entered (if any)      |
 
 ```json
-{"action":"accept","promptText":""}
+{"action":"accept"}
+```
+
+With prompt text:
+
+```json
+{"action":"accept","promptText":"my response"}
 ```
 
 ## Errors
 
 | Condition            | Exit code | Stderr                         |
 |----------------------|-----------|--------------------------------|
-| Invalid action       | 1         | `error: invalid action`        |
-| Chrome not connected | 2         | `error: chrome not connected`  |
-| Dialog timeout       | 3         | `error: timeout`               |
+| Missing action       | 1         | `usage: hubcap dialog [accept\|dismiss] [--text <prompt-text>]` |
+| Invalid action       | 1         | `action must be 'accept' or 'dismiss'` |
+| Chrome not connected | 2         | `error: connecting to Chrome: ...`  |
+| Timeout              | 3         | `error: timeout`               |
 
 ## Examples
 

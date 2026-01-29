@@ -73,10 +73,7 @@ hubcap domsnapshot > snapshot.json
 Compare DOM snapshots before and after an interaction:
 
 ```
-hubcap domsnapshot > before.json
-hubcap click "#expand-button"
-hubcap domsnapshot > after.json
-diff <(jq -S . before.json) <(jq -S . after.json)
+hubcap domsnapshot > before.json && hubcap click "#expand-button" && hubcap domsnapshot > after.json && diff <(jq -S . before.json) <(jq -S . after.json)
 ```
 
 ## See also
