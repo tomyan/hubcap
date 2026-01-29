@@ -50,9 +50,7 @@ hubcap back
 Navigate to a page, go back, then verify the URL changed:
 
 ```
-hubcap goto "https://example.com/page2"
-hubcap back
-hubcap url | jq -r '.url'
+hubcap goto --wait "https://example.com/page2" && hubcap back && hubcap url | jq -r '.url'
 ```
 
 Go back and wait for the page to finish loading:
