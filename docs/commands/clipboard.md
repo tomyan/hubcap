@@ -50,9 +50,9 @@ None.
 
 | Condition                    | Exit code | Stderr                                  |
 |------------------------------|-----------|------------------------------------------|
-| No --read or --write given   | 1         | `error: --read or --write required`      |
-| Chrome not connected         | 2         | `error: chrome not connected`            |
-| Operation timeout            | 3         | `error: timeout`                         |
+| No --read or --write given   | 1         | `usage: hubcap clipboard --write <text> \| --read` |
+| Chrome not connected         | 2         | `error: connecting to Chrome: ...`       |
+| Timeout                      | 3         | `error: timeout`                         |
 
 ## Examples
 
