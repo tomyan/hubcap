@@ -24,25 +24,27 @@ None.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| position | number | Current caret position (character index) |
-| selectionStart | number | Start index of the selection range |
-| selectionEnd | number | End index of the selection range |
+| start | number | Start index of the selection/caret position |
+| end | number | End index of the selection/caret position |
+
+When no text is selected (caret at position 5):
 
 ```json
-{"position":5,"selectionStart":5,"selectionEnd":5}
+{"start":5,"end":5}
 ```
 
-When text is selected within the input:
+When text is selected within the input (characters 3 through 10):
 
 ```json
-{"position":10,"selectionStart":3,"selectionEnd":10}
+{"start":3,"end":10}
 ```
 
 ## Errors
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Element not found | 1 | `error: element not found` |
+| Element does not support selection | 1 | `error: element does not support selection` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 
@@ -57,7 +59,7 @@ hubcap caret '#search'
 Focus an input, type some text, then check the caret position:
 
 ```
-hubcap fill '#editor' 'Hello world' && hubcap caret '#editor' | jq -r '.position'
+hubcap fill '#editor' 'Hello world' && hubcap caret '#editor' | jq -r '.end'
 ```
 
 ## See also
