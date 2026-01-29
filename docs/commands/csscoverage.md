@@ -71,10 +71,7 @@ hubcap csscoverage | jq '[.[] | {url, total: (.text | length), used: ([.ranges[]
 Navigate and interact before measuring coverage:
 
 ```
-hubcap goto "https://example.com"
-hubcap hover ".dropdown-trigger"
-hubcap click "#tab-2"
-hubcap csscoverage > css-coverage.json
+hubcap goto --wait "https://example.com" && hubcap hover ".dropdown-trigger" && hubcap click "#tab-2" && hubcap csscoverage > css-coverage.json
 ```
 
 ## See also

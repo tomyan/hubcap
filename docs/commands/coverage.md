@@ -79,10 +79,7 @@ hubcap coverage | jq '[.[] | .functions[] | select(.ranges[0].count == 0) | .fun
 Interact with the page first, then measure coverage:
 
 ```
-hubcap goto "https://example.com"
-hubcap click "#menu-toggle"
-hubcap click "#submit"
-hubcap coverage | jq '[.[] | {url, unused: [.functions[] | select(.ranges[0].count == 0)] | length}]'
+hubcap goto --wait "https://example.com" && hubcap click "#menu-toggle" && hubcap click "#submit" && hubcap coverage | jq '[.[] | {url, unused: [.functions[] | select(.ranges[0].count == 0)] | length}]'
 ```
 
 ## See also
