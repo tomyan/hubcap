@@ -1,4 +1,4 @@
-module github.com/tomyan/cdp-cli
+module github.com/tomyan/hubcap
 
 go 1.25.5
 

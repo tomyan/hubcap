@@ -1,4 +1,4 @@
-package cdp_test
+package chrome_test
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomyan/cdp-cli/internal/cdp"
-	"github.com/tomyan/cdp-cli/internal/testutil"
+	"github.com/tomyan/hubcap/internal/chrome"
+	"github.com/tomyan/hubcap/internal/testutil"
 )
 
 // Test Chrome instance - each package gets its own
@@ -20,7 +20,7 @@ const testChromePort = 9300
 
 var (
 	chromeInstance *testutil.ChromeInstance
-	sharedClient   *cdp.Client
+	sharedClient   *chrome.Client
 	sharedClientMu sync.Mutex
 	clientInitErr  error
 )
@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 // getSharedClient returns a shared client for tests that don't modify browser state.
 // The client is lazily initialized on first use and reused across tests.
 // Tests that modify state should create their own client.
-func getSharedClient(t *testing.T) *cdp.Client {
+func getSharedClient(t *testing.T) *chrome.Client {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -71,7 +71,7 @@ func getSharedClient(t *testing.T) *cdp.Client {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		var err error
-		sharedClient, err = cdp.Connect(ctx, "localhost", testChromePort)
+		sharedClient, err = chrome.Connect(ctx, "localhost", testChromePort)
 		if err != nil {
 			clientInitErr = err
 			t.Fatalf("failed to connect shared client: %v", err)
@@ -84,7 +84,7 @@ func getSharedClient(t *testing.T) *cdp.Client {
 // createTestTab creates a new isolated tab for tests that modify state.
 // Returns the tab ID and a cleanup function that must be deferred.
 // This prevents tests from interfering with each other's page state.
-func createTestTab(t *testing.T, client *cdp.Client, ctx context.Context) (string, func()) {
+func createTestTab(t *testing.T, client *chrome.Client, ctx context.Context) (string, func()) {
 	t.Helper()
 
 	tabID, err := client.NewTab(ctx, "about:blank")
@@ -162,7 +162,7 @@ func TestClient_Connect_FailsWithBadPort(t *testing.T) {
 	defer cancel()
 
 	// Port 1 should fail to connect
-	_, err := cdp.Connect(ctx, "localhost", 1)
+	_, err := chrome.Connect(ctx, "localhost", 1)
 	if err == nil {
 		t.Error("expected connection to fail on port 1")
 	}
@@ -173,7 +173,7 @@ func TestClient_Connect_FailsWithBadHost(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := cdp.Connect(ctx, "nonexistent.invalid", testChromePort)
+	_, err := chrome.Connect(ctx, "nonexistent.invalid", testChromePort)
 	if err == nil {
 		t.Error("expected connection to fail with invalid host")
 	}
@@ -201,7 +201,7 @@ func TestClient_Call_ReturnsErrorOnClosed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestClient_Call_ReturnsErrorOnClosed(t *testing.T) {
 
 	// Try to call after close
 	_, err = client.Call(ctx, "Browser.getVersion", nil)
-	if !errors.Is(err, cdp.ErrConnectionClosed) {
+	if !errors.Is(err, chrome.ErrConnectionClosed) {
 		t.Errorf("expected ErrConnectionClosed, got %v", err)
 	}
 }
@@ -229,9 +229,9 @@ func TestClient_Call_InvalidMethod(t *testing.T) {
 		t.Error("expected error for invalid method")
 	}
 
-	// Should be a CDP error
-	if !errors.Is(err, cdp.ErrCDPError) {
-		t.Errorf("expected ErrCDPError, got %v", err)
+	// Should be a protocol error
+	if !errors.Is(err, chrome.ErrProtocolError) {
+		t.Errorf("expected ErrProtocolError, got %v", err)
 	}
 }
 
@@ -330,7 +330,7 @@ func TestClient_Navigate_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestClient_Navigate_InvalidURL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestNavigateResult_JSONSerializable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestClient_Screenshot_ReturnsPNG(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -452,7 +452,7 @@ func TestClient_Screenshot_ReturnsPNG(t *testing.T) {
 	defer client.CloseTab(ctx, tabID)
 	time.Sleep(200 * time.Millisecond)
 
-	data, err := client.Screenshot(ctx, tabID, cdp.ScreenshotOptions{
+	data, err := client.Screenshot(ctx, tabID, chrome.ScreenshotOptions{
 		Format: "png",
 	})
 	if err != nil {
@@ -479,7 +479,7 @@ func TestClient_Screenshot_ReturnsJPEG(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestClient_Screenshot_ReturnsJPEG(t *testing.T) {
 	defer client.CloseTab(ctx, tabID)
 	time.Sleep(200 * time.Millisecond)
 
-	data, err := client.Screenshot(ctx, tabID, cdp.ScreenshotOptions{
+	data, err := client.Screenshot(ctx, tabID, chrome.ScreenshotOptions{
 		Format:  "jpeg",
 		Quality: 80,
 	})
@@ -519,7 +519,7 @@ func TestClient_Eval_SimpleExpression(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -557,7 +557,7 @@ func TestClient_Eval_StringExpression(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -589,7 +589,7 @@ func TestClient_Eval_JSONSerializable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestClient_Eval_JSException(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -663,7 +663,7 @@ func TestClient_Query_FindsElement(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -700,7 +700,7 @@ func TestClient_Query_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -733,7 +733,7 @@ func TestClient_Query_JSONSerializable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -778,7 +778,7 @@ func TestClient_Click_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -817,7 +817,7 @@ func TestClient_Click_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -850,7 +850,7 @@ func TestClient_Fill_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -890,7 +890,7 @@ func TestClient_Fill_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -923,7 +923,7 @@ func TestClient_GetHTML_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -960,7 +960,7 @@ func TestClient_GetHTML_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -988,7 +988,7 @@ func TestClient_WaitFor_ImmediateMatch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1018,7 +1018,7 @@ func TestClient_WaitFor_DelayedAppear(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1058,7 +1058,7 @@ func TestClient_WaitFor_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1091,7 +1091,7 @@ func TestClient_GetText_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1125,7 +1125,7 @@ func TestClient_Type_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1181,7 +1181,7 @@ func TestClient_CaptureConsole_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1234,7 +1234,7 @@ func TestClient_GetCookies_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1268,7 +1268,7 @@ func TestClient_SetCookie_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1283,7 +1283,7 @@ func TestClient_SetCookie_Success(t *testing.T) {
 	time.Sleep(1 * time.Second) // Wait for page to fully load
 
 	// Set a cookie
-	err = client.SetCookie(ctx, tabID, cdp.Cookie{
+	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "test_cookie",
 		Value:  "test_value",
 		Domain: "example.com",
@@ -1319,7 +1319,7 @@ func TestClient_PrintToPDF_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1335,7 +1335,7 @@ func TestClient_PrintToPDF_Success(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Generate PDF
-	data, err := client.PrintToPDF(ctx, tabID, cdp.PDFOptions{})
+	data, err := client.PrintToPDF(ctx, tabID, chrome.PDFOptions{})
 	if err != nil {
 		t.Fatalf("failed to print to PDF: %v", err)
 	}
@@ -1360,7 +1360,7 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1375,7 +1375,7 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 	time.Sleep(1 * time.Second) // Wait for page to fully load
 
 	// Set a cookie first
-	err = client.SetCookie(ctx, tabID, cdp.Cookie{
+	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "delete_test",
 		Value:  "test_value",
 		Domain: "example.com",
@@ -1426,7 +1426,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1441,7 +1441,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Set some cookies
-	err = client.SetCookie(ctx, tabID, cdp.Cookie{
+	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "clear_test1",
 		Value:  "value1",
 		Domain: "example.com",
@@ -1449,7 +1449,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to set cookie 1: %v", err)
 	}
-	err = client.SetCookie(ctx, tabID, cdp.Cookie{
+	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "clear_test2",
 		Value:  "value2",
 		Domain: "example.com",
@@ -1483,7 +1483,7 @@ func TestClient_Focus_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1523,7 +1523,7 @@ func TestClient_CaptureNetwork_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1576,7 +1576,7 @@ func TestClient_PressKey_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1624,7 +1624,7 @@ func TestClient_Hover_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1664,7 +1664,7 @@ func TestClient_GetAttribute_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1713,7 +1713,7 @@ func TestClient_GetAttribute_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1742,7 +1742,7 @@ func TestClient_Reload_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1782,7 +1782,7 @@ func TestClient_GoBack_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -1887,7 +1887,7 @@ func TestClient_NewTab_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2002,7 +2002,7 @@ func TestClient_CountElements_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2035,7 +2035,7 @@ func TestClient_SetViewport_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2124,7 +2124,7 @@ func TestClient_RawCall_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2157,7 +2157,7 @@ func TestClient_RawCallSession_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2200,7 +2200,7 @@ func TestClient_Emulate_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2215,7 +2215,7 @@ func TestClient_Emulate_Success(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Emulate iPhone 12 - just verify the method succeeds
-	device := cdp.CommonDevices["iPhone 12"]
+	device := chrome.CommonDevices["iPhone 12"]
 	err = client.Emulate(ctx, tabID, device)
 	if err != nil {
 		t.Fatalf("failed to emulate: %v", err)
@@ -2223,7 +2223,7 @@ func TestClient_Emulate_Success(t *testing.T) {
 
 	// Note: In headless Chrome, the emulation may not affect window.innerWidth/Height
 	// because there's no actual display. The emulation affects how the page renders
-	// and what user-agent is reported. We just verify the CDP calls succeed.
+	// and what user-agent is reported. We just verify the protocol calls succeed.
 }
 
 func TestClient_EnableIntercept(t *testing.T) {
@@ -2234,7 +2234,7 @@ func TestClient_EnableIntercept(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2249,7 +2249,7 @@ func TestClient_EnableIntercept(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Enable interception
-	config := cdp.InterceptConfig{
+	config := chrome.InterceptConfig{
 		URLPattern:        "*",
 		InterceptResponse: true,
 		Replacements:      map[string]string{"test": "replaced"},
@@ -2278,7 +2278,7 @@ func TestClient_InterceptModifyResponse(t *testing.T) {
 	defer cleanup()
 
 	// Enable interception - replace "Example Domain" with "PATCHED CONTENT"
-	config := cdp.InterceptConfig{
+	config := chrome.InterceptConfig{
 		URLPattern:        "*",
 		InterceptResponse: true,
 		Replacements:      map[string]string{"Example Domain": "PATCHED CONTENT"},
@@ -2318,7 +2318,7 @@ func TestClient_BlockURLs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2353,7 +2353,7 @@ func TestClient_Exists_Found(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2386,7 +2386,7 @@ func TestClient_Exists_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2418,7 +2418,7 @@ func TestClient_WaitForNavigation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2467,14 +2467,14 @@ func TestClient_UploadFile(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
 	defer client.Close()
 
 	// Create a temp file to upload
-	tmpFile, err := os.CreateTemp("", "cdp-test-upload-*.txt")
+	tmpFile, err := os.CreateTemp("", "hubcap-test-upload-*.txt")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -2518,7 +2518,7 @@ func TestClient_GetValue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2551,7 +2551,7 @@ func TestClient_GetValue_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2580,7 +2580,7 @@ func TestClient_WaitForFunction_ImmediateTrue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2610,7 +2610,7 @@ func TestClient_WaitForFunction_DelayedTrue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2640,7 +2640,7 @@ func TestClient_WaitForFunction_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2673,7 +2673,7 @@ func TestClient_GetForms(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2732,7 +2732,7 @@ func TestClient_Highlight(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2768,7 +2768,7 @@ func TestClient_Highlight_NotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2797,7 +2797,7 @@ func TestClient_GetImages(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2839,7 +2839,7 @@ func TestClient_ScrollToBottomAndTop(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2893,7 +2893,7 @@ func TestClient_GetFrames(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2943,7 +2943,7 @@ func TestClient_EvalInFrame(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -2998,7 +2998,7 @@ func TestClient_WaitForGone_ImmediatelyGone(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -3027,7 +3027,7 @@ func TestClient_WaitForGone_DelayedRemoval(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
@@ -3060,7 +3060,7 @@ func TestClient_WaitForGone_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, "localhost", testChromePort)
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}

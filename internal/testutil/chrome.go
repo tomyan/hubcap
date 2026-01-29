@@ -1,4 +1,4 @@
-// Package testutil provides test utilities for CDP tests.
+// Package testutil provides test utilities for Chrome tests.
 package testutil
 
 import (
@@ -34,7 +34,7 @@ func StartChrome(port int) (*ChromeInstance, error) {
 	}
 
 	// Create temp directory for user data
-	dataDir, err := os.MkdirTemp("", "cdp-test-chrome-*")
+	dataDir, err := os.MkdirTemp("", "hubcap-test-chrome-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}

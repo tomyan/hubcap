@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomyan/cdp-cli/internal/cdp"
+	"github.com/tomyan/hubcap/internal/chrome"
 )
 
 // Exit codes
@@ -39,8 +39,8 @@ type Config struct {
 // DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:    getEnvInt("CDP_PORT", 9222),
-		Host:    getEnv("CDP_HOST", "localhost"),
+		Port:    getEnvInt("HUBCAP_PORT", 9222),
+		Host:    getEnv("HUBCAP_HOST", "localhost"),
 		Timeout: 10 * time.Second,
 		Output:  "json",
 		Quiet:   false,
@@ -71,10 +71,10 @@ func main() {
 
 func run(args []string, cfg *Config) int {
 	// Parse global flags
-	fs := flag.NewFlagSet("cdp", flag.ContinueOnError)
+	fs := flag.NewFlagSet("hubcap", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
-	fs.IntVar(&cfg.Port, "port", cfg.Port, "Chrome debug port (env: CDP_PORT)")
-	fs.StringVar(&cfg.Host, "host", cfg.Host, "Chrome debug host (env: CDP_HOST)")
+	fs.IntVar(&cfg.Port, "port", cfg.Port, "Chrome debug port (env: HUBCAP_PORT)")
+	fs.StringVar(&cfg.Host, "host", cfg.Host, "Chrome debug host (env: HUBCAP_HOST)")
 	fs.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Command timeout")
 	fs.StringVar(&cfg.Output, "output", cfg.Output, "Output format: json, ndjson, text")
 	fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "Suppress non-essential output")
@@ -89,7 +89,7 @@ func run(args []string, cfg *Config) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp [flags] <command>")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap [flags] <command>")
 		fmt.Fprintln(cfg.Stderr, "commands: version, tabs, goto, screenshot, eval, query, click, dblclick, rightclick, fill, clear, select, check, uncheck, html, wait, text, type, console, cookies, pdf, focus, network, press, hover, attr, reload, back, forward, title, url, new, close, scrollto, scroll, count, visible, bounds, viewport, waitload, storage, dialog, run, raw, upload, exists, waitnav, value, waitfn, forms, highlight, images, scrollbottom, scrolltop, frames, evalframe, waitgone, responsebody, listeners, csscoverage, domsnapshot, swipe, pinch, heapsnapshot, trace")
 		fmt.Fprintln(cfg.Stderr, "flags:")
 		fs.PrintDefaults()
@@ -105,7 +105,7 @@ func run(args []string, cfg *Config) int {
 		return cmdTabs(cfg)
 	case "goto":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp goto [--wait] <url>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap goto [--wait] <url>")
 			return ExitError
 		}
 		return cmdGoto(cfg, remaining[1:])
@@ -113,55 +113,55 @@ func run(args []string, cfg *Config) int {
 		return cmdScreenshot(cfg, remaining[1:])
 	case "eval":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp eval <expression>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap eval <expression>")
 			return ExitError
 		}
 		return cmdEval(cfg, remaining[1])
 	case "query":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp query <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap query <selector>")
 			return ExitError
 		}
 		return cmdQuery(cfg, remaining[1])
 	case "click":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp click <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap click <selector>")
 			return ExitError
 		}
 		return cmdClick(cfg, remaining[1])
 	case "clickat":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp clickat <x> <y>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap clickat <x> <y>")
 			return ExitError
 		}
 		return cmdClickAt(cfg, remaining[1], remaining[2])
 	case "fill":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp fill <selector> <text>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap fill <selector> <text>")
 			return ExitError
 		}
 		return cmdFill(cfg, remaining[1], remaining[2])
 	case "html":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp html <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap html <selector>")
 			return ExitError
 		}
 		return cmdHTML(cfg, remaining[1])
 	case "wait":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp wait <selector> [--timeout <duration>]")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap wait <selector> [--timeout <duration>]")
 			return ExitError
 		}
 		return cmdWait(cfg, remaining[1:])
 	case "text":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp text <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap text <selector>")
 			return ExitError
 		}
 		return cmdText(cfg, remaining[1])
 	case "type":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp type <text>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap type <text>")
 			return ExitError
 		}
 		return cmdType(cfg, remaining[1])
@@ -175,7 +175,7 @@ func run(args []string, cfg *Config) int {
 		return cmdPDF(cfg, remaining[1:])
 	case "focus":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp focus <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap focus <selector>")
 			return ExitError
 		}
 		return cmdFocus(cfg, remaining[1])
@@ -183,7 +183,7 @@ func run(args []string, cfg *Config) int {
 		return cmdNetwork(cfg, remaining[1:])
 	case "press":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp press <key>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap press <key>")
 			fmt.Fprintln(cfg.Stderr, "keys: Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown, Space")
 			fmt.Fprintln(cfg.Stderr, "modifiers: Ctrl+<key>, Alt+<key>, Shift+<key>, Meta+<key> (e.g., Ctrl+a, Ctrl+Shift+n)")
 			return ExitError
@@ -191,31 +191,31 @@ func run(args []string, cfg *Config) int {
 		return cmdPress(cfg, remaining[1])
 	case "hover":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp hover <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap hover <selector>")
 			return ExitError
 		}
 		return cmdHover(cfg, remaining[1])
 	case "tap":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp tap <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap tap <selector>")
 			return ExitError
 		}
 		return cmdTap(cfg, remaining[1])
 	case "drag":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp drag <source-selector> <dest-selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap drag <source-selector> <dest-selector>")
 			return ExitError
 		}
 		return cmdDrag(cfg, remaining[1], remaining[2])
 	case "waiturl":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp waiturl <pattern> [--timeout <duration>]")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap waiturl <pattern> [--timeout <duration>]")
 			return ExitError
 		}
 		return cmdWaitURL(cfg, remaining[1], remaining[2:])
 	case "shadow":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp shadow <host-selector> <inner-selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap shadow <host-selector> <inner-selector>")
 			return ExitError
 		}
 		return cmdShadow(cfg, remaining[1], remaining[2])
@@ -229,7 +229,7 @@ func run(args []string, cfg *Config) int {
 		return cmdInfo(cfg)
 	case "waittext":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp waittext <text> [--timeout <duration>]")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap waittext <text> [--timeout <duration>]")
 			return ExitError
 		}
 		return cmdWaitText(cfg, remaining[1], remaining[2:])
@@ -237,25 +237,25 @@ func run(args []string, cfg *Config) int {
 		return cmdScripts(cfg)
 	case "find":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp find <text>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap find <text>")
 			return ExitError
 		}
 		return cmdFind(cfg, remaining[1])
 	case "setvalue":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp setvalue <selector> <value>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap setvalue <selector> <value>")
 			return ExitError
 		}
 		return cmdSetValue(cfg, remaining[1], remaining[2])
 	case "mouse":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp mouse <x> <y>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap mouse <x> <y>")
 			return ExitError
 		}
 		return cmdMouse(cfg, remaining[1], remaining[2])
 	case "attr":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp attr <selector> <attribute>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap attr <selector> <attribute>")
 			return ExitError
 		}
 		return cmdAttr(cfg, remaining[1], remaining[2])
@@ -279,73 +279,73 @@ func run(args []string, cfg *Config) int {
 		return cmdClose(cfg)
 	case "dblclick":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp dblclick <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap dblclick <selector>")
 			return ExitError
 		}
 		return cmdDblClick(cfg, remaining[1])
 	case "rightclick":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp rightclick <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap rightclick <selector>")
 			return ExitError
 		}
 		return cmdRightClick(cfg, remaining[1])
 	case "clear":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp clear <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap clear <selector>")
 			return ExitError
 		}
 		return cmdClear(cfg, remaining[1])
 	case "select":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp select <selector> <value>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap select <selector> <value>")
 			return ExitError
 		}
 		return cmdSelect(cfg, remaining[1], remaining[2])
 	case "check":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp check <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap check <selector>")
 			return ExitError
 		}
 		return cmdCheck(cfg, remaining[1])
 	case "uncheck":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp uncheck <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap uncheck <selector>")
 			return ExitError
 		}
 		return cmdUncheck(cfg, remaining[1])
 	case "scrollto":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp scrollto <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap scrollto <selector>")
 			return ExitError
 		}
 		return cmdScrollTo(cfg, remaining[1])
 	case "scroll":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp scroll <x> <y>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap scroll <x> <y>")
 			return ExitError
 		}
 		return cmdScroll(cfg, remaining[1], remaining[2])
 	case "count":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp count <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap count <selector>")
 			return ExitError
 		}
 		return cmdCount(cfg, remaining[1])
 	case "visible":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp visible <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap visible <selector>")
 			return ExitError
 		}
 		return cmdVisible(cfg, remaining[1])
 	case "bounds":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp bounds <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap bounds <selector>")
 			return ExitError
 		}
 		return cmdBounds(cfg, remaining[1])
 	case "viewport":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp viewport <width> <height>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap viewport <width> <height>")
 			return ExitError
 		}
 		return cmdViewport(cfg, remaining[1], remaining[2])
@@ -359,7 +359,7 @@ func run(args []string, cfg *Config) int {
 		return cmdDialog(cfg, remaining[1:])
 	case "run":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp run <file.js>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap run <file.js>")
 			return ExitError
 		}
 		return cmdRun(cfg, remaining[1])
@@ -367,9 +367,9 @@ func run(args []string, cfg *Config) int {
 		return cmdRaw(cfg, remaining[1:])
 	case "emulate":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp emulate <device>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap emulate <device>")
 			fmt.Fprintln(cfg.Stderr, "\nAvailable devices:")
-			for name := range cdp.CommonDevices {
+			for name := range chrome.CommonDevices {
 				fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
 			}
 			return ExitError
@@ -377,19 +377,19 @@ func run(args []string, cfg *Config) int {
 		return cmdEmulate(cfg, remaining[1])
 	case "useragent":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp useragent <string>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap useragent <string>")
 			return ExitError
 		}
 		return cmdUserAgent(cfg, remaining[1])
 	case "geolocation":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp geolocation <latitude> <longitude>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap geolocation <latitude> <longitude>")
 			return ExitError
 		}
 		return cmdGeolocation(cfg, remaining[1], remaining[2])
 	case "offline":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp offline <true|false>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap offline <true|false>")
 			return ExitError
 		}
 		return cmdOffline(cfg, remaining[1])
@@ -399,7 +399,7 @@ func run(args []string, cfg *Config) int {
 		return cmdMedia(cfg, remaining[1:])
 	case "permission":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp permission <name> <granted|denied|prompt>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap permission <name> <granted|denied|prompt>")
 			fmt.Fprintln(cfg.Stderr, "\nPermission names: geolocation, notifications, camera, microphone, midi, push")
 			return ExitError
 		}
@@ -408,13 +408,13 @@ func run(args []string, cfg *Config) int {
 		return cmdClipboard(cfg, remaining[1:])
 	case "styles":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp styles <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap styles <selector>")
 			return ExitError
 		}
 		return cmdStyles(cfg, remaining[1])
 	case "layout":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp layout <selector> [--depth <n>]")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap layout <selector> [--depth <n>]")
 			return ExitError
 		}
 		return cmdLayout(cfg, remaining[1:])
@@ -438,13 +438,13 @@ func run(args []string, cfg *Config) int {
 		return cmdTables(cfg)
 	case "upload":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp upload <selector> <file>...")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap upload <selector> <file>...")
 			return ExitError
 		}
 		return cmdUpload(cfg, remaining[1], remaining[2:])
 	case "exists":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp exists <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap exists <selector>")
 			return ExitError
 		}
 		return cmdExists(cfg, remaining[1])
@@ -452,7 +452,7 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitNav(cfg, remaining[1:])
 	case "value":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp value <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap value <selector>")
 			return ExitError
 		}
 		return cmdValue(cfg, remaining[1])
@@ -462,7 +462,7 @@ func run(args []string, cfg *Config) int {
 		return cmdForms(cfg)
 	case "highlight":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp highlight <selector> [--hide]")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap highlight <selector> [--hide]")
 			return ExitError
 		}
 		return cmdHighlight(cfg, remaining[1:])
@@ -476,7 +476,7 @@ func run(args []string, cfg *Config) int {
 		return cmdFrames(cfg)
 	case "evalframe":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp evalframe <frame-id> <expression>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap evalframe <frame-id> <expression>")
 			return ExitError
 		}
 		return cmdEvalFrame(cfg, remaining[1], remaining[2])
@@ -488,19 +488,19 @@ func run(args []string, cfg *Config) int {
 		return cmdWaitResponse(cfg, remaining[1:])
 	case "computed":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp computed <selector> <property>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap computed <selector> <property>")
 			return ExitError
 		}
 		return cmdComputed(cfg, remaining[1], remaining[2])
 	case "tripleclick":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp tripleclick <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap tripleclick <selector>")
 			return ExitError
 		}
 		return cmdTripleClick(cfg, remaining[1])
 	case "dispatch":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp dispatch <selector> <eventType>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap dispatch <selector> <eventType>")
 			return ExitError
 		}
 		return cmdDispatch(cfg, remaining[1], remaining[2])
@@ -508,19 +508,19 @@ func run(args []string, cfg *Config) int {
 		return cmdSelection(cfg)
 	case "caret":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp caret <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap caret <selector>")
 			return ExitError
 		}
 		return cmdCaret(cfg, remaining[1])
 	case "responsebody":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp responsebody <requestId>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap responsebody <requestId>")
 			return ExitError
 		}
 		return cmdResponseBody(cfg, remaining[1])
 	case "listeners":
 		if len(remaining) < 2 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp listeners <selector>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap listeners <selector>")
 			return ExitError
 		}
 		return cmdListeners(cfg, remaining[1])
@@ -530,13 +530,13 @@ func run(args []string, cfg *Config) int {
 		return cmdDOMSnapshot(cfg)
 	case "swipe":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp swipe <selector> <left|right|up|down>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap swipe <selector> <left|right|up|down>")
 			return ExitError
 		}
 		return cmdSwipe(cfg, remaining[1], remaining[2])
 	case "pinch":
 		if len(remaining) < 3 {
-			fmt.Fprintln(cfg.Stderr, "usage: cdp pinch <selector> <in|out>")
+			fmt.Fprintln(cfg.Stderr, "usage: hubcap pinch <selector> <in|out>")
 			return ExitError
 		}
 		return cmdPinch(cfg, remaining[1], remaining[2])
@@ -554,7 +554,7 @@ func run(args []string, cfg *Config) int {
 // If cfg.Target is empty, returns the first page.
 // If cfg.Target is a number, uses it as an index into the pages list.
 // Otherwise, treats cfg.Target as a target ID.
-func resolveTarget(ctx context.Context, client *cdp.Client, cfg *Config) (*cdp.TargetInfo, error) {
+func resolveTarget(ctx context.Context, client *chrome.Client, cfg *Config) (*chrome.TargetInfo, error) {
 	pages, err := client.Pages(ctx)
 	if err != nil {
 		return nil, err
@@ -586,12 +586,12 @@ func resolveTarget(ctx context.Context, client *cdp.Client, cfg *Config) (*cdp.T
 	return nil, fmt.Errorf("invalid target: %s (not found)", cfg.Target)
 }
 
-// withClient executes a function with a connected CDP client.
-func withClient(cfg *Config, fn func(ctx context.Context, client *cdp.Client) (interface{}, error)) int {
+// withClient executes a function with a connected Chrome client.
+func withClient(cfg *Config, fn func(ctx context.Context, client *chrome.Client) (interface{}, error)) int {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -611,12 +611,12 @@ func withClient(cfg *Config, fn func(ctx context.Context, client *cdp.Client) (i
 	return outputResult(cfg, result)
 }
 
-// withClientTarget executes a function with a connected CDP client and resolved target.
-func withClientTarget(cfg *Config, fn func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error)) int {
+// withClientTarget executes a function with a connected Chrome client and resolved target.
+func withClientTarget(cfg *Config, fn func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error)) int {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -643,13 +643,13 @@ func withClientTarget(cfg *Config, fn func(ctx context.Context, client *cdp.Clie
 }
 
 func cmdVersion(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+	return withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
 		return client.Version(ctx)
 	})
 }
 
 func cmdTabs(cfg *Config) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+	return withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
 		return client.Pages(ctx)
 	})
 }
@@ -677,13 +677,13 @@ func cmdGoto(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp goto [--wait] <url>")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap goto [--wait] <url>")
 		return ExitError
 	}
 
 	url := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		if *wait {
 			result, err := client.NavigateAndWait(ctx, target.ID, url)
 			if err != nil {
@@ -705,7 +705,7 @@ type ElementScreenshotResult struct {
 	Format   string         `json:"format"`
 	Size     int            `json:"size"`
 	Selector string         `json:"selector,omitempty"`
-	Bounds   *cdp.BoundingBox `json:"bounds,omitempty"`
+	Bounds   *chrome.BoundingBox `json:"bounds,omitempty"`
 }
 
 // Base64ScreenshotResult is returned by the screenshot command with --base64.
@@ -733,19 +733,19 @@ func cmdScreenshot(cfg *Config, args []string) int {
 	}
 
 	if *output == "" && !*base64Flag {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>]")
-		fmt.Fprintln(cfg.Stderr, "       cdp screenshot --base64 [--format png|jpeg|webp] [--quality 0-100]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap screenshot --output <file> [--format png|jpeg|webp] [--quality 0-100] [--selector <css>]")
+		fmt.Fprintln(cfg.Stderr, "       hubcap screenshot --base64 [--format png|jpeg|webp] [--quality 0-100]")
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
-		opts := cdp.ScreenshotOptions{
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
+		opts := chrome.ScreenshotOptions{
 			Format:  *format,
 			Quality: *quality,
 		}
 
 		var data []byte
-		var bounds *cdp.BoundingBox
+		var bounds *chrome.BoundingBox
 		var err error
 
 		if *selector != "" {
@@ -782,7 +782,7 @@ func cmdScreenshot(cfg *Config, args []string) int {
 			}, nil
 		}
 
-		return cdp.ScreenshotResult{
+		return chrome.ScreenshotResult{
 			Format: *format,
 			Size:   len(data),
 		}, nil
@@ -790,13 +790,13 @@ func cmdScreenshot(cfg *Config, args []string) int {
 }
 
 func cmdEval(cfg *Config, expression string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.Eval(ctx, target.ID, expression)
 	})
 }
 
 func cmdQuery(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.Query(ctx, target.ID, selector)
 	})
 }
@@ -811,7 +811,7 @@ type ShadowResult struct {
 }
 
 func cmdShadow(cfg *Config, hostSelector, innerSelector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.QueryShadow(ctx, target.ID, hostSelector, innerSelector)
 		if err != nil {
 			return nil, err
@@ -833,7 +833,7 @@ type ClickResult struct {
 }
 
 func cmdClick(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Click(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -861,7 +861,7 @@ func cmdClickAt(cfg *Config, xStr, yStr string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.ClickAt(ctx, target.ID, x, y)
 		if err != nil {
 			return nil, err
@@ -878,7 +878,7 @@ type FillResult struct {
 }
 
 func cmdFill(cfg *Config, selector, text string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Fill(ctx, target.ID, selector, text)
 		if err != nil {
 			return nil, err
@@ -894,7 +894,7 @@ type HTMLResult struct {
 }
 
 func cmdHTML(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		html, err := client.GetHTML(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -916,7 +916,7 @@ type TextResult struct {
 }
 
 func cmdText(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		text, err := client.GetText(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -932,7 +932,7 @@ type TypeResult struct {
 }
 
 func cmdType(cfg *Config, text string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Type(ctx, target.ID, text)
 		if err != nil {
 			return nil, err
@@ -961,7 +961,7 @@ func cmdConsole(cfg *Config, args []string) int {
 		defer cancel()
 	}
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -1018,7 +1018,7 @@ func cmdErrors(cfg *Config, args []string) int {
 		defer cancel()
 	}
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -1075,7 +1075,7 @@ func cmdNetwork(cfg *Config, args []string) int {
 		defer cancel()
 	}
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -1125,25 +1125,25 @@ func cmdHar(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.CaptureHAR(ctx, target.ID, *duration)
 	})
 }
 
 func cmdCoverage(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetCoverage(ctx, target.ID)
 	})
 }
 
 func cmdStylesheets(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetStylesheets(ctx, target.ID)
 	})
 }
 
 func cmdInfo(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetPageInfo(ctx, target.ID)
 	})
 }
@@ -1167,7 +1167,7 @@ func cmdWaitText(cfg *Config, text string, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitForText(ctx, target.ID, text, *timeout)
 		if err != nil {
 			return nil, err
@@ -1177,19 +1177,19 @@ func cmdWaitText(cfg *Config, text string, args []string) int {
 }
 
 func cmdScripts(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetScripts(ctx, target.ID)
 	})
 }
 
 func cmdFind(cfg *Config, text string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.FindText(ctx, target.ID, text)
 	})
 }
 
 func cmdSetValue(cfg *Config, selector string, value string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.SetValue(ctx, target.ID, selector, value)
 	})
 }
@@ -1206,7 +1206,7 @@ func cmdMouse(cfg *Config, xStr, yStr string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.MouseMove(ctx, target.ID, x, y)
 	})
 }
@@ -1229,14 +1229,14 @@ func cmdCookies(cfg *Config, args []string) int {
 
 	if *setName != "" {
 		// Set mode
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			// Parse name=value
 			parts := splitCookieValue(*setName)
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid cookie format, use name=value")
 			}
 
-			cookie := cdp.Cookie{
+			cookie := chrome.Cookie{
 				Name:   parts[0],
 				Value:  parts[1],
 				Domain: *domain,
@@ -1258,7 +1258,7 @@ func cmdCookies(cfg *Config, args []string) int {
 
 	if *deleteName != "" {
 		// Delete mode
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.DeleteCookie(ctx, target.ID, *deleteName, *domain)
 			if err != nil {
 				return nil, err
@@ -1274,7 +1274,7 @@ func cmdCookies(cfg *Config, args []string) int {
 
 	if *clearAll {
 		// Clear all cookies mode
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.ClearCookies(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -1287,7 +1287,7 @@ func cmdCookies(cfg *Config, args []string) int {
 	}
 
 	// List mode (default)
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetCookies(ctx, target.ID)
 	})
 }
@@ -1322,12 +1322,12 @@ func cmdPDF(cfg *Config, args []string) int {
 	}
 
 	if *output == "" {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp pdf --output <file> [--landscape] [--background]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap pdf --output <file> [--landscape] [--background]")
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
-		data, err := client.PrintToPDF(ctx, target.ID, cdp.PDFOptions{
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
+		data, err := client.PrintToPDF(ctx, target.ID, chrome.PDFOptions{
 			Landscape:       *landscape,
 			PrintBackground: *background,
 		})
@@ -1354,7 +1354,7 @@ type FocusResult struct {
 }
 
 func cmdFocus(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Focus(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1370,9 +1370,9 @@ type PressResult struct {
 }
 
 func cmdPress(cfg *Config, key string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		// Parse modifier+key combinations like "Ctrl+A", "Shift+End", "Ctrl+Shift+N"
-		mods := cdp.KeyModifiers{}
+		mods := chrome.KeyModifiers{}
 		actualKey := key
 
 		parts := strings.Split(key, "+")
@@ -1407,7 +1407,7 @@ type HoverResult struct {
 }
 
 func cmdHover(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Hover(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1423,7 +1423,7 @@ type TapResult struct {
 }
 
 func cmdTap(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Tap(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1440,7 +1440,7 @@ type DragResult struct {
 }
 
 func cmdDrag(cfg *Config, source, dest string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Drag(ctx, target.ID, source, dest)
 		if err != nil {
 			return nil, err
@@ -1457,7 +1457,7 @@ type AttrResult struct {
 }
 
 func cmdAttr(cfg *Config, selector, attribute string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		value, err := client.GetAttribute(ctx, target.ID, selector, attribute)
 		if err != nil {
 			return nil, err
@@ -1485,7 +1485,7 @@ func cmdReload(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Reload(ctx, target.ID, *ignoreCache)
 		if err != nil {
 			return nil, err
@@ -1500,7 +1500,7 @@ type BackResult struct {
 }
 
 func cmdBack(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.GoBack(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -1515,7 +1515,7 @@ type ForwardResult struct {
 }
 
 func cmdForward(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.GoForward(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -1530,7 +1530,7 @@ type TitleResult struct {
 }
 
 func cmdTitle(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		title, err := client.GetTitle(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -1545,7 +1545,7 @@ type URLResult struct {
 }
 
 func cmdURL(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		url, err := client.GetURL(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -1561,7 +1561,7 @@ type NewTabResult struct {
 }
 
 func cmdNew(cfg *Config, url string) int {
-	return withClient(cfg, func(ctx context.Context, client *cdp.Client) (interface{}, error) {
+	return withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
 		targetID, err := client.NewTab(ctx, url)
 		if err != nil {
 			return nil, err
@@ -1580,7 +1580,7 @@ type CloseTabResult struct {
 }
 
 func cmdClose(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.CloseTab(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -1596,7 +1596,7 @@ type DblClickResult struct {
 }
 
 func cmdDblClick(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.DoubleClick(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1612,7 +1612,7 @@ type RightClickResult struct {
 }
 
 func cmdRightClick(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.RightClick(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1628,7 +1628,7 @@ type ClearResult struct {
 }
 
 func cmdClear(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Clear(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1645,7 +1645,7 @@ type SelectResult struct {
 }
 
 func cmdSelect(cfg *Config, selector, value string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SelectOption(ctx, target.ID, selector, value)
 		if err != nil {
 			return nil, err
@@ -1661,7 +1661,7 @@ type CheckResult struct {
 }
 
 func cmdCheck(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Check(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1677,7 +1677,7 @@ type UncheckResult struct {
 }
 
 func cmdUncheck(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Uncheck(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1693,7 +1693,7 @@ type ScrollToResult struct {
 }
 
 func cmdScrollTo(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.ScrollIntoView(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1721,7 +1721,7 @@ func cmdScroll(cfg *Config, xStr, yStr string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.ScrollBy(ctx, target.ID, x, y)
 		if err != nil {
 			return nil, err
@@ -1737,7 +1737,7 @@ type CountResult struct {
 }
 
 func cmdCount(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		count, err := client.CountElements(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1753,7 +1753,7 @@ type VisibleResult struct {
 }
 
 func cmdVisible(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		visible, err := client.IsVisible(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1763,7 +1763,7 @@ func cmdVisible(cfg *Config, selector string) int {
 }
 
 func cmdBounds(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		bounds, err := client.GetBoundingBox(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -1790,7 +1790,7 @@ func cmdViewport(cfg *Config, widthStr, heightStr string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetViewport(ctx, target.ID, width, height)
 		if err != nil {
 			return nil, err
@@ -1819,7 +1819,7 @@ func cmdWaitLoad(cfg *Config, args []string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -1877,7 +1877,7 @@ func cmdStorage(cfg *Config, args []string) int {
 	remaining := fs.Args()
 
 	if *clear {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.ClearLocalStorage(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -1887,7 +1887,7 @@ func cmdStorage(cfg *Config, args []string) int {
 	}
 
 	if len(remaining) == 0 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp storage <key> [value] | --clear")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap storage <key> [value] | --clear")
 		return ExitError
 	}
 
@@ -1895,7 +1895,7 @@ func cmdStorage(cfg *Config, args []string) int {
 
 	if len(remaining) == 1 {
 		// Get
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			value, err := client.GetLocalStorage(ctx, target.ID, key)
 			if err != nil {
 				return nil, err
@@ -1906,7 +1906,7 @@ func cmdStorage(cfg *Config, args []string) int {
 
 	// Set
 	value := remaining[1]
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetLocalStorage(ctx, target.ID, key, value)
 		if err != nil {
 			return nil, err
@@ -1930,7 +1930,7 @@ func cmdSession(cfg *Config, args []string) int {
 	remaining := fs.Args()
 
 	if *clear {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.ClearSessionStorage(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -1940,7 +1940,7 @@ func cmdSession(cfg *Config, args []string) int {
 	}
 
 	if len(remaining) == 0 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp session <key> [value] | --clear")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap session <key> [value] | --clear")
 		return ExitError
 	}
 
@@ -1948,7 +1948,7 @@ func cmdSession(cfg *Config, args []string) int {
 
 	if len(remaining) == 1 {
 		// Get
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			value, err := client.GetSessionStorage(ctx, target.ID, key)
 			if err != nil {
 				return nil, err
@@ -1959,7 +1959,7 @@ func cmdSession(cfg *Config, args []string) int {
 
 	// Set
 	value := remaining[1]
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetSessionStorage(ctx, target.ID, key, value)
 		if err != nil {
 			return nil, err
@@ -1988,7 +1988,7 @@ func cmdDialog(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) == 0 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp dialog [accept|dismiss] [--text <prompt-text>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap dialog [accept|dismiss] [--text <prompt-text>]")
 		return ExitError
 	}
 
@@ -1998,7 +1998,7 @@ func cmdDialog(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.HandleDialog(ctx, target.ID, action, *promptText)
 		if err != nil {
 			return nil, err
@@ -2020,7 +2020,7 @@ func cmdRun(cfg *Config, file string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.ExecuteScriptFile(ctx, target.ID, string(content))
 		if err != nil {
 			return nil, err
@@ -2068,7 +2068,7 @@ type MetricsResult struct {
 }
 
 type A11yResult struct {
-	Nodes []cdp.AccessibilityNode `json:"nodes"`
+	Nodes []chrome.AccessibilityNode `json:"nodes"`
 }
 
 type SourceResult struct {
@@ -2120,7 +2120,7 @@ type StylesResult struct {
 }
 
 func cmdStyles(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		styles, err := client.GetComputedStyles(ctx, target.ID, selector, nil)
 		if err != nil {
 			return nil, err
@@ -2143,13 +2143,13 @@ func cmdLayout(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp layout <selector> [--depth <n>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap layout <selector> [--depth <n>]")
 		return ExitError
 	}
 
 	selector := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		layout, err := client.GetElementLayout(ctx, target.ID, selector, *depth)
 		if err != nil {
 			return nil, err
@@ -2175,7 +2175,7 @@ func cmdIntercept(cfg *Config, args []string) int {
 
 	// Disable interception
 	if *disable {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.DisableIntercept(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -2195,8 +2195,8 @@ func cmdIntercept(cfg *Config, args []string) int {
 		replacements[parts[0]] = parts[1]
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
-		config := cdp.InterceptConfig{
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
+		config := chrome.InterceptConfig{
 			URLPattern:        *pattern,
 			InterceptResponse: *response,
 			Replacements:      replacements,
@@ -2215,7 +2215,7 @@ func cmdIntercept(cfg *Config, args []string) int {
 }
 
 func cmdMetrics(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		metrics, err := client.GetPerformanceMetrics(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -2225,7 +2225,7 @@ func cmdMetrics(cfg *Config) int {
 }
 
 func cmdA11y(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		nodes, err := client.GetAccessibilityTree(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -2235,7 +2235,7 @@ func cmdA11y(cfg *Config) int {
 }
 
 func cmdSource(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		html, err := client.GetPageSource(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -2256,7 +2256,7 @@ func cmdWaitIdle(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitForNetworkIdle(ctx, target.ID, *idleTime)
 		if err != nil {
 			return nil, err
@@ -2266,7 +2266,7 @@ func cmdWaitIdle(cfg *Config, args []string) int {
 }
 
 func cmdLinks(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.Eval(ctx, target.ID, `
 			Array.from(document.querySelectorAll('a[href]')).map(a => ({
 				href: a.href,
@@ -2296,7 +2296,7 @@ func cmdLinks(cfg *Config) int {
 }
 
 func cmdMeta(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.Eval(ctx, target.ID, `
 			Array.from(document.querySelectorAll('meta')).map(m => ({
 				name: m.getAttribute('name') || '',
@@ -2332,7 +2332,7 @@ func cmdMeta(cfg *Config) int {
 }
 
 func cmdTables(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.Eval(ctx, target.ID, `
 			Array.from(document.querySelectorAll('table')).map(table => {
 				const headers = Array.from(table.querySelectorAll('thead th, thead td, tr:first-child th')).map(th => th.textContent.trim());
@@ -2407,7 +2407,7 @@ func cmdBlock(cfg *Config, args []string) int {
 
 	// Disable blocking
 	if *disable {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.UnblockURLs(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -2419,11 +2419,11 @@ func cmdBlock(cfg *Config, args []string) int {
 	// Get URL patterns from remaining args
 	patterns := fs.Args()
 	if len(patterns) == 0 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp block <pattern>... [--disable]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap block <pattern>... [--disable]")
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.BlockURLs(ctx, target.ID, patterns)
 		if err != nil {
 			return nil, err
@@ -2442,7 +2442,7 @@ func cmdOffline(cfg *Config, offlineStr string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetOfflineMode(ctx, target.ID, offline)
 		if err != nil {
 			return nil, err
@@ -2477,7 +2477,7 @@ func cmdThrottle(cfg *Config, args []string) int {
 	remaining := fs.Args()
 
 	if *disable {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.DisableNetworkThrottling(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -2487,26 +2487,26 @@ func cmdThrottle(cfg *Config, args []string) int {
 	}
 
 	if len(remaining) == 0 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp throttle <preset> | --disable")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap throttle <preset> | --disable")
 		fmt.Fprintln(cfg.Stderr, "\nAvailable presets:")
-		for name := range cdp.NetworkPresets {
+		for name := range chrome.NetworkPresets {
 			fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
 		}
 		return ExitError
 	}
 
 	preset := remaining[0]
-	conditions, ok := cdp.NetworkPresets[preset]
+	conditions, ok := chrome.NetworkPresets[preset]
 	if !ok {
 		fmt.Fprintf(cfg.Stderr, "error: unknown preset %q\n", preset)
 		fmt.Fprintln(cfg.Stderr, "\nAvailable presets:")
-		for name := range cdp.NetworkPresets {
+		for name := range chrome.NetworkPresets {
 			fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
 		}
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.EmulateNetworkConditions(ctx, target.ID, conditions)
 		if err != nil {
 			return nil, err
@@ -2537,17 +2537,17 @@ func cmdMedia(cfg *Config, args []string) int {
 	}
 
 	if *colorScheme == "" && *reducedMotion == "" && *forcedColors == "" {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp media [--color-scheme <light|dark>] [--reduced-motion <reduce|no-preference>] [--forced-colors <active|none>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap media [--color-scheme <light|dark>] [--reduced-motion <reduce|no-preference>] [--forced-colors <active|none>]")
 		return ExitError
 	}
 
-	features := cdp.MediaFeatures{
+	features := chrome.MediaFeatures{
 		ColorScheme:   *colorScheme,
 		ReducedMotion: *reducedMotion,
 		ForcedColors:  *forcedColors,
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetEmulatedMedia(ctx, target.ID, features)
 		if err != nil {
 			return nil, err
@@ -2574,7 +2574,7 @@ func cmdPermission(cfg *Config, permission, state string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetPermission(ctx, target.ID, permission, state)
 		if err != nil {
 			return nil, err
@@ -2608,12 +2608,12 @@ func cmdClipboard(cfg *Config, args []string) int {
 	}
 
 	if *write == "" && !*read {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp clipboard --write <text> | --read")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap clipboard --write <text> | --read")
 		return ExitError
 	}
 
 	if *write != "" {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.WriteClipboard(ctx, target.ID, *write)
 			if err != nil {
 				return nil, err
@@ -2623,7 +2623,7 @@ func cmdClipboard(cfg *Config, args []string) int {
 	}
 
 	// Read
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		text, err := client.ReadClipboard(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -2644,7 +2644,7 @@ func cmdGeolocation(cfg *Config, latStr, lonStr string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetGeolocation(ctx, target.ID, lat, lon, 1.0) // accuracy of 1 meter
 		if err != nil {
 			return nil, err
@@ -2654,7 +2654,7 @@ func cmdGeolocation(cfg *Config, latStr, lonStr string) int {
 }
 
 func cmdUserAgent(cfg *Config, userAgent string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.SetUserAgent(ctx, target.ID, userAgent)
 		if err != nil {
 			return nil, err
@@ -2664,17 +2664,17 @@ func cmdUserAgent(cfg *Config, userAgent string) int {
 }
 
 func cmdEmulate(cfg *Config, deviceName string) int {
-	device, ok := cdp.CommonDevices[deviceName]
+	device, ok := chrome.CommonDevices[deviceName]
 	if !ok {
 		fmt.Fprintf(cfg.Stderr, "error: unknown device: %s\n", deviceName)
 		fmt.Fprintln(cfg.Stderr, "\nAvailable devices:")
-		for name := range cdp.CommonDevices {
+		for name := range chrome.CommonDevices {
 			fmt.Fprintf(cfg.Stderr, "  - %s\n", name)
 		}
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Emulate(ctx, target.ID, device)
 		if err != nil {
 			return nil, err
@@ -2703,13 +2703,13 @@ func cmdRaw(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) == 0 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp raw [--browser] <method> [params-json]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap raw [--browser] <method> [params-json]")
 		fmt.Fprintln(cfg.Stderr, "")
 		fmt.Fprintln(cfg.Stderr, "examples:")
-		fmt.Fprintln(cfg.Stderr, "  cdp raw Page.navigate '{\"url\":\"https://example.com\"}'")
-		fmt.Fprintln(cfg.Stderr, "  cdp raw Runtime.evaluate '{\"expression\":\"1+1\"}'")
-		fmt.Fprintln(cfg.Stderr, "  cdp raw --browser Target.getTargets")
-		fmt.Fprintln(cfg.Stderr, "  cdp raw DOM.getDocument")
+		fmt.Fprintln(cfg.Stderr, "  hubcap raw Page.navigate '{\"url\":\"https://example.com\"}'")
+		fmt.Fprintln(cfg.Stderr, "  hubcap raw Runtime.evaluate '{\"expression\":\"1+1\"}'")
+		fmt.Fprintln(cfg.Stderr, "  hubcap raw --browser Target.getTargets")
+		fmt.Fprintln(cfg.Stderr, "  hubcap raw DOM.getDocument")
 		return ExitError
 	}
 
@@ -2722,7 +2722,7 @@ func cmdRaw(cfg *Config, args []string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	client, err := cdp.Connect(ctx, cfg.Host, cfg.Port)
+	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
 		return ExitConnFailed
@@ -2778,12 +2778,12 @@ func cmdWait(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp wait <selector> [--timeout <duration>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap wait <selector> [--timeout <duration>]")
 		return ExitError
 	}
 	selector := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitFor(ctx, target.ID, selector, *timeout)
 		if err != nil {
 			return nil, err
@@ -2829,7 +2829,7 @@ type UploadResult struct {
 }
 
 func cmdUpload(cfg *Config, selector string, files []string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.UploadFile(ctx, target.ID, selector, files)
 		if err != nil {
 			return nil, err
@@ -2845,7 +2845,7 @@ type ExistsResult struct {
 }
 
 func cmdExists(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		exists, err := client.Exists(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -2872,7 +2872,7 @@ func cmdWaitNav(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitForNavigation(ctx, target.ID, *timeout)
 		if err != nil {
 			return nil, err
@@ -2900,7 +2900,7 @@ func cmdWaitURL(cfg *Config, pattern string, args []string) int {
 		return ExitError
 	}
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		url, err := client.WaitForURL(ctx, target.ID, pattern, *timeout)
 		if err != nil {
 			return nil, err
@@ -2916,7 +2916,7 @@ type ValueResult struct {
 }
 
 func cmdValue(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		value, err := client.GetValue(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -2946,12 +2946,12 @@ func cmdWaitFn(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp waitfn <expression> [--timeout <duration>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap waitfn <expression> [--timeout <duration>]")
 		return ExitError
 	}
 	expression := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitForFunction(ctx, target.ID, expression, *timeout)
 		if err != nil {
 			return nil, err
@@ -2962,12 +2962,12 @@ func cmdWaitFn(cfg *Config, args []string) int {
 
 // FormsResult is returned by the forms command.
 type FormsResult struct {
-	Forms []cdp.FormInfo `json:"forms"`
+	Forms []chrome.FormInfo `json:"forms"`
 	Count int            `json:"count"`
 }
 
 func cmdForms(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		forms, err := client.GetForms(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -2996,7 +2996,7 @@ func cmdHighlight(cfg *Config, args []string) int {
 	}
 
 	if *hide {
-		return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 			err := client.HideHighlight(ctx, target.ID)
 			if err != nil {
 				return nil, err
@@ -3007,12 +3007,12 @@ func cmdHighlight(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp highlight <selector> [--hide]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap highlight <selector> [--hide]")
 		return ExitError
 	}
 	selector := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.Highlight(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -3023,12 +3023,12 @@ func cmdHighlight(cfg *Config, args []string) int {
 
 // ImagesResult is returned by the images command.
 type ImagesResult struct {
-	Images []cdp.ImageInfo `json:"images"`
+	Images []chrome.ImageInfo `json:"images"`
 	Count  int             `json:"count"`
 }
 
 func cmdImages(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		images, err := client.GetImages(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -3043,7 +3043,7 @@ type ScrollBottomResult struct {
 }
 
 func cmdScrollBottom(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.ScrollToBottom(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -3058,7 +3058,7 @@ type ScrollTopResult struct {
 }
 
 func cmdScrollTop(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.ScrollToTop(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -3069,12 +3069,12 @@ func cmdScrollTop(cfg *Config) int {
 
 // FramesResult is returned by the frames command.
 type FramesResult struct {
-	Frames []cdp.FrameInfo `json:"frames"`
+	Frames []chrome.FrameInfo `json:"frames"`
 	Count  int             `json:"count"`
 }
 
 func cmdFrames(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		frames, err := client.GetFrames(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -3091,7 +3091,7 @@ type EvalFrameResult struct {
 }
 
 func cmdEvalFrame(cfg *Config, frameID, expression string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.EvalInFrame(ctx, target.ID, frameID, expression)
 		if err != nil {
 			return nil, err
@@ -3120,12 +3120,12 @@ func cmdWaitGone(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp waitgone <selector> [--timeout <duration>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap waitgone <selector> [--timeout <duration>]")
 		return ExitError
 	}
 	selector := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitForGone(ctx, target.ID, selector, *timeout)
 		if err != nil {
 			return nil, err
@@ -3148,12 +3148,12 @@ func cmdWaitRequest(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp waitrequest <pattern> [--timeout <duration>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap waitrequest <pattern> [--timeout <duration>]")
 		return ExitError
 	}
 	pattern := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.WaitForRequest(ctx, target.ID, pattern, *timeout)
 		if err != nil {
 			return nil, err
@@ -3176,12 +3176,12 @@ func cmdWaitResponse(cfg *Config, args []string) int {
 
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp waitresponse <pattern> [--timeout <duration>]")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap waitresponse <pattern> [--timeout <duration>]")
 		return ExitError
 	}
 	pattern := remaining[0]
 
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.WaitForResponse(ctx, target.ID, pattern, *timeout)
 		if err != nil {
 			return nil, err
@@ -3191,7 +3191,7 @@ func cmdWaitResponse(cfg *Config, args []string) int {
 }
 
 func cmdComputed(cfg *Config, selector, property string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.GetComputedStyle(ctx, target.ID, selector, property)
 		if err != nil {
 			return nil, err
@@ -3206,7 +3206,7 @@ type TripleClickResult struct {
 }
 
 func cmdTripleClick(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.TripleClick(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -3216,7 +3216,7 @@ func cmdTripleClick(cfg *Config, selector string) int {
 }
 
 func cmdDispatch(cfg *Config, selector, eventType string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.DispatchEvent(ctx, target.ID, selector, eventType)
 		if err != nil {
 			return nil, err
@@ -3226,7 +3226,7 @@ func cmdDispatch(cfg *Config, selector, eventType string) int {
 }
 
 func cmdSelection(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.GetSelection(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -3236,7 +3236,7 @@ func cmdSelection(cfg *Config) int {
 }
 
 func cmdCaret(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		result, err := client.GetCaretPosition(ctx, target.ID, selector)
 		if err != nil {
 			return nil, err
@@ -3246,25 +3246,25 @@ func cmdCaret(cfg *Config, selector string) int {
 }
 
 func cmdResponseBody(cfg *Config, requestID string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetResponseBody(ctx, target.ID, requestID)
 	})
 }
 
 func cmdListeners(cfg *Config, selector string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetEventListeners(ctx, target.ID, selector)
 	})
 }
 
 func cmdCSSCoverage(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetCSSCoverage(ctx, target.ID)
 	})
 }
 
 func cmdDOMSnapshot(cfg *Config) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.GetDOMSnapshot(ctx, target.ID)
 	})
 }
@@ -3277,13 +3277,13 @@ type SwipeCLIResult struct {
 }
 
 func cmdSwipe(cfg *Config, selector, direction string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.Swipe(ctx, target.ID, selector, direction)
 	})
 }
 
 func cmdPinch(cfg *Config, selector, direction string) int {
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		return client.Pinch(ctx, target.ID, selector, direction)
 	})
 }
@@ -3307,12 +3307,12 @@ func cmdHeapSnapshot(cfg *Config, args []string) int {
 	}
 
 	if *output == "" {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp heapsnapshot --output <file>")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap heapsnapshot --output <file>")
 		return ExitError
 	}
 
 	outputFile := *output
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		data, err := client.TakeHeapSnapshot(ctx, target.ID)
 		if err != nil {
 			return nil, err
@@ -3349,13 +3349,13 @@ func cmdTrace(cfg *Config, args []string) int {
 	}
 
 	if *output == "" {
-		fmt.Fprintln(cfg.Stderr, "usage: cdp trace --duration <d> --output <file>")
+		fmt.Fprintln(cfg.Stderr, "usage: hubcap trace --duration <d> --output <file>")
 		return ExitError
 	}
 
 	outputFile := *output
 	traceDuration := *duration
-	return withClientTarget(cfg, func(ctx context.Context, client *cdp.Client, target *cdp.TargetInfo) (interface{}, error) {
+	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		data, err := client.CaptureTrace(ctx, target.ID, traceDuration)
 		if err != nil {
 			return nil, err

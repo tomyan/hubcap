@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomyan/cdp-cli/internal/testutil"
+	"github.com/tomyan/hubcap/internal/testutil"
 )
 
 // Test Chrome instance - each package gets its own
@@ -2519,7 +2519,7 @@ func TestRun_Upload_Success(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a temp file to upload
-	tmpFile, err := os.CreateTemp("", "cdp-test-upload-*.txt")
+	tmpFile, err := os.CreateTemp("", "hubcap-test-upload-*.txt")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -5239,7 +5239,7 @@ func TestRun_ResponseBody_Success(t *testing.T) {
 
 	// Use a waitresponse to capture a requestId by navigating
 	// Alternative approach: just navigate and use the main document's request
-	// Let's use the raw CDP command to get requestId
+	// Let's use the raw protocol command to get requestId
 	cfg = testConfig()
 	code = run([]string{"--target", tabID, "eval", `
 		// Navigate to get a fresh request
@@ -5266,7 +5266,7 @@ func TestRun_ResponseBody_Success(t *testing.T) {
 		t.Fatalf("failed to navigate: %s", stderr)
 	}
 
-	// Use a raw CDP call to get the requestId from the network log
+	// Use a raw protocol call to get the requestId from the network log
 	cfg = testConfig()
 	code = run([]string{"--target", tabID, "eval", `
 		(async function() {

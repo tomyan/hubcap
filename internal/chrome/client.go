@@ -1,4 +1,4 @@
-package cdp
+package chrome
 
 import (
 	"context"
@@ -18,21 +18,21 @@ import (
 // Errors
 var (
 	ErrConnectionClosed = errors.New("connection closed")
-	ErrCDPError         = errors.New("CDP error")
+	ErrProtocolError         = errors.New("protocol error")
 )
 
-// CDPError represents an error returned by Chrome DevTools Protocol.
-type CDPError struct {
+// ProtocolError represents an error returned by the Chrome DevTools Protocol.
+type ProtocolError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-func (e *CDPError) Error() string {
-	return fmt.Sprintf("CDP error %d: %s", e.Code, e.Message)
+func (e *ProtocolError) Error() string {
+	return fmt.Sprintf("protocol error %d: %s", e.Code, e.Message)
 }
 
-func (e *CDPError) Unwrap() error {
-	return ErrCDPError
+func (e *ProtocolError) Unwrap() error {
+	return ErrProtocolError
 }
 
 // VersionInfo contains browser version information.
@@ -146,7 +146,7 @@ type Client struct {
 
 type callResult struct {
 	Result json.RawMessage
-	Error  *CDPError
+	Error  *ProtocolError
 }
 
 // Connect establishes a connection to Chrome at the given host and port.
@@ -723,7 +723,7 @@ func (c *Client) Query(ctx context.Context, targetID string, selector string) (*
 		return nil, fmt.Errorf("parsing describe response: %w", err)
 	}
 
-	// Parse attributes (CDP returns flat array: [name, value, name, value, ...])
+	// Parse attributes (Chrome returns flat array: [name, value, name, value, ...])
 	attrs := make(map[string]string)
 	for i := 0; i+1 < len(descResp.Node.Attributes); i += 2 {
 		attrs[descResp.Node.Attributes[i]] = descResp.Node.Attributes[i+1]
@@ -1623,7 +1623,7 @@ type KeyModifiers struct {
 	Meta  bool
 }
 
-// modifierBitmask returns the CDP modifier bitmask.
+// modifierBitmask returns the protocol modifier bitmask.
 func (m KeyModifiers) modifierBitmask() int {
 	mask := 0
 	if m.Shift {
@@ -2164,7 +2164,7 @@ done:
 	// Build HAR log
 	har := &HARLog{}
 	har.Log.Version = "1.2"
-	har.Log.Creator = HARCreator{Name: "cdp-cli", Version: "1.0"}
+	har.Log.Creator = HARCreator{Name: "hubcap", Version: "1.0"}
 	har.Log.Entries = make([]HAREntry, 0)
 
 	for requestID, req := range requests {
@@ -3452,7 +3452,7 @@ func (c *Client) ExecuteScriptFile(ctx context.Context, targetID string, content
 	return c.Eval(ctx, targetID, content)
 }
 
-// RawCall sends a raw CDP command at the browser level.
+// RawCall sends a raw protocol command at the browser level.
 // Returns the raw JSON response.
 func (c *Client) RawCall(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 	var p interface{}
@@ -3464,7 +3464,7 @@ func (c *Client) RawCall(ctx context.Context, method string, params json.RawMess
 	return c.Call(ctx, method, p)
 }
 
-// RawCallSession sends a raw CDP command to a specific target/session.
+// RawCallSession sends a raw protocol command to a specific target/session.
 // Returns the raw JSON response.
 func (c *Client) RawCallSession(ctx context.Context, targetID string, method string, params json.RawMessage) (json.RawMessage, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)
@@ -4118,7 +4118,7 @@ func (c *Client) PrintToPDF(ctx context.Context, targetID string, opts PDFOption
 	return data, nil
 }
 
-// CallSession sends a CDP command to a specific session.
+// CallSession sends a protocol command to a specific session.
 func (c *Client) CallSession(ctx context.Context, sessionID string, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {
 		return nil, ErrConnectionClosed
@@ -4193,13 +4193,13 @@ type cdpRequest struct {
 type cdpResponse struct {
 	ID        int64           `json:"id"`
 	Result    json.RawMessage `json:"result,omitempty"`
-	Error     *CDPError       `json:"error,omitempty"`
+	Error     *ProtocolError       `json:"error,omitempty"`
 	Method    string          `json:"method,omitempty"`    // For events
 	Params    json.RawMessage `json:"params,omitempty"`    // For events
 	SessionID string          `json:"sessionId,omitempty"` // For session events
 }
 
-// Call sends a CDP command and waits for the response.
+// Call sends a protocol command and waits for the response.
 func (c *Client) Call(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
 	if c.closed.Load() {
 		return nil, ErrConnectionClosed
@@ -4295,7 +4295,7 @@ func (c *Client) readMessages() {
 	}
 }
 
-// subscribeEvent registers a handler for CDP events.
+// subscribeEvent registers a handler for protocol events.
 func (c *Client) subscribeEvent(sessionID, method string) chan json.RawMessage {
 	ch := make(chan json.RawMessage, 100)
 	key := sessionID + ":" + method
@@ -4483,7 +4483,7 @@ func (c *Client) DisableIntercept(ctx context.Context, targetID string) error {
 }
 
 // BlockURLs blocks network requests matching the specified URL patterns.
-// Uses the Network.setBlockedURLs CDP method.
+// Uses the Network.setBlockedURLs protocol method.
 func (c *Client) BlockURLs(ctx context.Context, targetID string, patterns []string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
 	if err != nil {
