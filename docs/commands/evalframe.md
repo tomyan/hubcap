@@ -39,7 +39,8 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| JavaScript evaluation error | 1 | `error: JS exception: <message>` |
+| Invalid frame ID | 1 | `error: creating isolated world: ...` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 

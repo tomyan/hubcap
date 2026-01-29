@@ -60,7 +60,7 @@ A single HAR format JSON object written to stdout conforming to the HTTP Archive
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Duration parse failure | 1 | `error: invalid duration "<value>"` |
 | Timeout exceeded | 3 | `error: timeout` |
 
@@ -87,7 +87,7 @@ hubcap har --duration 10s | jq '.log.entries | length'
 Navigate to a page and capture the resulting network activity:
 
 ```bash
-hubcap navigate "https://example.com" && hubcap har --duration 10s > page-load.har
+hubcap goto "https://example.com" && hubcap har --duration 10s > page-load.har
 ```
 
 ## See also

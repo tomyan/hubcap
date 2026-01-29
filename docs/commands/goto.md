@@ -55,9 +55,8 @@ With `--wait`:
 
 | Condition            | Exit code | Stderr                         |
 |----------------------|-----------|--------------------------------|
-| Missing URL argument | 1         | `error: url argument required` |
-| Chrome not connected | 2         | `error: chrome not connected`  |
-| Navigation timeout   | 3         | `error: navigation timeout`    |
+| Chrome not connected | 2         | `error: connecting to Chrome: ...` |
+| Timeout              | 3         | `error: timeout`                   |
 
 ## Examples
 

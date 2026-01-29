@@ -49,7 +49,7 @@ When hiding:
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Element not found | 1 | `error: element not found: <sel>` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 
@@ -64,7 +64,7 @@ hubcap highlight '.sidebar'
 Highlight an element, take a screenshot, then remove the highlight:
 
 ```
-hubcap highlight '.sidebar' && hubcap screenshot --path debug.png && hubcap highlight '.sidebar' --hide
+hubcap highlight '.sidebar' && hubcap screenshot --output debug.png && hubcap highlight '.sidebar' --hide
 ```
 
 ## See also

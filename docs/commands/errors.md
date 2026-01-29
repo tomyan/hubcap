@@ -26,19 +26,21 @@ NDJSON stream written to stdout. Each line is a JSON object representing a JavaS
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `message` | string | Exception message |
-| `stackTrace` | string | Full stack trace |
+| `text` | string | Exception text |
+| `lineNumber` | number | Line number of the exception |
+| `columnNumber` | number | Column number of the exception |
+| `url` | string | URL where the exception occurred |
 
 ```json
-{"message":"TypeError: Cannot read properties of undefined (reading 'map')","stackTrace":"TypeError: Cannot read properties of undefined (reading 'map')\n    at render (app.js:42:15)\n    at update (app.js:30:5)"}
+{"text":"TypeError: Cannot read properties of undefined (reading 'map')","lineNumber":42,"columnNumber":15,"url":"https://example.com/app.js"}
 ```
 
 ## Errors
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
-| Duration parse failure | 1 | `error: invalid duration "<value>"` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 
@@ -63,7 +65,7 @@ hubcap errors --duration 60s | jq -r '.message' | sort | uniq -c | sort -rn
 Navigate to a page and check for errors:
 
 ```bash
-hubcap navigate "https://example.com" && hubcap errors --duration 5s | jq -r '"[\(.message)]\n\(.stackTrace)\n"'
+hubcap goto --wait "https://example.com" && hubcap errors --duration 5s | jq -r '"[\(.text)]\n\(.url):\(.lineNumber)\n"'
 ```
 
 ## See also

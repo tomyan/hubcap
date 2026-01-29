@@ -40,9 +40,9 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Unknown device name | 1 | `emulate: unknown device: <name>` |
-| Chrome not connected | 2 | `chrome: not connected` |
-| Operation timed out | 3 | `timeout` |
+| Unknown device name | 1 | `error: unknown device: <name>` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

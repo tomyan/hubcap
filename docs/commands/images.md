@@ -75,8 +75,7 @@ hubcap images | jq '[.images[] | select(.alt == "")]'
 Generate a report of image sizes for a page by chaining with other tools:
 
 ```
-hubcap goto "https://example.com"
-hubcap images | jq -r '.images[] | "\(.width)x\(.height) \(.src)"'
+hubcap goto "https://example.com" && hubcap images | jq -r '.images[] | "\(.width)x\(.height) \(.src)"'
 ```
 
 ## See also

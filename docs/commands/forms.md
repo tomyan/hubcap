@@ -68,9 +68,7 @@ Discover the login form fields, then fill and submit:
 
 ```
 hubcap forms | jq '.forms[] | select(.id == "login") | .inputs[].name'
-hubcap fill "#username" "admin"
-hubcap fill "#password" "secret"
-hubcap click "button[type=submit]"
+hubcap fill "#username" "admin" && hubcap fill "#password" "secret" && hubcap click "button[type=submit]"
 ```
 
 Count the total number of input fields across all forms:

@@ -52,7 +52,7 @@ When disabling interception:
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Invalid pattern | 1 | `error: invalid pattern "<value>"` |
 | Invalid replace format | 1 | `error: invalid replace format "<value>"` |
 
@@ -79,7 +79,7 @@ hubcap intercept --disable
 Intercept responses, modify them, then verify the change:
 
 ```bash
-hubcap intercept --response --pattern "*/config.json" --replace "false:true" && hubcap navigate "https://example.com" && hubcap eval "fetch('/config.json').then(r => r.json())"
+hubcap intercept --response --pattern "*/config.json" --replace "false:true" && hubcap goto "https://example.com" && hubcap eval "fetch('/config.json').then(r => r.json())"
 ```
 
 ## See also

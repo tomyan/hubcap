@@ -28,7 +28,7 @@ None.
 | frames[].id | string | Frame identifier for use with `evalframe` |
 | frames[].url | string | URL loaded in the frame |
 | frames[].name | string | The frame's `name` attribute |
-| frames[].type | string | Frame type (`iframe`, `frame`) |
+| frames[].parentId | string | Parent frame identifier (empty for main frame) |
 | count | number | Total number of frames found |
 
 ```json
@@ -38,7 +38,7 @@ None.
       "id": "F1A2B3C4D5E6",
       "url": "https://example.com/widget",
       "name": "ad-frame",
-      "type": "iframe"
+      "parentId": "MAIN_FRAME_ID"
     }
   ],
   "count": 1

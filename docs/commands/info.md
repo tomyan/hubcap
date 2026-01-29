@@ -26,17 +26,17 @@ None.
 |-------|------|-------------|
 | title | string | The document title |
 | url | string | The current page URL |
-| securityOrigin | string | The security origin of the page |
-| secureContextType | string | Whether the page is a secure context |
-| frameId | string | The main frame identifier |
+| readyState | string | Document ready state (`loading`, `interactive`, `complete`) |
+| characterSet | string | Character encoding (e.g. `UTF-8`) |
+| contentType | string | Document content type (e.g. `text/html`) |
 
 ```json
 {
   "title": "Example Domain",
   "url": "https://example.com",
-  "securityOrigin": "https://example.com",
-  "secureContextType": "Secure",
-  "frameId": "A1B2C3D4E5F6"
+  "readyState": "complete",
+  "characterSet": "UTF-8",
+  "contentType": "text/html"
 }
 ```
 
@@ -64,8 +64,7 @@ hubcap info | jq '{title, url}'
 After navigation, confirm the page is on a secure context:
 
 ```
-hubcap goto "https://example.com"
-hubcap info | jq -e '.secureContextType == "Secure"'
+hubcap goto "https://example.com" && hubcap info | jq -e '.readyState == "complete"'
 ```
 
 ## See also

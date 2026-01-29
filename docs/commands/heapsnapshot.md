@@ -35,7 +35,7 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Missing --output flag | 1 | `error: --output flag is required` |
 | Cannot write to file | 1 | `error: cannot write to "<path>"` |
 | Timeout during capture | 3 | `error: timeout` |
@@ -58,7 +58,7 @@ Compare heap size before and after an action:
 
 ```bash
 hubcap heapsnapshot --output before.json
-hubcap navigate "https://example.com/heavy-page"
+hubcap goto "https://example.com/heavy-page"
 hubcap heapsnapshot --output after.json
 ```
 
