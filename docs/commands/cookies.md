@@ -56,9 +56,10 @@ None.
 |---------|--------|--------------------------|
 | deleted | bool   | Whether the cookie was deleted |
 | name    | string | Cookie name              |
+| domain  | string | Cookie domain            |
 
 ```json
-{"deleted":true,"name":"session_id"}
+{"deleted":true,"name":"session_id","domain":".example.com"}
 ```
 
 **Clear mode** (`--clear`):
@@ -75,9 +76,9 @@ None.
 
 | Condition            | Exit code | Stderr                        |
 |----------------------|-----------|-------------------------------|
-| Invalid --set format | 1         | `error: invalid cookie format`|
-| Chrome not connected | 2         | `error: chrome not connected` |
-| Operation timeout    | 3         | `error: timeout`              |
+| Invalid --set format | 1         | `error: invalid cookie format, use name=value` |
+| Chrome not connected | 2         | `error: connecting to Chrome: ...` |
+| Timeout              | 3         | `error: timeout`              |
 
 ## Examples
 

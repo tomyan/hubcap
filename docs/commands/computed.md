@@ -27,19 +27,18 @@ None.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `selector` | string | The selector that was queried |
 | `property` | string | The CSS property that was queried |
 | `value` | string | Computed value of the property |
 
 ```json
-{"selector":"h1","property":"color","value":"rgb(255, 0, 0)"}
+{"property":"color","value":"rgb(255, 0, 0)"}
 ```
 
 ## Errors
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Element not found | 1 | `error: element not found` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 

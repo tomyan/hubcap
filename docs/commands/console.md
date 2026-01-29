@@ -45,8 +45,8 @@ NDJSON stream written to stdout. Each line is a JSON object representing a conso
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
-| Duration parse failure | 1 | `error: invalid duration "<value>"` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 
@@ -71,7 +71,7 @@ hubcap console | jq 'select(.type == "error" or .type == "warn")'
 Navigate to a page and capture its console output:
 
 ```bash
-hubcap navigate "https://example.com" && hubcap console --duration 10s | jq -r '.text'
+hubcap goto --wait "https://example.com" && hubcap console --duration 10s | jq -r '.text'
 ```
 
 ## See also
