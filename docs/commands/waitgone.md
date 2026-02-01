@@ -39,9 +39,9 @@ hubcap waitgone <selector> [--timeout <duration>]
 
 | Condition                            | Exit code | Stderr                                    |
 |--------------------------------------|-----------|-------------------------------------------|
-| Element still present after timeout  | 3         | `error: timeout waiting for removal`      |
-| Chrome not connected                 | 2         | `error: chrome not connected`             |
-| Missing selector argument            | 1         | `error: selector argument required`       |
+| Missing selector argument            | 1         | `usage: hubcap waitgone <selector> [--timeout <duration>]` |
+| Chrome not connected                 | 2         | `error: connecting to Chrome: ...`        |
+| Element still present after timeout  | 3         | `error: timeout`                          |
 
 ## Examples
 

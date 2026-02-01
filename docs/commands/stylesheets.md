@@ -22,33 +22,37 @@ None.
 
 ## Output
 
-Returns an array of stylesheet info objects.
-
 | Field | Type | Description |
 |-------|------|-------------|
-| [].styleSheetId | string | Identifier for the stylesheet |
-| [].sourceURL | string | URL of the stylesheet, empty for inline styles |
-| [].title | string | Title of the stylesheet |
-| [].disabled | boolean | Whether the stylesheet is disabled |
-| [].isInline | boolean | Whether the stylesheet is an inline `<style>` block |
+| stylesheets | array | Array of stylesheet info objects |
+| stylesheets[].styleSheetId | string | Identifier for the stylesheet |
+| stylesheets[].sourceURL | string | URL of the stylesheet, empty for inline styles |
+| stylesheets[].title | string | Title of the stylesheet |
+| stylesheets[].disabled | boolean | Whether the stylesheet is disabled |
+| stylesheets[].isInline | boolean | Whether the stylesheet is an inline `<style>` block |
+| stylesheets[].length | number | Number of CSS rules in the stylesheet |
 
 ```json
-[
-  {
-    "styleSheetId": "1",
-    "sourceURL": "https://example.com/styles.css",
-    "title": "",
-    "disabled": false,
-    "isInline": false
-  },
-  {
-    "styleSheetId": "2",
-    "sourceURL": "",
-    "title": "",
-    "disabled": false,
-    "isInline": true
-  }
-]
+{
+  "stylesheets": [
+    {
+      "styleSheetId": "0",
+      "sourceURL": "https://example.com/styles.css",
+      "title": "",
+      "disabled": false,
+      "isInline": false,
+      "length": 42
+    },
+    {
+      "styleSheetId": "1",
+      "sourceURL": "",
+      "title": "",
+      "disabled": false,
+      "isInline": true,
+      "length": 5
+    }
+  ]
+}
 ```
 
 ## Errors
@@ -69,14 +73,13 @@ hubcap stylesheets
 Count external vs inline stylesheets:
 
 ```
-hubcap stylesheets | jq '{external: [.[] | select(.isInline | not)] | length, inline: [.[] | select(.isInline)] | length}'
+hubcap stylesheets | jq '{external: [.stylesheets[] | select(.isInline | not)] | length, inline: [.stylesheets[] | select(.isInline)] | length}'
 ```
 
 List all external stylesheet URLs for a page:
 
 ```
-hubcap goto "https://example.com"
-hubcap stylesheets | jq -r '[.[] | select(.sourceURL != "") | .sourceURL] | .[]'
+hubcap goto "https://example.com" && hubcap stylesheets | jq -r '[.stylesheets[] | select(.sourceURL != "") | .sourceURL] | .[]'
 ```
 
 ## See also

@@ -37,10 +37,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| File not found | 1 | `run: file not found: <path>` |
-| JavaScript evaluation error | 1 | `run: <error message>` |
-| Chrome not connected | 2 | `chrome: not connected` |
-| Operation timed out | 3 | `timeout` |
+| File not found | 1 | `error reading file: ...` |
+| JavaScript evaluation error | 1 | `error: JS exception: <message>` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

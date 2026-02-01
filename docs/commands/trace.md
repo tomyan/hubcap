@@ -36,11 +36,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
-| Missing --output flag | 1 | `error: --output flag is required` |
-| Cannot write to file | 1 | `error: cannot write to "<path>"` |
-| Duration parse failure | 1 | `error: invalid duration "<value>"` |
-| Timeout during capture | 3 | `error: timeout` |
+| Missing --output flag | 1 | `usage: hubcap trace --duration <d> --output <file>` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Cannot write to file | 1 | `error: writing file: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 
@@ -59,7 +58,7 @@ hubcap trace --output trace.json --duration 5s
 Navigate to a page and trace its load performance:
 
 ```bash
-hubcap navigate "https://example.com" && hubcap trace --output load-trace.json --duration 3s
+hubcap goto "https://example.com" && hubcap trace --output load-trace.json --duration 3s
 ```
 
 Capture a trace with a timestamped filename and report the size:

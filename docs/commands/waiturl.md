@@ -39,9 +39,9 @@ hubcap waiturl <pattern> [--timeout <duration>]
 
 | Condition                        | Exit code | Stderr                                  |
 |----------------------------------|-----------|------------------------------------------|
-| URL not matched within timeout   | 3         | `error: timeout waiting for URL pattern` |
-| Chrome not connected             | 2         | `error: chrome not connected`            |
-| Missing pattern argument         | 1         | `error: pattern argument required`       |
+| Missing pattern argument         | 1         | `usage: hubcap waiturl <pattern> [--timeout <duration>]` |
+| Chrome not connected             | 2         | `error: connecting to Chrome: ...`       |
+| URL not matched within timeout   | 3         | `error: timeout`                         |
 
 ## Examples
 

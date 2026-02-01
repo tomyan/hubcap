@@ -36,8 +36,8 @@ None.
 
 | Condition                          | Exit code | Stderr                                    |
 |------------------------------------|-----------|-------------------------------------------|
-| No navigation within timeout       | 3         | `error: timeout waiting for navigation`   |
-| Chrome not connected               | 2         | `error: chrome not connected`             |
+| Chrome not connected               | 2         | `error: connecting to Chrome: ...`        |
+| No navigation within timeout       | 3         | `error: timeout`                          |
 
 ## Examples
 

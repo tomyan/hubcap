@@ -37,9 +37,10 @@ The response body content object.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Chrome not reachable | 2 | `error: cannot connect to Chrome` |
-| Missing requestId argument | 1 | `error: requestId argument is required` |
-| Request not found | 1 | `error: request "<requestId>" not found` |
+| Missing requestId argument | 1 | `usage: hubcap responsebody <requestId>` |
+| Protocol error | 1 | `error: getting response body: ...` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

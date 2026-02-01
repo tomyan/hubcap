@@ -25,22 +25,9 @@ None.
 | Field | Type | Description |
 |-------|------|-------------|
 | text | string | The currently selected text |
-| rangeCount | number | Number of selection ranges |
-| ranges | array | Array of range objects with start/end info |
 
 ```json
-{
-  "text": "selected text content",
-  "rangeCount": 1,
-  "ranges": [
-    {
-      "startContainer": "#text",
-      "startOffset": 0,
-      "endContainer": "#text",
-      "endOffset": 21
-    }
-  ]
-}
+{"text":"selected text content"}
 ```
 
 ## Errors
@@ -67,15 +54,13 @@ hubcap selection | jq -r '.text'
 Select a paragraph by triple-clicking, then read the selection:
 
 ```
-hubcap tripleclick "p.intro"
-hubcap selection | jq -r '.text'
+hubcap tripleclick "p.intro" && hubcap selection | jq -r '.text'
 ```
 
 Verify that a keyboard shortcut (Ctrl+A) selects all text:
 
 ```
-hubcap press "Control+a"
-hubcap selection | jq -e '.text | length > 0'
+hubcap press "Control+a" && hubcap selection | jq -e '.text | length > 0'
 ```
 
 ## See also

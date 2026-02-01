@@ -25,7 +25,7 @@ None.
 | Field | Type | Description |
 |-------|------|-------------|
 | tables | array | Array of table objects |
-| tables[].id | string | The table's `id` attribute, empty if none |
+| tables[].id | string | The table's `id` attribute (omitted if none) |
 | tables[].headers | array | Array of header cell strings |
 | tables[].rows | array | Array of row arrays, each containing cell strings |
 
@@ -68,8 +68,7 @@ hubcap tables | jq -r '.tables[0] | (.headers | @csv), (.rows[] | @csv)'
 Navigate to a page and extract a specific table by ID:
 
 ```
-hubcap goto "https://example.com/data"
-hubcap tables | jq '.tables[] | select(.id == "results")'
+hubcap goto "https://example.com/data" && hubcap tables | jq '.tables[] | select(.id == "results")'
 ```
 
 ## See also

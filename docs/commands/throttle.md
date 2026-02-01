@@ -49,8 +49,8 @@ When disabled:
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
 | Unknown preset name | 1 | `error: unknown preset "name"` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
-| Timeout waiting for response | 3 | `error: timeout` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

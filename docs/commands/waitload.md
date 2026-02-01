@@ -36,8 +36,8 @@ None.
 
 | Condition                    | Exit code | Stderr                              |
 |------------------------------|-----------|-------------------------------------|
-| Load event not fired in time | 3         | `error: timeout waiting for load`   |
-| Chrome not connected         | 2         | `error: chrome not connected`       |
+| Chrome not connected         | 2         | `error: connecting to Chrome: ...`  |
+| Load event not fired in time | 3         | `error: timeout`                    |
 
 ## Examples
 

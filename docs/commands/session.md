@@ -64,8 +64,8 @@ hubcap session <key> [value] | --clear
 
 | Condition            | Exit code | Stderr                        |
 |----------------------|-----------|-------------------------------|
-| Missing key argument | 1         | `error: key argument required`|
-| Chrome not connected | 2         | `error: chrome not connected` |
+| Missing key argument | 1         | `usage: hubcap session <key> [value] \| --clear`|
+| Chrome not connected | 2         | `error: connecting to Chrome: ...` |
 | Operation timeout    | 3         | `error: timeout`              |
 
 ## Examples

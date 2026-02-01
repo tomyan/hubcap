@@ -41,9 +41,9 @@ The raw protocol result JSON, exactly as returned by the protocol.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Missing method argument | 1 | `error: method name required` |
-| Invalid JSON params | 1 | `error: invalid JSON params` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
+| Missing method argument | 1 | `usage: hubcap raw [--browser] <method> [params-json]` |
+| Protocol error | 1 | `error: <message>` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout waiting for response | 3 | `error: timeout` |
 
 ## Examples

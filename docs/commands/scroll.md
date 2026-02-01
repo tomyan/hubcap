@@ -39,9 +39,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Invalid coordinate value | 1 | `error: coordinates must be integers` |
-| Chrome not connected | 2 | `error: chrome connection failed` |
-| Timeout waiting for response | 3 | `error: timeout` |
+| Invalid x value | 1 | `invalid x value: <val>` |
+| Invalid y value | 1 | `invalid y value: <val>` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 
@@ -66,7 +67,7 @@ hubcap scroll 100 300
 Scroll down and take a screenshot of the newly visible content:
 
 ```
-hubcap scroll 0 800 && hubcap screenshot after-scroll.png
+hubcap scroll 0 800 && hubcap screenshot --output after-scroll.png
 ```
 
 ## See also

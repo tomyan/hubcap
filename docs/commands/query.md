@@ -36,7 +36,7 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Element not found | 0 | None (returns `{"nodeId":0}`) |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 

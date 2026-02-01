@@ -52,9 +52,9 @@ With `--base64`:
 | Condition              | Exit code | Stderr                                |
 |------------------------|-----------|---------------------------------------|
 | No output or base64    | 1         | `error: --output or --base64 required`|
-| Selector not found     | 1         | `error: element not found`            |
-| Chrome not connected   | 2         | `error: chrome not connected`         |
-| Capture timeout        | 3         | `error: screenshot timeout`           |
+| Selector not found     | 1         | `error: element not found: <sel>`     |
+| Chrome not connected   | 2         | `error: connecting to Chrome: ...`    |
+| Timeout                | 3         | `error: timeout`                      |
 
 ## Examples
 

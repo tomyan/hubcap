@@ -41,7 +41,8 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Element not found | 1 | `error: no element found for selector: <sel>` |
+| Host element not found | 1 | `error: shadow host not found: <sel>` |
+| No shadow root on host | 1 | `error: no shadow root found on element: <sel>` |
 | Chrome not connected | 2 | `error: connecting to Chrome: ...` |
 | Timeout | 3 | `error: timeout` |
 

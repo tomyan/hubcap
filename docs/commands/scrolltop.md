@@ -50,15 +50,13 @@ hubcap scrolltop
 Scroll to the bottom to trigger lazy loading, then back to the top:
 
 ```
-hubcap scrollbottom
-hubcap waitidle
-hubcap scrolltop
+hubcap scrollbottom && hubcap waitidle && hubcap scrolltop
 ```
 
 Take a screenshot from the top of the page:
 
 ```
-hubcap scrolltop && hubcap screenshot > top.png
+hubcap scrolltop && hubcap screenshot --output top.png
 ```
 
 ## See also

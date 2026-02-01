@@ -36,8 +36,8 @@ None.
 
 | Condition                        | Exit code | Stderr                                    |
 |----------------------------------|-----------|-------------------------------------------|
-| Network not idle within timeout  | 3         | `error: timeout waiting for network idle` |
-| Chrome not connected             | 2         | `error: chrome not connected`             |
+| Chrome not connected             | 2         | `error: connecting to Chrome: ...`        |
+| Network not idle within timeout  | 3         | `error: timeout`                          |
 
 ## Examples
 

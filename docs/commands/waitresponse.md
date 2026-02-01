@@ -42,9 +42,9 @@ hubcap waitresponse <pattern> [--timeout <duration>]
 
 | Condition                           | Exit code | Stderr                                     |
 |-------------------------------------|-----------|---------------------------------------------|
-| No matching response within timeout | 3         | `error: timeout waiting for response`       |
-| Chrome not connected                | 2         | `error: chrome not connected`               |
-| Missing pattern argument            | 1         | `error: pattern argument required`          |
+| Missing pattern argument            | 1         | `usage: hubcap waitresponse <pattern> [--timeout <duration>]` |
+| Chrome not connected                | 2         | `error: connecting to Chrome: ...`          |
+| No matching response within timeout | 3         | `error: timeout`                            |
 
 ## Examples
 

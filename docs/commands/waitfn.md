@@ -39,9 +39,9 @@ hubcap waitfn <expression> [--timeout <duration>]
 
 | Condition                              | Exit code | Stderr                                    |
 |----------------------------------------|-----------|-------------------------------------------|
-| Expression not truthy within timeout   | 3         | `error: timeout waiting for expression`   |
-| Chrome not connected                   | 2         | `error: chrome not connected`             |
-| Missing expression argument            | 1         | `error: expression argument required`     |
+| Missing expression argument            | 1         | `usage: hubcap waitfn <expression> [--timeout <duration>]` |
+| Chrome not connected                   | 2         | `error: connecting to Chrome: ...`        |
+| Expression not truthy within timeout   | 3         | `error: timeout`                          |
 
 ## Examples
 

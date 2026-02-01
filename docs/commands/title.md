@@ -56,8 +56,7 @@ hubcap title | jq -r '.title'
 Navigate to a page, then assert the title matches an expected value:
 
 ```
-hubcap goto "https://example.com"
-hubcap title | jq -e '.title == "Example Domain"'
+hubcap goto "https://example.com" && hubcap title | jq -e '.title == "Example Domain"'
 ```
 
 ## See also

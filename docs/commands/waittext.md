@@ -39,9 +39,9 @@ hubcap waittext <text> [--timeout <duration>]
 
 | Condition                      | Exit code | Stderr                                |
 |--------------------------------|-----------|---------------------------------------|
-| Text not found within timeout  | 3         | `error: timeout waiting for text`     |
-| Chrome not connected           | 2         | `error: chrome not connected`         |
-| Missing text argument          | 1         | `error: text argument required`       |
+| Missing text argument          | 1         | `usage: hubcap waittext <text> [--timeout <duration>]` |
+| Chrome not connected           | 2         | `error: connecting to Chrome: ...`    |
+| Text not found within timeout  | 3         | `error: timeout`                      |
 
 ## Examples
 

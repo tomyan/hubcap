@@ -37,8 +37,8 @@ None.
 
 | Condition            | Exit code | Stderr                        |
 |----------------------|-----------|-------------------------------|
-| Chrome not connected | 2         | `error: chrome not connected` |
-| Reload timeout       | 3         | `error: reload timeout`       |
+| Chrome not connected | 2         | `error: connecting to Chrome: ...` |
+| Timeout              | 3         | `error: timeout`                   |
 
 ## Examples
 

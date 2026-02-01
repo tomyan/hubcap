@@ -38,9 +38,10 @@ None.
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
-| Invalid dimension (non-numeric or out of range) | 1 | `invalid dimension` |
-| Chrome not connected | 2 | `chrome: not connected` |
-| Operation timed out | 3 | `timeout` |
+| Invalid width (non-numeric) | 1 | `invalid width: <value>` |
+| Invalid height (non-numeric) | 1 | `invalid height: <value>` |
+| Chrome not connected | 2 | `error: connecting to Chrome: ...` |
+| Timeout | 3 | `error: timeout` |
 
 ## Examples
 

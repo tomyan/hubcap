@@ -50,17 +50,13 @@ hubcap scrollbottom
 Trigger infinite scroll by scrolling to the bottom and waiting for new content:
 
 ```
-hubcap scrollbottom
-hubcap waitidle
-hubcap scrollbottom
-hubcap waitidle
+hubcap scrollbottom && hubcap waitidle && hubcap scrollbottom && hubcap waitidle
 ```
 
 Scroll to the bottom and count the total number of items loaded:
 
 ```
-hubcap scrollbottom && hubcap waitidle
-hubcap count ".item"
+hubcap scrollbottom && hubcap waitidle && hubcap count ".item"
 ```
 
 ## See also

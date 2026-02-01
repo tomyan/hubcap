@@ -56,10 +56,7 @@ hubcap url | jq -r '.url'
 Navigate and verify the final URL after redirects:
 
 ```
-hubcap goto "https://example.com/redirect"
-hubcap waitload
-FINAL=$(hubcap url | jq -r '.url')
-echo "Landed on: $FINAL"
+hubcap goto "https://example.com/redirect" && hubcap waitload && FINAL=$(hubcap url | jq -r '.url') && echo "Landed on: $FINAL"
 ```
 
 ## See also
