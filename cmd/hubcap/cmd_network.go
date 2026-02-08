@@ -16,6 +16,7 @@ func cmdConsole(cfg *Config, args []string) int {
 	fs := flag.NewFlagSet("console", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
 	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
+	filter := fs.String("filter", "", "Filter by message type (log, warn, error, info, debug)")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -57,6 +58,9 @@ func cmdConsole(cfg *Config, args []string) int {
 		case msg, ok := <-messages:
 			if !ok {
 				return ExitSuccess
+			}
+			if *filter != "" && msg.Type != *filter {
+				continue
 			}
 			if err := enc.Encode(msg); err != nil {
 				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
@@ -130,6 +134,8 @@ func cmdNetwork(cfg *Config, args []string) int {
 	fs := flag.NewFlagSet("network", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
 	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
+	filter := fs.String("filter", "", "Filter by URL substring")
+	method := fs.String("method", "", "Filter by HTTP method (GET, POST, etc.)")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -171,6 +177,12 @@ func cmdNetwork(cfg *Config, args []string) int {
 		case event, ok := <-events:
 			if !ok {
 				return ExitSuccess
+			}
+			if *filter != "" && !strings.Contains(event.URL, *filter) {
+				continue
+			}
+			if *method != "" && !strings.EqualFold(event.Method, *method) {
+				continue
 			}
 			if err := enc.Encode(event); err != nil {
 				fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
