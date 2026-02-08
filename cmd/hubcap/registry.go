@@ -428,10 +428,12 @@ var commands = map[string]CommandInfo{
 
 	// Assert
 	"assert": {Name: "assert", Desc: "Assert page state", Category: "Assert", Run: func(cfg *Config, args []string) int { return cmdAssert(cfg, args) }},
+
 }
 
 func init() {
 	commands["help"] = CommandInfo{Name: "help", Desc: "Show help for a command", Category: "Advanced", Run: func(cfg *Config, args []string) int { return cmdHelp(cfg, args) }}
+	commands["retry"] = CommandInfo{Name: "retry", Desc: "Retry a command on failure", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdRetry(cfg, args) }}
 }
 
 // cmdMissingArg prints a usage message and returns ExitError.
@@ -456,6 +458,7 @@ var categoryOrder = []string{
 	"Profile",
 	"Advanced",
 	"Assert",
+	"Utility",
 }
 
 // commandsByCategory returns commands grouped by category, with sorted names within each category.
