@@ -434,6 +434,7 @@ var commands = map[string]CommandInfo{
 func init() {
 	commands["help"] = CommandInfo{Name: "help", Desc: "Show help for a command", Category: "Advanced", Run: func(cfg *Config, args []string) int { return cmdHelp(cfg, args) }}
 	commands["retry"] = CommandInfo{Name: "retry", Desc: "Retry a command on failure", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdRetry(cfg, args) }}
+	commands["pipe"] = CommandInfo{Name: "pipe", Desc: "Read commands from stdin", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdPipe(cfg, args) }}
 }
 
 // cmdMissingArg prints a usage message and returns ExitError.

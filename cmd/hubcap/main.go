@@ -29,6 +29,7 @@ type Config struct {
 	Quiet   bool
 	Target  string // target index or ID
 
+	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 }
@@ -41,6 +42,7 @@ func DefaultConfig() *Config {
 		Timeout: 10 * time.Second,
 		Output:  "json",
 		Quiet:   false,
+		Stdin:   os.Stdin,
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
 	}
