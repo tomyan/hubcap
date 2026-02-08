@@ -5851,3 +5851,469 @@ func TestConfig_CLIOverridesFile(t *testing.T) {
 		t.Errorf("expected port 5678 from CLI flag, got %d", cfg.Port)
 	}
 }
+
+// --- splitArgs unit tests ---
+
+func TestSplitArgs_Simple(t *testing.T) {
+	t.Parallel()
+	got := splitArgs("goto https://example.com")
+	want := []string{"goto", "https://example.com"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSplitArgs_Quoted(t *testing.T) {
+	t.Parallel()
+	got := splitArgs(`fill "#name" "John Doe"`)
+	want := []string{"fill", "#name", "John Doe"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSplitArgs_SingleQuotes(t *testing.T) {
+	t.Parallel()
+	got := splitArgs("eval 'document.title'")
+	want := []string{"eval", "document.title"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSplitArgs_Empty(t *testing.T) {
+	t.Parallel()
+	got := splitArgs("")
+	if len(got) != 0 {
+		t.Errorf("expected empty, got %v", got)
+	}
+}
+
+func TestSplitArgs_ExtraSpaces(t *testing.T) {
+	t.Parallel()
+	got := splitArgs("  goto   https://example.com  ")
+	want := []string{"goto", "https://example.com"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// --- Assert command tests ---
+
+func TestRun_Assert_NoArgs(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"assert"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Assert_UnknownSubcommand(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"assert", "unknown"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "unknown assertion") {
+		t.Errorf("expected 'unknown assertion' in stderr, got: %s", stderr)
+	}
+}
+
+func TestRun_Assert_Title_Pass(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Target = tabID
+	cfg.Timeout = 10 * time.Second
+
+	// Navigate and set title
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	code = run([]string{"--target", tabID, "eval", `document.title = "Assert Test"`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("eval failed: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "title", "Assert Test"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result AssertResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse result: %v", err)
+	}
+	if !result.Passed {
+		t.Errorf("expected passed=true")
+	}
+}
+
+func TestRun_Assert_Title_Fail(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	code = run([]string{"--target", tabID, "eval", `document.title = "Actual"`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("eval failed: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "title", "Expected"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected ExitError, got %d", code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "title mismatch") {
+		t.Errorf("expected 'title mismatch' in stderr, got: %s", stderr)
+	}
+}
+
+func TestRun_Assert_URL_Pass(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "url", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+}
+
+func TestRun_Assert_Exists_Pass(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	code = run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<div id="test">hello</div>'`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("eval failed: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "exists", "#test"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+}
+
+func TestRun_Assert_Exists_Fail(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "exists", "#nonexistent"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected ExitError, got %d", code)
+	}
+}
+
+func TestRun_Assert_Count(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	code = run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<p>a</p><p>b</p><p>c</p>'`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("eval failed: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "count", "p", "3"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+
+	// Wrong count should fail
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "count", "p", "5"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected ExitError for wrong count, got %d", code)
+	}
+}
+
+func TestRun_Assert_Text_Pass(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	code = run([]string{"--target", tabID, "eval", `document.body.innerHTML = '<span id="msg">Hello World</span>'`}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("eval failed: %d", code)
+	}
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "assert", "text", "#msg", "Hello World"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+}
+
+// --- Retry command tests ---
+
+func TestRun_Retry_NoArgs(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"retry"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Retry_UnknownCommand(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"retry", "nonexistent"}, cfg)
+	if code != ExitError {
+		t.Errorf("expected exit code %d, got %d", ExitError, code)
+	}
+}
+
+func TestRun_Retry_ImmediateSuccess(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	// title command should succeed on first try
+	code = run([]string{"--target", tabID, "retry", "--attempts", "3", "title"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+}
+
+// --- Pipe command tests ---
+
+func TestRun_Pipe_SkipsBlanksAndComments(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.Port = 1 // Invalid port - we just test parsing
+	input := "# comment\n\n  \n"
+	cfg.Stdin = strings.NewReader(input)
+
+	code := run([]string{"pipe"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess for empty input, got %d", code)
+	}
+}
+
+func TestRun_Pipe_UnknownCommand(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.Port = 1
+	cfg.Stdin = strings.NewReader("nonexistent\n")
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	// Unknown commands are skipped (logged to stderr), not fatal
+	code := run([]string{"pipe"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess (unknown commands are skipped), got %d", code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "unknown command") {
+		t.Errorf("expected 'unknown command' in stderr, got: %s", stderr)
+	}
+}
+
+func TestRun_Pipe_MultipleCommands(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	cfg.Timeout = 10 * time.Second
+
+	// First navigate
+	code := run([]string{"--target", tabID, "goto", "about:blank"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("goto failed: %d", code)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	cfg.Stdin = strings.NewReader("title\nurl\n")
+	code = run([]string{"--target", tabID, "pipe"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	// Should have two JSON objects in the output
+	dec := json.NewDecoder(strings.NewReader(stdout))
+	count := 0
+	for dec.More() {
+		var v interface{}
+		if err := dec.Decode(&v); err != nil {
+			t.Fatalf("failed to decode JSON object %d: %v", count, err)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Errorf("expected 2 JSON objects, got %d: %s", count, stdout)
+	}
+}
+
+// --- Shell command tests ---
+
+func TestRun_Shell_QuitCommand(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.Port = 1
+	cfg.Stdin = strings.NewReader(".quit\n")
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"shell"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess from .quit, got %d", code)
+	}
+}
+
+func TestRun_Shell_ExitCommand(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.Port = 1
+	cfg.Stdin = strings.NewReader(".exit\n")
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"shell"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess from .exit, got %d", code)
+	}
+}
+
+func TestRun_Shell_DotTarget(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.Port = 1
+	cfg.Stdin = strings.NewReader(".target myid\n.quit\n")
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"shell"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess, got %d", code)
+	}
+	if cfg.Target != "myid" {
+		t.Errorf("expected target 'myid', got %q", cfg.Target)
+	}
+}
+
+func TestRun_Shell_DotOutput(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.Port = 1
+	cfg.Stdin = strings.NewReader(".output text\n.quit\n")
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	code := run([]string{"shell"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess, got %d", code)
+	}
+	if cfg.Output != "text" {
+		t.Errorf("expected output 'text', got %q", cfg.Output)
+	}
+}
