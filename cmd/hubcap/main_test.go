@@ -116,6 +116,42 @@ func TestRun_Help(t *testing.T) {
 	}
 }
 
+func TestRun_Help_NewCommands(t *testing.T) {
+	t.Parallel()
+
+	newCommands := []string{"assert", "retry", "pipe", "shell", "record", "help"}
+	for _, cmd := range newCommands {
+		t.Run(cmd, func(t *testing.T) {
+			t.Parallel()
+			cfg := testConfig()
+			code := run([]string{"help", cmd}, cfg)
+			if code != ExitSuccess {
+				stderr := cfg.Stderr.(*bytes.Buffer).String()
+				t.Errorf("hubcap help %s: expected ExitSuccess, got %d, stderr: %s", cmd, code, stderr)
+			}
+			stdout := cfg.Stdout.(*bytes.Buffer).String()
+			if !strings.Contains(stdout, "hubcap "+cmd) {
+				t.Errorf("hubcap help %s: expected output to contain 'hubcap %s', got: %s", cmd, cmd, stdout)
+			}
+		})
+	}
+}
+
+func TestRun_Help_ListsNewCommands(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"help"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess, got %d", code)
+	}
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	for _, cmd := range []string{"assert", "retry", "pipe", "shell", "record"} {
+		if !strings.Contains(stdout, cmd) {
+			t.Errorf("help output should list %q, got: %s", cmd, stdout)
+		}
+	}
+}
+
 func TestRun_Version_NoChrome(t *testing.T) {
 	t.Parallel() // No Chrome needed
 	cfg := testConfig()
