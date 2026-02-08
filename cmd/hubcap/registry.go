@@ -426,6 +426,8 @@ var commands = map[string]CommandInfo{
 		return cmdHighlight(cfg, args)
 	}},
 
+	// Assert
+	"assert": {Name: "assert", Desc: "Assert page state", Category: "Assert", Run: func(cfg *Config, args []string) int { return cmdAssert(cfg, args) }},
 }
 
 func init() {
@@ -453,6 +455,7 @@ var categoryOrder = []string{
 	"Analyze",
 	"Profile",
 	"Advanced",
+	"Assert",
 }
 
 // commandsByCategory returns commands grouped by category, with sorted names within each category.
