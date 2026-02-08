@@ -63,7 +63,9 @@ func getEnvInt(key string, defaultVal int) int {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], DefaultConfig()))
+	cfg := DefaultConfig()
+	loadConfigFile(cfg)
+	os.Exit(run(os.Args[1:], cfg))
 }
 
 func run(args []string, cfg *Config) int {

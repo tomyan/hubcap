@@ -5795,3 +5795,59 @@ func TestRun_Trace_NoChrome(t *testing.T) {
 		t.Errorf("expected exit code %d, got %d", ExitConnFailed, code)
 	}
 }
+
+func TestConfig_FromFile(t *testing.T) {
+	t.Parallel()
+
+	// Create a temp config file
+	dir := t.TempDir()
+	configPath := dir + "/.hubcaprc"
+	configData := `{"port": 1234, "host": "example.com", "timeout": "30s", "output": "text"}`
+	if err := os.WriteFile(configPath, []byte(configData), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := DefaultConfig()
+
+	var fc fileConfig
+	data, _ := os.ReadFile(configPath)
+	if err := json.Unmarshal(data, &fc); err != nil {
+		t.Fatal(err)
+	}
+	applyFileConfig(cfg, &fc)
+
+	if cfg.Port != 1234 {
+		t.Errorf("expected port 1234, got %d", cfg.Port)
+	}
+	if cfg.Host != "example.com" {
+		t.Errorf("expected host example.com, got %s", cfg.Host)
+	}
+	if cfg.Timeout != 30*time.Second {
+		t.Errorf("expected timeout 30s, got %v", cfg.Timeout)
+	}
+	if cfg.Output != "text" {
+		t.Errorf("expected output text, got %s", cfg.Output)
+	}
+}
+
+func TestConfig_CLIOverridesFile(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultConfig()
+	// Simulate file config setting port to 1234
+	port := 1234
+	fc := fileConfig{Port: &port}
+	applyFileConfig(cfg, &fc)
+
+	if cfg.Port != 1234 {
+		t.Errorf("expected port 1234 from file config, got %d", cfg.Port)
+	}
+
+	// CLI flag should override
+	code := run([]string{"--port", "5678", "version"}, cfg)
+	// Will fail to connect but that's ok - we just check the port was set
+	_ = code
+	if cfg.Port != 5678 {
+		t.Errorf("expected port 5678 from CLI flag, got %d", cfg.Port)
+	}
+}
