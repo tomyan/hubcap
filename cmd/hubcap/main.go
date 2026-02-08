@@ -80,6 +80,9 @@ func run(args []string, cfg *Config) int {
 	fs.StringVar(&cfg.Output, "output", cfg.Output, "Output format: json, ndjson, text")
 	fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "Suppress non-essential output")
 	fs.StringVar(&cfg.Target, "target", cfg.Target, "Target page (index or ID)")
+	helpCommands := fs.Bool("help-commands", false, "List all commands with descriptions")
+
+	fs.Usage = func() { printBriefUsage(cfg, fs) }
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -88,9 +91,14 @@ func run(args []string, cfg *Config) int {
 		return ExitError
 	}
 
+	if *helpCommands {
+		printFullCommandList(cfg)
+		return ExitSuccess
+	}
+
 	remaining := fs.Args()
 	if len(remaining) < 1 {
-		printUsage(cfg, fs)
+		printBriefUsage(cfg, fs)
 		return ExitError
 	}
 

@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"sort"
-	"strings"
 )
 
 // CommandInfo describes a CLI command.
@@ -506,21 +505,27 @@ func sortedCommandNames() []string {
 	return names
 }
 
-// printUsage prints the usage message with commands grouped by category.
-func printUsage(cfg *Config, fs *flag.FlagSet) {
+// printBriefUsage prints a short usage message with flags and hints.
+func printBriefUsage(cfg *Config, fs *flag.FlagSet) {
 	fmt.Fprintln(cfg.Stderr, "usage: hubcap [flags] <command>")
 	fmt.Fprintln(cfg.Stderr)
-
-	for _, group := range commandsByCategory() {
-		fmt.Fprintf(cfg.Stderr, "  %s:\n", group.Category)
-		names := make([]string, len(group.Commands))
-		for i, cmd := range group.Commands {
-			names[i] = cmd.Name
-		}
-		fmt.Fprintf(cfg.Stderr, "    %s\n", strings.Join(names, ", "))
-		fmt.Fprintln(cfg.Stderr)
-	}
-
 	fmt.Fprintln(cfg.Stderr, "flags:")
 	fs.PrintDefaults()
+	fmt.Fprintln(cfg.Stderr)
+	fmt.Fprintln(cfg.Stderr, "Run 'hubcap --help-commands' to list all commands.")
+	fmt.Fprintln(cfg.Stderr, "Run 'hubcap help <command>' for detailed help on a command.")
+}
+
+// printFullCommandList prints all commands grouped by category, one per line with descriptions.
+func printFullCommandList(cfg *Config) {
+	fmt.Fprintln(cfg.Stderr, "usage: hubcap [flags] <command>")
+	fmt.Fprintln(cfg.Stderr)
+	for _, group := range commandsByCategory() {
+		fmt.Fprintf(cfg.Stderr, "  %s:\n", group.Category)
+		for _, cmd := range group.Commands {
+			fmt.Fprintf(cfg.Stderr, "    %-14s %s\n", cmd.Name, cmd.Desc)
+		}
+		fmt.Fprintln(cfg.Stderr)
+	}
+	fmt.Fprintln(cfg.Stderr, "Run 'hubcap help <command>' for detailed help on a command.")
 }

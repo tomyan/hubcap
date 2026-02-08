@@ -80,7 +80,7 @@ func createTestTabCLI(t *testing.T) (string, func()) {
 }
 
 func TestRun_NoArgs(t *testing.T) {
-	t.Parallel() // No Chrome needed
+	t.Parallel()
 	cfg := testConfig()
 	code := run([]string{}, cfg)
 	if code != ExitError {
@@ -88,8 +88,51 @@ func TestRun_NoArgs(t *testing.T) {
 	}
 
 	stderr := cfg.Stderr.(*bytes.Buffer).String()
-	if !strings.Contains(stderr, "usage:") {
-		t.Errorf("expected usage message in stderr, got: %s", stderr)
+	if !strings.Contains(stderr, "hubcap [flags] <command>") {
+		t.Errorf("usage should show 'hubcap [flags] <command>', got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "--help-commands") {
+		t.Errorf("usage should mention --help-commands, got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "hubcap help <command>") {
+		t.Errorf("usage should mention 'hubcap help <command>', got: %s", stderr)
+	}
+	// Brief usage should NOT contain the full command list
+	if strings.Contains(stderr, "Navigate & manage tabs") {
+		t.Errorf("brief usage should not contain full command list")
+	}
+}
+
+func TestRun_HelpFlag(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"-h"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess, got %d", code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "hubcap [flags] <command>") {
+		t.Errorf("-h should show usage line, got: %s", stderr)
+	}
+}
+
+func TestRun_HelpCommands(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	code := run([]string{"--help-commands"}, cfg)
+	if code != ExitSuccess {
+		t.Errorf("expected ExitSuccess, got %d", code)
+	}
+
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	// Should have categories
+	if !strings.Contains(stderr, "Navigate & manage tabs") {
+		t.Errorf("--help-commands should show categories, got: %s", stderr)
+	}
+	// Should have descriptions (one per line)
+	if !strings.Contains(stderr, "Navigate to a URL") {
+		t.Errorf("--help-commands should show descriptions, got: %s", stderr)
 	}
 }
 
