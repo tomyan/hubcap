@@ -137,6 +137,21 @@ func TestRun_Help_NewCommands(t *testing.T) {
 	}
 }
 
+func TestRun_Help_AllCommandsHaveDocs(t *testing.T) {
+	t.Parallel()
+	for name := range commands {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg := testConfig()
+			code := run([]string{"help", name}, cfg)
+			if code != ExitSuccess {
+				stderr := cfg.Stderr.(*bytes.Buffer).String()
+				t.Errorf("hubcap help %s: expected ExitSuccess, got %d, stderr: %s", name, code, stderr)
+			}
+		})
+	}
+}
+
 func TestRun_Help_ListsNewCommands(t *testing.T) {
 	t.Parallel()
 	cfg := testConfig()
