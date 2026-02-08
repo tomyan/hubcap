@@ -429,6 +429,9 @@ var commands = map[string]CommandInfo{
 	// Assert
 	"assert": {Name: "assert", Desc: "Assert page state", Category: "Assert", Run: func(cfg *Config, args []string) int { return cmdAssert(cfg, args) }},
 
+	// Record
+	"record": {Name: "record", Desc: "Record browser interactions", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdRecord(cfg, args) }},
+
 }
 
 func init() {
