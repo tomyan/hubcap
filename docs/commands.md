@@ -156,6 +156,8 @@ All commands accept these flags before the command name:
 | Set cookie | `cookies --set k=v` | Optional `--domain` |
 | Delete cookie | `cookies --delete <name>` | Optional `--domain` |
 | Clear cookies | `cookies --clear` | |
+| Export cookies | `cookies --export <file>` | JSON array format |
+| Import cookies | `cookies --import <file>` | JSON array format |
 | Get localStorage | `storage <key>` | |
 | Set localStorage | `storage <key> <val>` | |
 | Clear localStorage | `storage --clear` | |
@@ -169,7 +171,7 @@ All commands accept these flags before the command name:
 
 | Task | Command | Notes |
 |------|---------|-------|
-| Stream network events | `network` | NDJSON; `--duration` optional |
+| Stream network events | `network` | `--duration`, `--filter`, `--method` |
 | Capture HAR | `har` | `--duration 5s` default |
 | Get response body | `responsebody <id>` | Use requestId from network/har |
 | Intercept requests | `intercept` | `--pattern`, `--replace`, `--response` |
@@ -195,8 +197,8 @@ All commands accept these flags before the command name:
 
 | Task | Command | Notes |
 |------|---------|-------|
-| Stream console | `console` | NDJSON; `--duration` optional |
-| Stream JS errors | `errors` | NDJSON; `--duration` optional |
+| Stream console | `console` | `--duration`, `--filter <type>` |
+| Stream JS errors | `errors` | `--duration` |
 
 ## Analysis
 
@@ -223,6 +225,27 @@ All commands accept these flags before the command name:
 | Eval expression | `eval <expr>` | Returns typed value |
 | Eval in frame | `evalframe <frameId> <expr>` | Use `frames` to get IDs |
 | Run JS file | `run <file.js>` | Reads file, evaluates contents |
+
+## Assert
+
+| Task | Command | Notes |
+|------|---------|-------|
+| Assert element text | `assert text <sel> <expected>` | Exits 1 on mismatch |
+| Assert page title | `assert title <expected>` | |
+| Assert URL contains | `assert url <substring>` | |
+| Assert element exists | `assert exists <sel>` | |
+| Assert element visible | `assert visible <sel>` | |
+| Assert element count | `assert count <sel> <n>` | |
+
+## Utility
+
+| Task | Command | Notes |
+|------|---------|-------|
+| Retry a command | `retry <cmd> [args]` | `--attempts`, `--interval` |
+| Read commands from stdin | `pipe` | Pipe-compatible format |
+| Interactive REPL | `shell` | `.quit`, `.target`, `.output` |
+| Record interactions | `record` | `--output`, `--duration` |
+| Show help | `help [cmd]` | |
 
 ## Advanced
 

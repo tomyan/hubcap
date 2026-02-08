@@ -120,7 +120,61 @@ export HUBCAP_PORT=9333
 hubcap tabs
 ```
 
+## Configuration
+
+Create a `.hubcaprc` file in your project directory or home directory to set defaults:
+
+```json
+{
+  "port": 9333,
+  "host": "localhost",
+  "timeout": "30s",
+  "output": "json"
+}
+```
+
+Precedence: CLI flags > environment variables > `.hubcaprc` > built-in defaults.
+
 ## Common workflows
+
+### Assertions and retry
+
+```bash
+# Assert page state
+hubcap assert title "Dashboard"
+hubcap assert exists '#user-menu'
+hubcap assert text '#status' "Active"
+hubcap assert count '.notification' 3
+
+# Retry flaky checks
+hubcap retry --attempts 5 --interval 2s assert text '#status' "Ready"
+```
+
+### Scripting with pipe
+
+```bash
+# Run commands from a file
+hubcap pipe < test-script.txt
+
+# Inline script
+hubcap pipe <<'EOF'
+goto https://example.com
+wait '#content'
+assert title "Example Domain"
+screenshot --output page.png
+EOF
+```
+
+### Interactive exploration
+
+```bash
+hubcap shell
+hubcap> goto https://example.com
+hubcap> title
+hubcap> .output text
+hubcap> text h1
+hubcap> .quit
+```
 
 ### Form submission
 
@@ -232,7 +286,7 @@ hubcap -output ndjson console --duration 5s
 
 See [docs/commands.md](docs/commands.md) for the full command directory, or individual command docs in the [docs/commands/](docs/commands/) folder.
 
-There are 112 commands organized into these categories:
+There are 113 commands organized into these categories:
 
 - **Browser & tabs** — version, tabs, new, close
 - **Navigation** — goto, back, forward, reload, waitnav, waitload, waiturl
@@ -249,6 +303,8 @@ There are 112 commands organized into these categories:
 - **Monitoring** — console, errors, network, har
 - **Analysis** — metrics, a11y, coverage, csscoverage, stylesheets, listeners, domsnapshot
 - **Profiling** — heapsnapshot, trace
+- **Assert** — assert (text, title, url, exists, visible, count)
+- **Utility** — retry, pipe, shell, record, help
 - **Advanced** — eval, evalframe, run, raw, dialog, highlight
 
 ## Testing
