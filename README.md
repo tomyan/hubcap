@@ -2,8 +2,6 @@
 
 A command-line interface for Chrome DevTools Protocol. Control headless and headed Chrome from your terminal, scripts, and CI pipelines.
 
-Named after the spinning chrome hubcaps of classic cars — because this tool puts a shine on browser automation.
-
 ## Quick start
 
 Start Chrome with remote debugging enabled:
