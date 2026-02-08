@@ -187,12 +187,58 @@ func cmdCookies(cfg *Config, args []string) int {
 	deleteName := fs.String("delete", "", "Cookie name to delete")
 	clearAll := fs.Bool("clear", false, "Clear all cookies")
 	domain := fs.String("domain", "", "Cookie domain (for set/delete)")
+	exportFile := fs.String("export", "", "Export cookies to JSON file")
+	importFile := fs.String("import", "", "Import cookies from JSON file")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
 		return ExitError
+	}
+
+	if *exportFile != "" {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
+			cookies, err := client.GetCookies(ctx, target.ID)
+			if err != nil {
+				return nil, err
+			}
+			data, err := json.MarshalIndent(cookies, "", "  ")
+			if err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(*exportFile, data, 0644); err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{
+				"exported": true,
+				"file":     *exportFile,
+				"count":    len(cookies),
+			}, nil
+		})
+	}
+
+	if *importFile != "" {
+		return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
+			data, err := os.ReadFile(*importFile)
+			if err != nil {
+				return nil, err
+			}
+			var cookies []chrome.Cookie
+			if err := json.Unmarshal(data, &cookies); err != nil {
+				return nil, fmt.Errorf("invalid cookie JSON: %v", err)
+			}
+			for _, c := range cookies {
+				if err := client.SetCookie(ctx, target.ID, c); err != nil {
+					return nil, fmt.Errorf("failed to set cookie %s: %v", c.Name, err)
+				}
+			}
+			return map[string]interface{}{
+				"imported": true,
+				"file":     *importFile,
+				"count":    len(cookies),
+			}, nil
+		})
 	}
 
 	if *setName != "" {
