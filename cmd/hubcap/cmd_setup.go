@@ -30,6 +30,9 @@ var setupSubcommands = map[string]string{
 
 func cmdSetup(cfg *Config, args []string) int {
 	if len(args) == 0 {
+		if isTerminal(cfg.Stdin) {
+			return runSetupWizard(cfg)
+		}
 		return cmdSetupShow(cfg, nil)
 	}
 
