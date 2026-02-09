@@ -43,32 +43,6 @@ func (m *mockRunner) findCall(name string) *mockCall {
 	return nil
 }
 
-func (m *mockRunner) findCallArgs(name string, argSubstr string) *mockCall {
-	for i := range m.calls {
-		if m.calls[i].Name == name {
-			for _, a := range m.calls[i].Args {
-				if a == argSubstr || contains(a, argSubstr) {
-					return &m.calls[i]
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr)
-}
-
-func searchString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 // --- Slice 1: quitChromeDarwin tests ---
 
 func TestQuitChromeDarwin(t *testing.T) {

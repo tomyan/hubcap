@@ -122,6 +122,69 @@ func TestPromptConfirm_No(t *testing.T) {
 	}
 }
 
+func TestWizardRelaunchChrome_Messaging(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+
+	// Input: "y" to confirm, then "default" for profile name
+	input := strings.NewReader("y\ndefault\n")
+	var output bytes.Buffer
+
+	scanner := bufio.NewScanner(input)
+	relaunchCalled := false
+
+	// When
+	code := wizardRelaunchChrome(scanner, &output, func() error {
+		relaunchCalled = true
+		return nil
+	})
+
+	// Then
+	if code != ExitSuccess {
+		t.Fatalf("wizard failed (exit %d):\noutput: %s", code, output.String())
+	}
+
+	out := output.String()
+
+	// Should say "quit Chrome and relaunch"
+	if !strings.Contains(out, "quit Chrome and relaunch") {
+		t.Errorf("output should mention quitting and relaunching, got:\n%s", out)
+	}
+
+	// Should NOT say "close it first"
+	if strings.Contains(out, "close it first") {
+		t.Errorf("output should not say 'close it first', got:\n%s", out)
+	}
+
+	// Should NOT say "launch Chrome with remote debugging"
+	if strings.Contains(out, "launch Chrome with remote debugging") {
+		t.Errorf("output should not use old messaging, got:\n%s", out)
+	}
+
+	if !relaunchCalled {
+		t.Error("expected relaunch function to be called")
+	}
+}
+
+func TestWizardRelaunchChrome_Declined(t *testing.T) {
+	// Input: "n" to decline
+	input := strings.NewReader("n\n")
+	var output bytes.Buffer
+
+	scanner := bufio.NewScanner(input)
+
+	// When
+	code := wizardRelaunchChrome(scanner, &output, func() error {
+		t.Error("relaunch should not be called when user declines")
+		return nil
+	})
+
+	// Then
+	if code != ExitSuccess {
+		t.Errorf("declining should return success, got %d", code)
+	}
+}
+
 func TestSetupWizard_CustomPort(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)

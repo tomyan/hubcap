@@ -146,7 +146,7 @@ func runSetupWizard(cfg *Config) int {
 
 	switch idx {
 	case 0:
-		return wizardRelaunchChrome(r, w)
+		return wizardRelaunchChrome(r, w, nil)
 	case 1:
 		return wizardCustomPort(r, w)
 	case 2:
@@ -156,21 +156,14 @@ func runSetupWizard(cfg *Config) int {
 	return ExitError
 }
 
-// wizardRelaunchChrome finds Chrome and relaunches it with CDP on port 9222.
-func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer) int {
-	chromePath := launcher.FindChrome("")
-	if chromePath == "" {
-		fmt.Fprintln(w, "Could not find Chrome on this system.")
-		fmt.Fprintln(w, "Install Chrome or use 'hubcap setup add' with --chrome-path.")
-		return ExitError
-	}
-
-	fmt.Fprintf(w, "Found Chrome: %s\n", chromePath)
-	fmt.Fprintln(w, "This will launch Chrome with remote debugging on port 9222.")
-	fmt.Fprintln(w, "If Chrome is already running, close it first.")
+// wizardRelaunchChrome quits the user's Chrome and relaunches it with CDP on port 9222.
+// If relaunchFn is nil, uses launcher.RelaunchUserChrome with default options.
+func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer, relaunchFn func() error) int {
+	fmt.Fprintln(w, "This will quit Chrome and relaunch it with remote debugging enabled.")
+	fmt.Fprintln(w, "Your tabs, profile, and extensions will be preserved.")
 	fmt.Fprintln(w)
 
-	ok, err := promptConfirm(r, w, "Launch Chrome now?")
+	ok, err := promptConfirm(r, w, "Continue?")
 	if err != nil {
 		fmt.Fprintf(w, "error: %v\n", err)
 		return ExitError
@@ -179,18 +172,20 @@ func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer) int {
 		return ExitSuccess
 	}
 
-	fmt.Fprintln(w, "Launching Chrome...")
-	inst, err := launcher.Launch(launcher.LaunchOptions{
-		ChromePath: chromePath,
-		Port:       9222,
-		Headless:   false,
-	})
-	if err != nil {
+	if relaunchFn == nil {
+		relaunchFn = func() error {
+			return launcher.RelaunchUserChrome(launcher.RelaunchOptions{Port: 9222})
+		}
+	}
+
+	fmt.Fprintln(w, "Relaunching Chrome...")
+	if err := relaunchFn(); err != nil {
 		fmt.Fprintf(w, "error: %v\n", err)
 		return ExitError
 	}
 
-	fmt.Fprintf(w, "Chrome launched on localhost:9222 (pid %d)\n\n", inst.PID)
+	fmt.Fprintln(w, "Chrome is running with remote debugging on port 9222.")
+	fmt.Fprintln(w)
 
 	name, err := promptString(r, w, "Profile name:", "default")
 	if err != nil {
