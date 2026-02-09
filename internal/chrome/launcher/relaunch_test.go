@@ -236,3 +236,114 @@ func TestRelaunchChromeDarwin_CustomPort(t *testing.T) {
 		t.Errorf("expected --remote-debugging-port=9333 in args, got %v", call.Args)
 	}
 }
+
+// --- Slice 3: RelaunchUserChrome end-to-end tests ---
+
+func TestRelaunchUserChrome_Darwin_FullSequence(t *testing.T) {
+	t.Parallel()
+
+	// Given
+	// Full sequence: pgrep (running) → osascript (quit) → pgrep (gone) → open (relaunch)
+	runner := &mockRunner{
+		results: []mockResult{
+			{nil, nil},                         // pgrep: Chrome is running
+			{nil, nil},                         // osascript: quit succeeds
+			{nil, fmt.Errorf("exit status 1")}, // pgrep: Chrome gone
+			{nil, nil},                         // open -a: relaunch succeeds
+		},
+	}
+	waitCalled := false
+
+	// When
+	opts := RelaunchOptions{
+		Port:     9222,
+		GOOS:     "darwin",
+		Runner:   runner,
+		WaitFunc: func() error { waitCalled = true; return nil },
+	}
+	err := RelaunchUserChrome(opts)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify quit happened (osascript was called)
+	if runner.findCall("osascript") == nil {
+		t.Error("expected osascript to be called for quit")
+	}
+
+	// Verify relaunch happened (open was called)
+	openCall := runner.findCall("open")
+	if openCall == nil {
+		t.Fatal("expected open to be called for relaunch")
+	}
+
+	// Verify wait-for-port was called
+	if !waitCalled {
+		t.Error("expected WaitFunc to be called")
+	}
+}
+
+func TestRelaunchUserChrome_ChromeNotRunning_JustLaunches(t *testing.T) {
+	t.Parallel()
+
+	// Given
+	// pgrep says Chrome not running → skip quit → open (relaunch)
+	runner := &mockRunner{
+		results: []mockResult{
+			{nil, fmt.Errorf("exit status 1")}, // pgrep: no Chrome
+			{nil, nil},                         // open -a: relaunch succeeds
+		},
+	}
+	waitCalled := false
+
+	// When
+	opts := RelaunchOptions{
+		Port:     9222,
+		GOOS:     "darwin",
+		Runner:   runner,
+		WaitFunc: func() error { waitCalled = true; return nil },
+	}
+	err := RelaunchUserChrome(opts)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// osascript should NOT have been called
+	if runner.findCall("osascript") != nil {
+		t.Error("osascript should not be called when Chrome wasn't running")
+	}
+
+	// open should have been called
+	if runner.findCall("open") == nil {
+		t.Fatal("expected open to be called for relaunch")
+	}
+
+	if !waitCalled {
+		t.Error("expected WaitFunc to be called")
+	}
+}
+
+func TestRelaunchUserChrome_UnsupportedOS(t *testing.T) {
+	t.Parallel()
+
+	// Given
+	runner := &mockRunner{}
+
+	// When
+	opts := RelaunchOptions{
+		Port:     9222,
+		GOOS:     "windows",
+		Runner:   runner,
+		WaitFunc: func() error { return nil },
+	}
+	err := RelaunchUserChrome(opts)
+
+	// Then
+	if err == nil {
+		t.Fatal("expected error for unsupported OS")
+	}
+}
