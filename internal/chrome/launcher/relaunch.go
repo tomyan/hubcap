@@ -51,3 +51,15 @@ func quitChromeDarwin(runner CommandRunner, maxWaitMs int) error {
 	runner.Run("pkill", "-x", "Google Chrome")
 	return nil
 }
+
+// relaunchChromeDarwin launches Chrome on macOS using `open -a` with only
+// the remote debugging port flag. This preserves the user's default profile,
+// tabs, and extensions.
+func relaunchChromeDarwin(runner CommandRunner, port int) error {
+	_, err := runner.Run("open", "-a", "Google Chrome", "--args",
+		fmt.Sprintf("--remote-debugging-port=%d", port))
+	if err != nil {
+		return fmt.Errorf("failed to launch Chrome: %w", err)
+	}
+	return nil
+}

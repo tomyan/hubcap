@@ -75,12 +75,12 @@ func TestQuitChromeDarwin(t *testing.T) {
 	t.Parallel()
 
 	// Given
-	// osascript succeeds, first pgrep finds Chrome, second pgrep says gone
+	// Call sequence: pgrep (running) → osascript (quit) → pgrep (gone)
 	runner := &mockRunner{
 		results: []mockResult{
-			{nil, nil},                                    // osascript quit: success
-			{[]byte("1234\n"), nil},                       // pgrep: Chrome still running
-			{nil, fmt.Errorf("exit status 1")},            // pgrep: Chrome gone
+			{nil, nil},                         // pgrep: Chrome is running
+			{nil, nil},                         // osascript: quit succeeds
+			{nil, fmt.Errorf("exit status 1")}, // pgrep: Chrome gone
 		},
 	}
 
@@ -162,5 +162,77 @@ func TestQuitChromeDarwin_FallbackToKill(t *testing.T) {
 	pkillCall := runner.findCall("pkill")
 	if pkillCall == nil {
 		t.Fatal("expected pkill to be called as fallback")
+	}
+}
+
+// --- Slice 2: relaunchChromeDarwin tests ---
+
+func TestRelaunchChromeDarwin(t *testing.T) {
+	t.Parallel()
+
+	// Given
+	runner := &mockRunner{
+		results: []mockResult{
+			{nil, nil}, // open -a: success
+		},
+	}
+
+	// When
+	err := relaunchChromeDarwin(runner, 9222)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d: %+v", len(runner.calls), runner.calls)
+	}
+
+	call := runner.calls[0]
+	if call.Name != "open" {
+		t.Errorf("expected 'open', got %q", call.Name)
+	}
+
+	// Verify args: -a "Google Chrome" --args --remote-debugging-port=9222
+	wantArgs := []string{"-a", "Google Chrome", "--args", "--remote-debugging-port=9222"}
+	if len(call.Args) != len(wantArgs) {
+		t.Fatalf("args = %v, want %v", call.Args, wantArgs)
+	}
+	for i, want := range wantArgs {
+		if call.Args[i] != want {
+			t.Errorf("arg[%d] = %q, want %q", i, call.Args[i], want)
+		}
+	}
+}
+
+func TestRelaunchChromeDarwin_CustomPort(t *testing.T) {
+	t.Parallel()
+
+	// Given
+	runner := &mockRunner{
+		results: []mockResult{
+			{nil, nil}, // open -a: success
+		},
+	}
+
+	// When
+	err := relaunchChromeDarwin(runner, 9333)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	call := runner.calls[0]
+	foundPort := false
+	for _, arg := range call.Args {
+		if arg == "--remote-debugging-port=9333" {
+			foundPort = true
+			break
+		}
+	}
+	if !foundPort {
+		t.Errorf("expected --remote-debugging-port=9333 in args, got %v", call.Args)
 	}
 }
