@@ -93,6 +93,9 @@ func run(args []string, cfg *Config) int {
 		explicitFlags[f.Name] = true
 	})
 
+	// Clean up stale ephemeral sessions
+	cleanupStaleEphemeral(configDir())
+
 	// Config precedence: built-in defaults < profile < .hubcaprc < env vars < CLI flags
 	// 1. Apply profile (if any)
 	if code := applyProfile(cfg, *profileName); code != -1 {
@@ -177,6 +180,16 @@ func applyProfile(cfg *Config, flagProfile string) int {
 	}
 	if p.Target != "" {
 		cfg.Target = p.Target
+	}
+
+	// Ephemeral profile: auto-launch Chrome if needed
+	if p.Ephemeral {
+		port, err := ensureEphemeralRunning(dir, name, p)
+		if err != nil {
+			fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+			return ExitError
+		}
+		cfg.Port = port
 	}
 
 	return -1
