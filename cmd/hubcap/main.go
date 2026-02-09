@@ -34,11 +34,12 @@ type Config struct {
 	Stderr io.Writer
 }
 
-// DefaultConfig returns the default configuration.
+// DefaultConfig returns the default configuration with built-in defaults.
+// Environment variables and profiles are applied later in the config chain.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:    getEnvInt("HUBCAP_PORT", 9222),
-		Host:    getEnv("HUBCAP_HOST", "localhost"),
+		Port:    9222,
+		Host:    "localhost",
 		Timeout: 10 * time.Second,
 		Output:  "json",
 		Quiet:   false,
@@ -48,38 +49,33 @@ func DefaultConfig() *Config {
 	}
 }
 
-func getEnv(key, defaultVal string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return defaultVal
-}
-
-func getEnvInt(key string, defaultVal int) int {
-	if v := os.Getenv(key); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
-		}
-	}
-	return defaultVal
-}
-
 func main() {
 	cfg := DefaultConfig()
-	loadConfigFile(cfg)
 	os.Exit(run(os.Args[1:], cfg))
 }
 
+// flagValues stores values parsed from CLI flags before they get overwritten.
+type flagValues struct {
+	port    int
+	host    string
+	timeout time.Duration
+	output  string
+	quiet   bool
+	target  string
+}
+
 func run(args []string, cfg *Config) int {
-	// Parse global flags
+	// Parse into temporary variables so we can snapshot values before overwriting
+	var fv flagValues
 	fs := flag.NewFlagSet("hubcap", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
-	fs.IntVar(&cfg.Port, "port", cfg.Port, "Chrome debug port (env: HUBCAP_PORT)")
-	fs.StringVar(&cfg.Host, "host", cfg.Host, "Chrome debug host (env: HUBCAP_HOST)")
-	fs.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Command timeout")
-	fs.StringVar(&cfg.Output, "output", cfg.Output, "Output format: json, ndjson, text")
-	fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "Suppress non-essential output")
-	fs.StringVar(&cfg.Target, "target", cfg.Target, "Target page (index or ID)")
+	fs.IntVar(&fv.port, "port", cfg.Port, "Chrome debug port (env: HUBCAP_PORT)")
+	fs.StringVar(&fv.host, "host", cfg.Host, "Chrome debug host (env: HUBCAP_HOST)")
+	fs.DurationVar(&fv.timeout, "timeout", cfg.Timeout, "Command timeout")
+	fs.StringVar(&fv.output, "output", cfg.Output, "Output format: json, ndjson, text")
+	fs.BoolVar(&fv.quiet, "quiet", cfg.Quiet, "Suppress non-essential output")
+	fs.StringVar(&fv.target, "target", cfg.Target, "Target page (index or ID)")
+	profileName := fs.String("profile", "", "Named profile (env: HUBCAP_PROFILE)")
 	helpCommands := fs.Bool("help-commands", false, "List all commands with descriptions")
 
 	fs.Usage = func() { printBriefUsage(cfg, fs) }
@@ -90,6 +86,27 @@ func run(args []string, cfg *Config) int {
 		}
 		return ExitError
 	}
+
+	// Track which flags were explicitly set on the command line
+	explicitFlags := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) {
+		explicitFlags[f.Name] = true
+	})
+
+	// Config precedence: built-in defaults < profile < .hubcaprc < env vars < CLI flags
+	// 1. Apply profile (if any)
+	if code := applyProfile(cfg, *profileName); code != -1 {
+		return code
+	}
+
+	// 2. Apply .hubcaprc
+	loadConfigFile(cfg)
+
+	// 3. Apply env vars (only if not explicitly set by flags)
+	applyEnvVars(cfg, explicitFlags)
+
+	// 4. Re-apply explicit CLI flags on top of everything
+	reapplyExplicitFlags(cfg, &fv, explicitFlags)
 
 	if *helpCommands {
 		printFullCommandList(cfg)
@@ -110,6 +127,99 @@ func run(args []string, cfg *Config) int {
 		return ExitError
 	}
 	return info.Run(cfg, remaining[1:])
+}
+
+// applyProfile loads and applies the named profile to cfg.
+// Returns -1 if successful, or an exit code on error.
+func applyProfile(cfg *Config, flagProfile string) int {
+	// Resolve profile name: --profile flag > HUBCAP_PROFILE env > default from file
+	name := flagProfile
+	if name == "" {
+		name = os.Getenv("HUBCAP_PROFILE")
+	}
+
+	dir := configDir()
+	pf, err := loadProfilesFile(dir)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	if name == "" {
+		name = pf.Default
+	}
+
+	// No profile to apply
+	if name == "" {
+		return -1
+	}
+
+	p, ok := pf.Profiles[name]
+	if !ok {
+		fmt.Fprintf(cfg.Stderr, "error: profile %q not found\n", name)
+		return ExitError
+	}
+
+	// Apply profile fields (only non-zero values)
+	if p.Host != "" {
+		cfg.Host = p.Host
+	}
+	if p.Port != 0 {
+		cfg.Port = p.Port
+	}
+	if p.Timeout != "" {
+		if d, err := time.ParseDuration(p.Timeout); err == nil {
+			cfg.Timeout = d
+		}
+	}
+	if p.Output != "" {
+		cfg.Output = p.Output
+	}
+	if p.Target != "" {
+		cfg.Target = p.Target
+	}
+
+	return -1
+}
+
+// applyEnvVars applies environment variables to cfg, but only for fields
+// not already set by explicit CLI flags.
+func applyEnvVars(cfg *Config, explicit map[string]bool) {
+	if !explicit["port"] {
+		if v := os.Getenv("HUBCAP_PORT"); v != "" {
+			if i, err := strconv.Atoi(v); err == nil {
+				cfg.Port = i
+			}
+		}
+	}
+	if !explicit["host"] {
+		if v := os.Getenv("HUBCAP_HOST"); v != "" {
+			cfg.Host = v
+		}
+	}
+}
+
+// reapplyExplicitFlags re-applies flag values that were explicitly set
+// on the command line, since profile/.hubcaprc loading may have overwritten them.
+func reapplyExplicitFlags(cfg *Config, fv *flagValues, explicit map[string]bool) {
+	if explicit["port"] {
+		cfg.Port = fv.port
+	}
+	if explicit["host"] {
+		cfg.Host = fv.host
+	}
+	if explicit["timeout"] {
+		cfg.Timeout = fv.timeout
+	}
+	if explicit["output"] {
+		cfg.Output = fv.output
+	}
+	if explicit["quiet"] {
+		cfg.Quiet = fv.quiet
+	}
+	if explicit["target"] {
+		cfg.Target = fv.target
+	}
 }
 
 // resolveTarget resolves the target page from cfg.Target.
