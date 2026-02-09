@@ -32,6 +32,9 @@ type Config struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+
+	// PortChecker overrides port detection for testing. If nil, uses launcher.IsPortOpen.
+	PortChecker func(host string, port int) bool
 }
 
 // DefaultConfig returns the default configuration with built-in defaults.

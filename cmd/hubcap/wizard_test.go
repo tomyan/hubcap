@@ -189,7 +189,7 @@ func TestSetupWizard_CustomPort(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)
 
-	// No Chrome on 9222, so wizard shows options.
+	// Wizard shows options when Chrome is not detected.
 	// Input:
 	// 1) "2" = Connect to a different port
 	// 2) port: "9301" (our test chrome)
@@ -197,13 +197,14 @@ func TestSetupWizard_CustomPort(t *testing.T) {
 	input := strings.NewReader("2\n9301\nmylocal\n")
 
 	cfg := &Config{
-		Host:    "localhost",
-		Port:    9222,
-		Timeout: 5 * time.Second,
-		Output:  "json",
-		Stdin:   input,
-		Stdout:  &bytes.Buffer{},
-		Stderr:  &bytes.Buffer{},
+		Host:        "localhost",
+		Port:        9222,
+		Timeout:     5 * time.Second,
+		Output:      "json",
+		Stdin:       input,
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &bytes.Buffer{},
+		PortChecker: func(string, int) bool { return false },
 	}
 
 	code := runSetupWizard(cfg)
@@ -234,7 +235,7 @@ func TestSetupWizard_RemoteHost(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)
 
-	// No Chrome on 9222, pick remote.
+	// Wizard shows options when Chrome is not detected, pick remote.
 	// Input:
 	// 1) "3" = Connect to a remote Chrome
 	// 2) host: "ci-box"
@@ -243,13 +244,14 @@ func TestSetupWizard_RemoteHost(t *testing.T) {
 	input := strings.NewReader("3\nci-box\n9222\nci\n")
 
 	cfg := &Config{
-		Host:    "localhost",
-		Port:    9222,
-		Timeout: 5 * time.Second,
-		Output:  "json",
-		Stdin:   input,
-		Stdout:  &bytes.Buffer{},
-		Stderr:  &bytes.Buffer{},
+		Host:        "localhost",
+		Port:        9222,
+		Timeout:     5 * time.Second,
+		Output:      "json",
+		Stdin:       input,
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &bytes.Buffer{},
+		PortChecker: func(string, int) bool { return false },
 	}
 
 	code := runSetupWizard(cfg)

@@ -106,7 +106,11 @@ func runSetupWizard(cfg *Config) int {
 	fmt.Fprintln(w)
 
 	// Step 1: Check if Chrome CDP is already running on the default port
-	detected := launcher.IsPortOpen("localhost", 9222)
+	portChecker := cfg.PortChecker
+	if portChecker == nil {
+		portChecker = launcher.IsPortOpen
+	}
+	detected := portChecker("localhost", 9222)
 
 	if detected {
 		// Happy path: Chrome is already listening
