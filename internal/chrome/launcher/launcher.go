@@ -3,8 +3,11 @@ package launcher
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -171,6 +174,36 @@ func Launch(opts LaunchOptions) (*Instance, error) {
 	}
 
 	return inst, nil
+}
+
+// ChromeInfo contains version information from a running Chrome instance.
+type ChromeInfo struct {
+	Browser  string `json:"Browser"`
+	Protocol string `json:"Protocol-Version"`
+	V8       string `json:"V8-Version"`
+	WebKit   string `json:"WebKit-Version"`
+}
+
+// DetectRunning checks if a Chrome debug port is responding and returns version info.
+func DetectRunning(host string, port int) (*ChromeInfo, error) {
+	url := fmt.Sprintf("http://%s/json/version", net.JoinHostPort(host, fmt.Sprintf("%d", port)))
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("Chrome not reachable at %s:%d: %w", host, port, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	var info ChromeInfo
+	if err := json.Unmarshal(body, &info); err != nil {
+		return nil, fmt.Errorf("parsing version info: %w", err)
+	}
+	return &info, nil
 }
 
 // Stop terminates the Chrome instance and cleans up.

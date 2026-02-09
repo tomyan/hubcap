@@ -469,6 +469,64 @@ func TestSetup_UnknownSubcommand(t *testing.T) {
 	}
 }
 
+func TestSetupLaunch(t *testing.T) {
+	cfg, dir := setupTestConfig(t)
+
+	pf := &ProfilesFile{
+		Profiles: map[string]Profile{
+			"launchtest": {
+				Port:     19880,
+				Headless: true,
+			},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	code := run([]string{"setup", "launch", "launchtest"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("setup launch failed: %s", stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output not valid JSON: %v\n%s", err, stdout)
+	}
+
+	// Should have launched Chrome
+	if result["port"] != float64(19880) {
+		t.Errorf("port = %v, want 19880", result["port"])
+	}
+	pid, ok := result["pid"]
+	if !ok || pid == float64(0) {
+		t.Error("should report a pid")
+	}
+
+	// Clean up: stop via setup remove or kill directly
+	// The launched Chrome should be reachable
+	cfg2, _ := setupTestConfig(t)
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+	code = run([]string{"setup", "status", "launchtest"}, cfg2)
+	if code != ExitSuccess {
+		t.Fatal("status check failed after launch")
+	}
+	statusOut := cfg2.Stdout.(*bytes.Buffer).String()
+	var statusResult map[string]interface{}
+	json.Unmarshal([]byte(statusOut), &statusResult)
+	if statusResult["connected"] != true {
+		t.Error("Chrome should be connected after launch")
+	}
+
+	// Kill the process we launched
+	if pidFloat, ok := pid.(float64); ok {
+		proc, err := os.FindProcess(int(pidFloat))
+		if err == nil {
+			proc.Kill()
+		}
+	}
+}
+
 // Ensure profiles.json file permissions
 func TestSetupAdd_FilePermissions(t *testing.T) {
 	cfg, dir := setupTestConfig(t)

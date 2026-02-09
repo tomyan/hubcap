@@ -110,6 +110,42 @@ func TestLaunch_InvalidChromePath(t *testing.T) {
 	}
 }
 
+func TestDetectRunning_Open(t *testing.T) {
+	t.Parallel()
+
+	chromePath := FindChrome("")
+	if chromePath == "" {
+		t.Skip("Chrome not found on this system")
+	}
+
+	inst, err := Launch(LaunchOptions{
+		ChromePath: chromePath,
+		Port:       19879,
+		Headless:   true,
+	})
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+	defer inst.Stop()
+
+	info, err := DetectRunning("localhost", 19879)
+	if err != nil {
+		t.Fatalf("DetectRunning failed: %v", err)
+	}
+	if info.Browser == "" {
+		t.Error("DetectRunning should return browser info")
+	}
+}
+
+func TestDetectRunning_Closed(t *testing.T) {
+	t.Parallel()
+
+	_, err := DetectRunning("localhost", 19999)
+	if err == nil {
+		t.Error("DetectRunning should fail for closed port")
+	}
+}
+
 func TestLaunch_CustomDataDir(t *testing.T) {
 	t.Parallel()
 

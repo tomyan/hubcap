@@ -445,8 +445,77 @@ func cmdSetupStatus(cfg *Config, args []string) int {
 }
 
 func cmdSetupLaunch(cfg *Config, args []string) int {
-	fmt.Fprintln(cfg.Stderr, "setup launch not yet implemented")
-	return ExitError
+	dir := configDir()
+	pf, err := loadProfilesFile(dir)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	name := ""
+	if len(args) > 0 {
+		name = args[0]
+	}
+	if name == "" {
+		name = pf.Default
+	}
+	if name == "" {
+		fmt.Fprintln(cfg.Stderr, "error: no profile specified and no default set")
+		return ExitError
+	}
+
+	p, ok := pf.Profiles[name]
+	if !ok {
+		fmt.Fprintf(cfg.Stderr, "error: profile %q not found\n", name)
+		return ExitError
+	}
+
+	host := p.Host
+	if host == "" {
+		host = "localhost"
+	}
+	port := p.Port
+	if port == 0 {
+		port = 9222
+	}
+
+	// Check if already running
+	if launcher.IsPortOpen(host, port) {
+		fmt.Fprintf(cfg.Stderr, "Chrome already running on %s:%d\n", host, port)
+		return ExitError
+	}
+
+	opts := launcher.LaunchOptions{
+		ChromePath: p.ChromePath,
+		Port:       port,
+		Headless:   p.Headless,
+		DataDir:    p.ChromeDataDir,
+	}
+
+	inst, err := launcher.Launch(opts)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	type launchResult struct {
+		Profile string `json:"profile"`
+		Host    string `json:"host"`
+		Port    int    `json:"port"`
+		PID     int    `json:"pid"`
+		DataDir string `json:"data_dir"`
+	}
+
+	// Note: we don't call inst.Stop() — the Chrome process stays running
+	_ = inst
+
+	return outputResult(cfg, launchResult{
+		Profile: name,
+		Host:    host,
+		Port:    port,
+		PID:     inst.PID,
+		DataDir: inst.DataDir,
+	})
 }
 
 // profileFlags holds pointers to flag values for add/edit commands.
