@@ -177,6 +177,103 @@ func TestSaveProfilesFile_CreatesDir(t *testing.T) {
 	}
 }
 
+func TestEnsureDefaultProfile_CreatesWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	// Given
+	dir := t.TempDir()
+
+	// When
+	err := ensureDefaultProfile(dir)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pf, err := loadProfilesFile(dir)
+	if err != nil {
+		t.Fatalf("load profiles: %v", err)
+	}
+
+	if pf.Default != "default" {
+		t.Errorf("Default = %q, want default", pf.Default)
+	}
+
+	p, ok := pf.Profiles["default"]
+	if !ok {
+		t.Fatal("profile 'default' not found")
+	}
+	if !p.Ephemeral {
+		t.Error("profile should be ephemeral")
+	}
+	if p.Port != 9222 {
+		t.Errorf("Port = %d, want 9222", p.Port)
+	}
+	if p.Host != "localhost" {
+		t.Errorf("Host = %q, want localhost", p.Host)
+	}
+
+	expectedDataDir := filepath.Join(dir, "chrome-data", "default")
+	if p.ChromeDataDir != expectedDataDir {
+		t.Errorf("ChromeDataDir = %q, want %q", p.ChromeDataDir, expectedDataDir)
+	}
+	if p.ChromePath != "" {
+		t.Errorf("ChromePath = %q, want empty", p.ChromePath)
+	}
+}
+
+func TestEnsureDefaultProfile_SkipsWhenFileExists(t *testing.T) {
+	t.Parallel()
+
+	// Given — pre-create a profiles.json with a custom profile
+	dir := t.TempDir()
+	pf := &ProfilesFile{
+		Default:  "custom",
+		Profiles: map[string]Profile{"custom": {Port: 5555}},
+	}
+	saveProfilesFile(dir, pf)
+
+	// When
+	err := ensureDefaultProfile(dir)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// File should be unchanged
+	pf2, _ := loadProfilesFile(dir)
+	if pf2.Default != "custom" {
+		t.Errorf("Default = %q, want custom (unchanged)", pf2.Default)
+	}
+	if _, ok := pf2.Profiles["default"]; ok {
+		t.Error("should not have added 'default' profile to existing file")
+	}
+}
+
+func TestEnsureDefaultProfile_SkipsWhenEmptyProfiles(t *testing.T) {
+	t.Parallel()
+
+	// Given — file exists but has empty profiles
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "profiles.json"), []byte(`{}`), 0644)
+
+	// When
+	err := ensureDefaultProfile(dir)
+
+	// Then
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// File should be unchanged — no default profile added
+	data, _ := os.ReadFile(filepath.Join(dir, "profiles.json"))
+	if string(data) != "{}" {
+		t.Errorf("file should be unchanged, got: %s", string(data))
+	}
+}
+
 func TestProfileAllFields(t *testing.T) {
 	t.Parallel()
 

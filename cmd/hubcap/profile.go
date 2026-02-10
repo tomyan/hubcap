@@ -178,6 +178,32 @@ func ensureEphemeralRunning(dir string, name string, p Profile) (int, error) {
 	return port, nil
 }
 
+// ensureDefaultProfile creates a default profiles.json if one doesn't exist.
+// If the file already exists (even empty), it's left unchanged.
+func ensureDefaultProfile(dir string) error {
+	path := filepath.Join(dir, "profiles.json")
+	_, err := os.Stat(path)
+	if err == nil {
+		return nil // file exists, leave it alone
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("checking profiles.json: %w", err)
+	}
+
+	pf := &ProfilesFile{
+		Default: "default",
+		Profiles: map[string]Profile{
+			"default": {
+				Host:          "localhost",
+				Port:          9222,
+				Ephemeral:     true,
+				ChromeDataDir: filepath.Join(dir, "chrome-data", "default"),
+			},
+		},
+	}
+	return saveProfilesFile(dir, pf)
+}
+
 // cleanupStaleEphemeral removes ephemeral sessions that have exceeded their timeout.
 func cleanupStaleEphemeral(dir string) {
 	ephDir := filepath.Join(dir, "ephemeral")
