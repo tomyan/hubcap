@@ -97,7 +97,14 @@ func run(args []string, cfg *Config) int {
 	})
 
 	// Clean up stale ephemeral sessions
-	cleanupStaleEphemeral(configDir())
+	dir := configDir()
+	cleanupStaleEphemeral(dir)
+
+	// Auto-create default profile if no profiles.json exists
+	if err := ensureDefaultProfile(dir); err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
 
 	// Config precedence: built-in defaults < profile < .hubcaprc < env vars < CLI flags
 	// 1. Apply profile (if any)
