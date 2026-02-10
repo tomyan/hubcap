@@ -9,7 +9,7 @@ Use `setup` to create, manage, and switch between named connection profiles. Pro
 ## Usage
 
 ```
-hubcap setup                    Show current config (non-TTY) or run wizard (TTY)
+hubcap setup                    Show profile dashboard with connectivity status
 hubcap setup list               List all profiles
 hubcap setup show [name]        Show profile details (default: active profile)
 hubcap setup add <name>         Add a new profile
@@ -51,6 +51,15 @@ hubcap setup launch [name]      Launch Chrome for a profile
 ## Output
 
 Output format depends on the subcommand. All subcommands support `--output json`.
+
+### setup (dashboard)
+
+```json
+[
+  {"name": "default", "host": "localhost", "port": 9222, "is_default": true, "ephemeral": true, "connected": true},
+  {"name": "ci", "host": "ci-host", "port": 9333, "connected": false}
+]
+```
 
 ### setup list
 
