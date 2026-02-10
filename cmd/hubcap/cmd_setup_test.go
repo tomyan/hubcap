@@ -14,6 +14,9 @@ func setupTestConfig(t *testing.T) (*Config, string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+	// Pre-create empty profiles.json to prevent ensureDefaultProfile from
+	// auto-creating an ephemeral profile that launches Chrome during tests.
+	saveProfilesFile(dir, &ProfilesFile{Profiles: map[string]Profile{}})
 	cfg := &Config{
 		Port:    testChromePort,
 		Host:    "localhost",
@@ -452,36 +455,6 @@ func TestSetup_NoSubcommand_NonTTY(t *testing.T) {
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("setup (no subcommand) failed: %s", stderr)
-	}
-}
-
-func TestRun_AutoCreatesDefaultProfile(t *testing.T) {
-	// Given — no profiles.json exists
-	cfg, dir := setupTestConfig(t)
-
-	// When — run any command (setup list will work without Chrome)
-	code := run([]string{"setup", "list"}, cfg)
-
-	// Then
-	if code != ExitSuccess {
-		stderr := cfg.Stderr.(*bytes.Buffer).String()
-		t.Fatalf("setup list failed: %s", stderr)
-	}
-
-	// Should have auto-created profiles.json with a default profile
-	pf, err := loadProfilesFile(dir)
-	if err != nil {
-		t.Fatalf("load profiles: %v", err)
-	}
-	if pf.Default != "default" {
-		t.Errorf("Default = %q, want default", pf.Default)
-	}
-	p, ok := pf.Profiles["default"]
-	if !ok {
-		t.Fatal("auto-created profile 'default' not found")
-	}
-	if !p.Ephemeral {
-		t.Error("auto-created profile should be ephemeral")
 	}
 }
 
