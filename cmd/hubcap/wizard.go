@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -96,7 +97,7 @@ func promptConfirm(scanner *bufio.Scanner, w io.Writer, prompt string) (bool, er
 
 // runSetupWizard runs the interactive setup wizard.
 // Happy path: detect Chrome → save profile (2 prompts).
-// If Chrome isn't running: offer to relaunch it with CDP enabled.
+// If Chrome isn't running: offer to launch a dedicated Chrome for debugging.
 // Falls through to advanced setup for remote/custom configurations.
 func runSetupWizard(cfg *Config) int {
 	r := bufio.NewScanner(cfg.Stdin)
@@ -131,7 +132,7 @@ func runSetupWizard(cfg *Config) int {
 			name = "default"
 		}
 
-		return saveWizardProfile(w, name, "localhost", 9222, false)
+		return saveWizardProfile(w, name, "localhost", 9222, false, "", "")
 	}
 
 	// Chrome not detected — offer options
@@ -139,10 +140,10 @@ func runSetupWizard(cfg *Config) int {
 	fmt.Fprintln(w)
 
 	idx, err := promptChoice(r, w, "What would you like to do?", []string{
-		"Relaunch Chrome with CDP enabled",
+		"Launch a dedicated Chrome for debugging",
 		"Connect to a different port",
 		"Connect to a remote Chrome",
-	}, "Relaunch Chrome with CDP enabled")
+	}, "Launch a dedicated Chrome for debugging")
 	if err != nil {
 		fmt.Fprintf(w, "error: %v\n", err)
 		return ExitError
@@ -160,11 +161,17 @@ func runSetupWizard(cfg *Config) int {
 	return ExitError
 }
 
-// wizardRelaunchChrome quits the user's Chrome and relaunches it with CDP on port 9222.
-// If relaunchFn is nil, uses launcher.RelaunchUserChrome with default options.
-func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer, relaunchFn func() error) int {
-	fmt.Fprintln(w, "This will quit Chrome and relaunch it with remote debugging enabled.")
-	fmt.Fprintln(w, "Your tabs, profile, and extensions will be preserved.")
+// wizardRelaunchChrome launches a dedicated Chrome for debugging with an ephemeral profile.
+// If launchFn is nil, uses ensureEphemeralRunning with the saved profile.
+func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer, launchFn func(dir, name string, p Profile) error) int {
+	chromePath := launcher.FindChrome("")
+	if chromePath == "" {
+		fmt.Fprintln(w, "error: Chrome not found")
+		return ExitError
+	}
+
+	fmt.Fprintln(w, "This will launch a dedicated Chrome for debugging.")
+	fmt.Fprintln(w, "Your normal Chrome is not affected.")
 	fmt.Fprintln(w)
 
 	ok, err := promptConfirm(r, w, "Continue?")
@@ -176,21 +183,6 @@ func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer, relaunchFn func() error
 		return ExitSuccess
 	}
 
-	if relaunchFn == nil {
-		relaunchFn = func() error {
-			return launcher.RelaunchUserChrome(launcher.RelaunchOptions{Port: 9222})
-		}
-	}
-
-	fmt.Fprintln(w, "Relaunching Chrome...")
-	if err := relaunchFn(); err != nil {
-		fmt.Fprintf(w, "error: %v\n", err)
-		return ExitError
-	}
-
-	fmt.Fprintln(w, "Chrome is running with remote debugging on port 9222.")
-	fmt.Fprintln(w)
-
 	name, err := promptString(r, w, "Profile name:", "default")
 	if err != nil {
 		fmt.Fprintf(w, "error: %v\n", err)
@@ -200,7 +192,34 @@ func wizardRelaunchChrome(r *bufio.Scanner, w io.Writer, relaunchFn func() error
 		name = "default"
 	}
 
-	return saveWizardProfile(w, name, "localhost", 9222, false)
+	dir := configDir()
+	dataDir := filepath.Join(dir, "chrome-data", name)
+
+	profile := Profile{
+		Host:          "localhost",
+		Port:          9222,
+		Ephemeral:     true,
+		ChromeDataDir: dataDir,
+		ChromePath:    chromePath,
+	}
+
+	if launchFn == nil {
+		launchFn = func(d, n string, p Profile) error {
+			_, err := ensureEphemeralRunning(d, n, p)
+			return err
+		}
+	}
+
+	fmt.Fprintln(w, "Launching Chrome...")
+	if err := launchFn(dir, name, profile); err != nil {
+		fmt.Fprintf(w, "error: %v\n", err)
+		return ExitError
+	}
+
+	fmt.Fprintln(w, "Chrome is running with remote debugging on port 9222.")
+	fmt.Fprintln(w)
+
+	return saveWizardProfile(w, name, "localhost", 9222, false, dataDir, chromePath)
 }
 
 // wizardCustomPort sets up a local profile on a non-default port.
@@ -225,7 +244,7 @@ func wizardCustomPort(r *bufio.Scanner, w io.Writer) int {
 		name = "default"
 	}
 
-	return saveWizardProfile(w, name, "localhost", port, false)
+	return saveWizardProfile(w, name, "localhost", port, false, "", "")
 }
 
 // wizardRemote sets up a profile for a remote Chrome instance.
@@ -260,11 +279,12 @@ func wizardRemote(r *bufio.Scanner, w io.Writer) int {
 		name = "remote"
 	}
 
-	return saveWizardProfile(w, name, host, port, false)
+	return saveWizardProfile(w, name, host, port, false, "", "")
 }
 
 // saveWizardProfile saves a profile and sets it as default.
-func saveWizardProfile(w io.Writer, name, host string, port int, headless bool) int {
+// Optional chromeDataDir and chromePath set the ephemeral fields when non-empty.
+func saveWizardProfile(w io.Writer, name, host string, port int, headless bool, chromeDataDir string, chromePath string) int {
 	dir := configDir()
 	pf, err := loadProfilesFile(dir)
 	if err != nil {
@@ -272,11 +292,18 @@ func saveWizardProfile(w io.Writer, name, host string, port int, headless bool) 
 		return ExitError
 	}
 
-	pf.Profiles[name] = Profile{
+	p := Profile{
 		Host:     host,
 		Port:     port,
 		Headless: headless,
 	}
+	if chromeDataDir != "" {
+		p.Ephemeral = true
+		p.ChromeDataDir = chromeDataDir
+		p.ChromePath = chromePath
+	}
+
+	pf.Profiles[name] = p
 	pf.Default = name
 
 	if err := saveProfilesFile(dir, pf); err != nil {
