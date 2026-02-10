@@ -145,7 +145,7 @@ func Launch(opts LaunchOptions) (*Instance, error) {
 		"about:blank",
 	}
 	if opts.Headless {
-		args = append([]string{"--headless"}, args...)
+		args = append([]string{"--headless=new"}, args...)
 	}
 
 	cmd := exec.Command(chromePath, args...)
