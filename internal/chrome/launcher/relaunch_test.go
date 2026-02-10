@@ -34,6 +34,17 @@ func (m *mockRunner) Run(name string, args ...string) ([]byte, error) {
 	return nil, nil
 }
 
+func (m *mockRunner) Start(name string, args ...string) error {
+	m.calls = append(m.calls, mockCall{Name: name, Args: args})
+	if m.callIdx < len(m.results) {
+		r := m.results[m.callIdx]
+		m.callIdx++
+		return r.err
+	}
+	m.callIdx++
+	return nil
+}
+
 func (m *mockRunner) findCall(name string) *mockCall {
 	for i := range m.calls {
 		if m.calls[i].Name == name {
@@ -145,14 +156,14 @@ func TestRelaunchChromeDarwin(t *testing.T) {
 	t.Parallel()
 
 	// Given
-	runner := &mockRunner{
-		results: []mockResult{
-			{nil, nil}, // open -a: success
-		},
+	chromePath := FindChrome("")
+	if chromePath == "" {
+		t.Skip("Chrome not found on this system")
 	}
+	runner := &mockRunner{}
 
 	// When
-	err := relaunchChromeDarwin(runner, 9222)
+	err := relaunchChromeDarwin(runner, chromePath, 9222)
 
 	// Then
 	if err != nil {
@@ -163,20 +174,22 @@ func TestRelaunchChromeDarwin(t *testing.T) {
 		t.Fatalf("expected 1 call, got %d: %+v", len(runner.calls), runner.calls)
 	}
 
+	// Should launch Chrome binary directly via Start (not open -a)
 	call := runner.calls[0]
-	if call.Name != "open" {
-		t.Errorf("expected 'open', got %q", call.Name)
+	if call.Name != chromePath {
+		t.Errorf("expected %q, got %q", chromePath, call.Name)
 	}
 
-	// Verify args: -a "Google Chrome" --args --remote-debugging-port=9222
-	wantArgs := []string{"-a", "Google Chrome", "--args", "--remote-debugging-port=9222"}
-	if len(call.Args) != len(wantArgs) {
-		t.Fatalf("args = %v, want %v", call.Args, wantArgs)
-	}
-	for i, want := range wantArgs {
-		if call.Args[i] != want {
-			t.Errorf("arg[%d] = %q, want %q", i, call.Args[i], want)
+	// Verify --remote-debugging-port=9222 is in args
+	foundPort := false
+	for _, arg := range call.Args {
+		if arg == "--remote-debugging-port=9222" {
+			foundPort = true
+			break
 		}
+	}
+	if !foundPort {
+		t.Errorf("expected --remote-debugging-port=9222 in args, got %v", call.Args)
 	}
 }
 
@@ -184,14 +197,10 @@ func TestRelaunchChromeDarwin_CustomPort(t *testing.T) {
 	t.Parallel()
 
 	// Given
-	runner := &mockRunner{
-		results: []mockResult{
-			{nil, nil}, // open -a: success
-		},
-	}
+	runner := &mockRunner{}
 
 	// When
-	err := relaunchChromeDarwin(runner, 9333)
+	err := relaunchChromeDarwin(runner, "/fake/chrome", 9333)
 
 	// Then
 	if err != nil {
@@ -217,23 +226,24 @@ func TestRelaunchUserChrome_Darwin_FullSequence(t *testing.T) {
 	t.Parallel()
 
 	// Given
-	// Full sequence: pgrep (running) → osascript (quit) → pgrep (gone) → open (relaunch)
+	// Full sequence: pgrep (running) → osascript (quit) → pgrep (gone) → Start chrome binary
 	runner := &mockRunner{
 		results: []mockResult{
 			{nil, nil},                         // pgrep: Chrome is running
 			{nil, nil},                         // osascript: quit succeeds
 			{nil, fmt.Errorf("exit status 1")}, // pgrep: Chrome gone
-			{nil, nil},                         // open -a: relaunch succeeds
+			{nil, nil},                         // Start: chrome binary launches
 		},
 	}
 	waitCalled := false
 
 	// When
 	opts := RelaunchOptions{
-		Port:     9222,
-		GOOS:     "darwin",
-		Runner:   runner,
-		WaitFunc: func() error { waitCalled = true; return nil },
+		Port:       9222,
+		GOOS:       "darwin",
+		ChromePath: "/fake/chrome",
+		Runner:     runner,
+		WaitFunc:   func() error { waitCalled = true; return nil },
 	}
 	err := RelaunchUserChrome(opts)
 
@@ -247,10 +257,10 @@ func TestRelaunchUserChrome_Darwin_FullSequence(t *testing.T) {
 		t.Error("expected osascript to be called for quit")
 	}
 
-	// Verify relaunch happened (open was called)
-	openCall := runner.findCall("open")
-	if openCall == nil {
-		t.Fatal("expected open to be called for relaunch")
+	// Verify Chrome binary was launched directly (not via open -a)
+	chromeCall := runner.findCall("/fake/chrome")
+	if chromeCall == nil {
+		t.Fatal("expected Chrome binary to be launched directly")
 	}
 
 	// Verify wait-for-port was called
@@ -263,21 +273,22 @@ func TestRelaunchUserChrome_ChromeNotRunning_JustLaunches(t *testing.T) {
 	t.Parallel()
 
 	// Given
-	// pgrep says Chrome not running → skip quit → open (relaunch)
+	// pgrep says Chrome not running → skip quit → Start chrome binary
 	runner := &mockRunner{
 		results: []mockResult{
 			{nil, fmt.Errorf("exit status 1")}, // pgrep: no Chrome
-			{nil, nil},                         // open -a: relaunch succeeds
+			{nil, nil},                         // Start: chrome binary launches
 		},
 	}
 	waitCalled := false
 
 	// When
 	opts := RelaunchOptions{
-		Port:     9222,
-		GOOS:     "darwin",
-		Runner:   runner,
-		WaitFunc: func() error { waitCalled = true; return nil },
+		Port:       9222,
+		GOOS:       "darwin",
+		ChromePath: "/fake/chrome",
+		Runner:     runner,
+		WaitFunc:   func() error { waitCalled = true; return nil },
 	}
 	err := RelaunchUserChrome(opts)
 
@@ -291,9 +302,9 @@ func TestRelaunchUserChrome_ChromeNotRunning_JustLaunches(t *testing.T) {
 		t.Error("osascript should not be called when Chrome wasn't running")
 	}
 
-	// open should have been called
-	if runner.findCall("open") == nil {
-		t.Fatal("expected open to be called for relaunch")
+	// Chrome binary should have been launched
+	if runner.findCall("/fake/chrome") == nil {
+		t.Fatal("expected Chrome binary to be launched")
 	}
 
 	if !waitCalled {

@@ -10,6 +10,7 @@ import (
 // CommandRunner abstracts command execution for testability.
 type CommandRunner interface {
 	Run(name string, args ...string) ([]byte, error)
+	Start(name string, args ...string) error // launches a process without waiting for it to exit
 }
 
 // DefaultCommandRunner executes commands via os/exec.
@@ -18,6 +19,15 @@ type DefaultCommandRunner struct{}
 // Run executes a command and returns its combined output.
 func (d DefaultCommandRunner) Run(name string, args ...string) ([]byte, error) {
 	return exec.Command(name, args...).CombinedOutput()
+}
+
+// Start launches a process in the background without waiting for it to exit.
+// Stdout and stderr are discarded.
+func (d DefaultCommandRunner) Start(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Start()
 }
 
 // quitChromeDarwin gracefully quits Chrome on macOS.
@@ -53,12 +63,11 @@ func quitChromeDarwin(runner CommandRunner, maxWaitMs int) error {
 	return nil
 }
 
-// relaunchChromeDarwin launches Chrome on macOS using `open -a` with only
-// the remote debugging port flag. This preserves the user's default profile,
-// tabs, and extensions.
-func relaunchChromeDarwin(runner CommandRunner, port int) error {
-	_, err := runner.Run("open", "-a", "Google Chrome", "--args",
-		fmt.Sprintf("--remote-debugging-port=%d", port))
+// relaunchChromeDarwin launches Chrome directly with the remote debugging port.
+// Uses the binary path directly (not `open -a`) so command-line args are reliably
+// passed even when macOS tries to restore a previous session.
+func relaunchChromeDarwin(runner CommandRunner, chromePath string, port int) error {
+	err := runner.Start(chromePath, fmt.Sprintf("--remote-debugging-port=%d", port))
 	if err != nil {
 		return fmt.Errorf("failed to launch Chrome: %w", err)
 	}
@@ -69,10 +78,11 @@ const defaultQuitTimeoutMs = 5000
 
 // RelaunchOptions configures the relaunch behaviour.
 type RelaunchOptions struct {
-	Port     int           // Remote debugging port (default 9222)
-	GOOS     string        // Override runtime.GOOS for testing
-	Runner   CommandRunner // Override command runner for testing
-	WaitFunc func() error  // Override wait-for-port for testing
+	Port       int           // Remote debugging port (default 9222)
+	ChromePath string        // Path to Chrome binary (auto-detected if empty)
+	GOOS       string        // Override runtime.GOOS for testing
+	Runner     CommandRunner // Override command runner for testing
+	WaitFunc   func() error  // Override wait-for-port for testing
 }
 
 // RelaunchUserChrome gracefully quits the user's Chrome and relaunches it
@@ -93,19 +103,27 @@ func RelaunchUserChrome(opts RelaunchOptions) error {
 		port = 9222
 	}
 
+	chromePath := opts.ChromePath
+	if chromePath == "" {
+		chromePath = FindChrome("")
+		if chromePath == "" {
+			return fmt.Errorf("Chrome not found")
+		}
+	}
+
 	switch goos {
 	case "darwin":
 		if err := quitChromeDarwin(runner, defaultQuitTimeoutMs); err != nil {
 			return err
 		}
-		if err := relaunchChromeDarwin(runner, port); err != nil {
+		if err := relaunchChromeDarwin(runner, chromePath, port); err != nil {
 			return err
 		}
 	case "linux":
 		if err := quitChromeLinux(runner, defaultQuitTimeoutMs); err != nil {
 			return err
 		}
-		if err := relaunchChromeLinux(runner, port); err != nil {
+		if err := relaunchChromeLinux(runner, chromePath, port); err != nil {
 			return err
 		}
 	default:
@@ -141,12 +159,8 @@ func quitChromeLinux(runner CommandRunner, maxWaitMs int) error {
 }
 
 // relaunchChromeLinux launches Chrome on Linux directly with the debugging port.
-func relaunchChromeLinux(runner CommandRunner, port int) error {
-	chromePath := FindChrome("")
-	if chromePath == "" {
-		return fmt.Errorf("Chrome not found")
-	}
-	_, err := runner.Run(chromePath, fmt.Sprintf("--remote-debugging-port=%d", port))
+func relaunchChromeLinux(runner CommandRunner, chromePath string, port int) error {
+	err := runner.Start(chromePath, fmt.Sprintf("--remote-debugging-port=%d", port))
 	if err != nil {
 		return fmt.Errorf("failed to launch Chrome: %w", err)
 	}
