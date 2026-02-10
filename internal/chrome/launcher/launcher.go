@@ -132,7 +132,6 @@ func Launch(opts LaunchOptions) (*Instance, error) {
 
 	args := []string{
 		"--disable-gpu",
-		"--no-sandbox",
 		"--disable-dev-shm-usage",
 		"--disable-extensions",
 		"--disable-background-networking",
