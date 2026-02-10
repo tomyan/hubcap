@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/tomyan/hubcap/internal/chrome/launcher"
@@ -30,10 +31,7 @@ var setupSubcommands = map[string]string{
 
 func cmdSetup(cfg *Config, args []string) int {
 	if len(args) == 0 {
-		if isTerminal(cfg.Stdin) {
-			return runSetupWizard(cfg)
-		}
-		return cmdSetupShow(cfg, nil)
+		return cmdSetupDashboard(cfg)
 	}
 
 	sub := args[0]
@@ -61,6 +59,60 @@ func cmdSetup(cfg *Config, args []string) int {
 		fmt.Fprintln(cfg.Stderr, "subcommands: list, show, add, edit, remove, default, status, launch")
 		return ExitError
 	}
+}
+
+type dashboardEntry struct {
+	Name      string `json:"name"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	IsDefault bool   `json:"is_default,omitempty"`
+	Ephemeral bool   `json:"ephemeral,omitempty"`
+	Connected bool   `json:"connected"`
+}
+
+func cmdSetupDashboard(cfg *Config) int {
+	dir := configDir()
+	pf, err := loadProfilesFile(dir)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	portChecker := cfg.PortChecker
+	if portChecker == nil {
+		portChecker = launcher.IsPortOpen
+	}
+
+	var entries []dashboardEntry
+	for name, p := range pf.Profiles {
+		host := p.Host
+		if host == "" {
+			host = "localhost"
+		}
+		port := p.Port
+		if port == 0 {
+			port = 9222
+		}
+
+		entries = append(entries, dashboardEntry{
+			Name:      name,
+			Host:      host,
+			Port:      port,
+			IsDefault: name == pf.Default,
+			Ephemeral: p.Ephemeral,
+			Connected: portChecker(host, port),
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+
+	if entries == nil {
+		entries = []dashboardEntry{}
+	}
+
+	return outputResult(cfg, entries)
 }
 
 func cmdSetupList(cfg *Config) int {

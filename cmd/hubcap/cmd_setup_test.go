@@ -438,9 +438,10 @@ func TestSetupAdd_AllFields(t *testing.T) {
 	}
 }
 
-func TestSetup_NoSubcommand_NonTTY(t *testing.T) {
+func TestSetup_NoSubcommand_ShowsDashboard(t *testing.T) {
 	cfg, dir := setupTestConfig(t)
 
+	// Given
 	pf := &ProfilesFile{
 		Default: "local",
 		Profiles: map[string]Profile{
@@ -449,12 +450,104 @@ func TestSetup_NoSubcommand_NonTTY(t *testing.T) {
 	}
 	saveProfilesFile(dir, pf)
 
-	// Non-TTY stdin — should show config summary
-	cfg.Stdin = strings.NewReader("")
+	// When — no subcommand, any stdin
 	code := run([]string{"setup"}, cfg)
+
+	// Then — outputs a JSON array (dashboard)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("setup (no subcommand) failed: %s", stderr)
+	}
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var entries []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
+		t.Fatalf("expected JSON array, got: %s", stdout)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(entries))
+	}
+}
+
+func TestSetupDashboard_ShowsProfiles(t *testing.T) {
+	cfg, dir := setupTestConfig(t)
+
+	// Given — two profiles, one connected, one not
+	pf := &ProfilesFile{
+		Default: "local",
+		Profiles: map[string]Profile{
+			"local":  {Host: "localhost", Port: testChromePort},
+			"remote": {Host: "unreachable-host", Port: 19999, Ephemeral: true},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	cfg.PortChecker = func(host string, port int) bool {
+		return host == "localhost" && port == testChromePort
+	}
+
+	// When
+	code := run([]string{"setup"}, cfg)
+
+	// Then
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("setup dashboard failed: %s", stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var entries []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
+		t.Fatalf("output not valid JSON array: %v\n%s", err, stdout)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+
+	// Find each profile in the output
+	entryByName := map[string]map[string]interface{}{}
+	for _, e := range entries {
+		entryByName[e["name"].(string)] = e
+	}
+
+	local := entryByName["local"]
+	if local["connected"] != true {
+		t.Errorf("local should be connected, got %v", local["connected"])
+	}
+	if local["is_default"] != true {
+		t.Errorf("local should be default, got %v", local["is_default"])
+	}
+
+	remote := entryByName["remote"]
+	if remote["connected"] != false {
+		t.Errorf("remote should not be connected, got %v", remote["connected"])
+	}
+	if remote["ephemeral"] != true {
+		t.Errorf("remote should be ephemeral, got %v", remote["ephemeral"])
+	}
+}
+
+func TestSetupDashboard_NoProfiles(t *testing.T) {
+	cfg, _ := setupTestConfig(t)
+
+	// Given — empty profiles (setupTestConfig creates empty file)
+
+	// When
+	code := run([]string{"setup"}, cfg)
+
+	// Then
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("setup dashboard failed: %s", stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var entries []interface{}
+	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
+		t.Fatalf("output not valid JSON array: %v\n%s", err, stdout)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected empty array, got %d entries", len(entries))
 	}
 }
 
