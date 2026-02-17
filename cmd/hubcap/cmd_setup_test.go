@@ -438,37 +438,7 @@ func TestSetupAdd_AllFields(t *testing.T) {
 	}
 }
 
-func TestSetup_NoSubcommand_ShowsDashboard(t *testing.T) {
-	cfg, dir := setupTestConfig(t)
-
-	// Given
-	pf := &ProfilesFile{
-		Default: "local",
-		Profiles: map[string]Profile{
-			"local": {Host: "localhost", Port: 9222},
-		},
-	}
-	saveProfilesFile(dir, pf)
-
-	// When — no subcommand, any stdin
-	code := run([]string{"setup"}, cfg)
-
-	// Then — outputs a JSON array (dashboard)
-	if code != ExitSuccess {
-		stderr := cfg.Stderr.(*bytes.Buffer).String()
-		t.Fatalf("setup (no subcommand) failed: %s", stderr)
-	}
-	stdout := cfg.Stdout.(*bytes.Buffer).String()
-	var entries []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
-		t.Fatalf("expected JSON array, got: %s", stdout)
-	}
-	if len(entries) != 1 {
-		t.Errorf("expected 1 entry, got %d", len(entries))
-	}
-}
-
-func TestSetupDashboard_ShowsProfiles(t *testing.T) {
+func TestSetupDashboard_ShowsTable(t *testing.T) {
 	cfg, dir := setupTestConfig(t)
 
 	// Given — two profiles, one connected, one not
@@ -495,39 +465,30 @@ func TestSetupDashboard_ShowsProfiles(t *testing.T) {
 	}
 
 	stdout := cfg.Stdout.(*bytes.Buffer).String()
-	var entries []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
-		t.Fatalf("output not valid JSON array: %v\n%s", err, stdout)
-	}
 
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(entries))
+	// Should show a text table with both profiles
+	if !strings.Contains(stdout, "PROFILE") {
+		t.Errorf("expected table header, got:\n%s", stdout)
 	}
-
-	// Find each profile in the output
-	entryByName := map[string]map[string]interface{}{}
-	for _, e := range entries {
-		entryByName[e["name"].(string)] = e
+	if !strings.Contains(stdout, "local") {
+		t.Errorf("expected 'local' profile in output, got:\n%s", stdout)
 	}
-
-	local := entryByName["local"]
-	if local["connected"] != true {
-		t.Errorf("local should be connected, got %v", local["connected"])
+	if !strings.Contains(stdout, "remote") {
+		t.Errorf("expected 'remote' profile in output, got:\n%s", stdout)
 	}
-	if local["is_default"] != true {
-		t.Errorf("local should be default, got %v", local["is_default"])
+	if !strings.Contains(stdout, "connected") {
+		t.Errorf("expected 'connected' status in output, got:\n%s", stdout)
 	}
-
-	remote := entryByName["remote"]
-	if remote["connected"] != false {
-		t.Errorf("remote should not be connected, got %v", remote["connected"])
+	if !strings.Contains(stdout, "not connected") {
+		t.Errorf("expected 'not connected' status in output, got:\n%s", stdout)
 	}
-	if remote["ephemeral"] != true {
-		t.Errorf("remote should be ephemeral, got %v", remote["ephemeral"])
+	// Default profile should be marked with *
+	if !strings.Contains(stdout, "* local") {
+		t.Errorf("expected '* local' for default profile, got:\n%s", stdout)
 	}
 }
 
-func TestSetupDashboard_NoProfiles(t *testing.T) {
+func TestSetupDashboard_FirstRun(t *testing.T) {
 	cfg, _ := setupTestConfig(t)
 
 	// Given — empty profiles (setupTestConfig creates empty file)
@@ -542,12 +503,13 @@ func TestSetupDashboard_NoProfiles(t *testing.T) {
 	}
 
 	stdout := cfg.Stdout.(*bytes.Buffer).String()
-	var entries []interface{}
-	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
-		t.Fatalf("output not valid JSON array: %v\n%s", err, stdout)
+
+	// Should show welcome message
+	if !strings.Contains(stdout, "hubcap tabs") {
+		t.Errorf("expected 'hubcap tabs' in welcome message, got:\n%s", stdout)
 	}
-	if len(entries) != 0 {
-		t.Errorf("expected empty array, got %d entries", len(entries))
+	if !strings.Contains(stdout, "hubcap setup add") {
+		t.Errorf("expected 'hubcap setup add' in welcome message, got:\n%s", stdout)
 	}
 }
 

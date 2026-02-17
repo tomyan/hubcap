@@ -61,15 +61,6 @@ func cmdSetup(cfg *Config, args []string) int {
 	}
 }
 
-type dashboardEntry struct {
-	Name      string `json:"name"`
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	IsDefault bool   `json:"is_default,omitempty"`
-	Ephemeral bool   `json:"ephemeral,omitempty"`
-	Connected bool   `json:"connected"`
-}
-
 func cmdSetupDashboard(cfg *Config) int {
 	dir := configDir()
 	pf, err := loadProfilesFile(dir)
@@ -78,12 +69,42 @@ func cmdSetupDashboard(cfg *Config) int {
 		return ExitError
 	}
 
+	if len(pf.Profiles) == 0 {
+		printFirstRunMessage(cfg)
+		return ExitSuccess
+	}
+
+	printProfileTable(cfg, pf)
+	return ExitSuccess
+}
+
+func printFirstRunMessage(cfg *Config) {
+	w := cfg.Stdout
+	fmt.Fprintln(w, "Hubcap is ready! A default profile will launch Chrome automatically.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Try:")
+	fmt.Fprintln(w, "  hubcap tabs")
+	fmt.Fprintln(w, "  hubcap title")
+	fmt.Fprintln(w, "  hubcap goto https://example.com")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Run 'hubcap setup add <name>' to create additional profiles.")
+}
+
+func printProfileTable(cfg *Config, pf *ProfilesFile) {
 	portChecker := cfg.PortChecker
 	if portChecker == nil {
 		portChecker = launcher.IsPortOpen
 	}
 
-	var entries []dashboardEntry
+	type row struct {
+		marker string
+		name   string
+		host   string
+		port   int
+		status string
+	}
+
+	var rows []row
 	for name, p := range pf.Profiles {
 		host := p.Host
 		if host == "" {
@@ -93,26 +114,26 @@ func cmdSetupDashboard(cfg *Config) int {
 		if port == 0 {
 			port = 9222
 		}
-
-		entries = append(entries, dashboardEntry{
-			Name:      name,
-			Host:      host,
-			Port:      port,
-			IsDefault: name == pf.Default,
-			Ephemeral: p.Ephemeral,
-			Connected: portChecker(host, port),
-		})
+		status := "not connected"
+		if portChecker(host, port) {
+			status = "connected"
+		}
+		marker := " "
+		if name == pf.Default {
+			marker = "*"
+		}
+		rows = append(rows, row{marker, name, host, port, status})
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Name < entries[j].Name
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].name < rows[j].name
 	})
 
-	if entries == nil {
-		entries = []dashboardEntry{}
+	w := cfg.Stdout
+	fmt.Fprintf(w, "  %-12s %-16s %-6s %s\n", "PROFILE", "HOST", "PORT", "STATUS")
+	for _, r := range rows {
+		fmt.Fprintf(w, "%s %-12s %-16s %-6d %s\n", r.marker, r.name, r.host, r.port, r.status)
 	}
-
-	return outputResult(cfg, entries)
 }
 
 func cmdSetupList(cfg *Config) int {
