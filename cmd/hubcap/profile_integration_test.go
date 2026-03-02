@@ -313,6 +313,34 @@ func TestWithClient_HintOnConnectionFailure(t *testing.T) {
 	}
 }
 
+func TestRun_DoesNotCreateProfilesJson(t *testing.T) {
+	// Given — no profiles.json exists
+	dir := t.TempDir()
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+	// Deliberately NOT creating profiles.json
+
+	cfg := &Config{
+		Port:    testChromePort,
+		Host:    "localhost",
+		Timeout: 5 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+
+	// When — run a regular command
+	code := run([]string{"title"}, cfg)
+
+	// Then — should succeed and NOT create profiles.json
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Errorf("expected success, got %d: %s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "profiles.json")); err == nil {
+		t.Error("profiles.json should NOT be created by run()")
+	}
+}
+
 func TestApplyProfile_NoAutoLaunch(t *testing.T) {
 	// Given — an ephemeral profile
 	dir := t.TempDir()

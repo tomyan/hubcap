@@ -30,6 +30,11 @@ var setupSubcommands = map[string]string{
 }
 
 func cmdSetup(cfg *Config, args []string) int {
+	if err := ensureDefaultProfile(configDir()); err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
 	if len(args) == 0 {
 		return cmdSetupDashboard(cfg)
 	}

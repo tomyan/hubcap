@@ -513,6 +513,44 @@ func TestSetupDashboard_FirstRun(t *testing.T) {
 	}
 }
 
+func TestSetup_CreatesDefaultProfileOnFirstRun(t *testing.T) {
+	// Given — no profiles.json exists
+	dir := t.TempDir()
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+
+	// Remove profiles.json if it exists
+	os.Remove(filepath.Join(dir, "profiles.json"))
+
+	cfg := &Config{
+		Port:    testChromePort,
+		Host:    "localhost",
+		Timeout: 5 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+
+	// When — run 'hubcap setup'
+	code := run([]string{"setup"}, cfg)
+
+	// Then — should succeed and create profiles.json with a default profile
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("setup failed: %s", stderr)
+	}
+
+	pf, err := loadProfilesFile(dir)
+	if err != nil {
+		t.Fatalf("load profiles: %v", err)
+	}
+	if pf.Default != "default" {
+		t.Errorf("Default = %q, want 'default'", pf.Default)
+	}
+	if _, ok := pf.Profiles["default"]; !ok {
+		t.Error("expected 'default' profile to be created")
+	}
+}
+
 func TestSetup_UnknownSubcommand(t *testing.T) {
 	cfg, _ := setupTestConfig(t)
 
