@@ -19,8 +19,18 @@ var chromeInstance *testutil.ChromeInstance
 
 // TestMain sets up and tears down Chrome for all tests
 func TestMain(m *testing.M) {
+	// Isolate tests from the real config directory to prevent
+	// ensureDefaultProfile from launching ephemeral Chrome.
+	configDir, err := os.MkdirTemp("", "hubcap-test-config-*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create temp config dir: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(configDir)
+	os.Setenv("HUBCAP_CONFIG_DIR", configDir)
+	saveProfilesFile(configDir, &ProfilesFile{Profiles: map[string]Profile{}})
+
 	// Start Chrome for this package's tests
-	var err error
 	chromeInstance, err = testutil.StartChrome(testChromePort)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start Chrome: %v\n", err)

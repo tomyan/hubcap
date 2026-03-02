@@ -107,10 +107,11 @@ func TestRun_ProfileEnvVar(t *testing.T) {
 }
 
 func TestRun_NoProfileBackwardCompat(t *testing.T) {
-	// No profiles.json, no --profile flag — should work as before
+	// Empty profiles.json, no --profile flag — should work with cfg defaults
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)
 	t.Setenv("HUBCAP_PROFILE", "")
+	saveProfilesFile(dir, &ProfilesFile{Profiles: map[string]Profile{}})
 
 	cfg := &Config{
 		Port:    testChromePort,
@@ -131,6 +132,7 @@ func TestRun_NoProfileBackwardCompat(t *testing.T) {
 func TestRun_ProfileNotFound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+	saveProfilesFile(dir, &ProfilesFile{Profiles: map[string]Profile{}})
 
 	cfg := &Config{
 		Timeout: 5 * time.Second,
