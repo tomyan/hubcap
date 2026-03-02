@@ -132,6 +132,44 @@ func TestRun_NoProfileBackwardCompat(t *testing.T) {
 	}
 }
 
+func TestRun_NoArgsDoesNotLaunchChrome(t *testing.T) {
+	// Given — an ephemeral default profile that would launch Chrome
+	dir := t.TempDir()
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+	pf := &ProfilesFile{
+		Default: "default",
+		Profiles: map[string]Profile{
+			"default": {Host: "localhost", Port: 19882, Ephemeral: true, Headless: true},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	cfg := &Config{
+		Timeout: 5 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+
+	// When — run with no args
+	code := run([]string{}, cfg)
+
+	// Then — should show usage without launching Chrome
+	if code != ExitError {
+		t.Errorf("expected ExitError, got %d", code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "hubcap") {
+		t.Errorf("expected usage message, got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "Quick start") {
+		t.Errorf("expected getting started example in usage, got: %s", stderr)
+	}
+	if launcher.IsPortOpen("localhost", 19882) {
+		t.Error("Chrome should not have been launched for bare run")
+	}
+}
+
 func TestRun_UnknownCommandDoesNotLaunchChrome(t *testing.T) {
 	// Given — an ephemeral default profile that would launch Chrome
 	dir := t.TempDir()

@@ -509,6 +509,12 @@ func sortedCommandNames() []string {
 func printBriefUsage(cfg *Config, fs *flag.FlagSet) {
 	fmt.Fprintln(cfg.Stderr, "usage: hubcap [flags] <command>")
 	fmt.Fprintln(cfg.Stderr)
+	fmt.Fprintln(cfg.Stderr, "Quick start:")
+	fmt.Fprintln(cfg.Stderr, "  hubcap tabs                  List open tabs")
+	fmt.Fprintln(cfg.Stderr, "  hubcap goto https://example   Navigate to a URL")
+	fmt.Fprintln(cfg.Stderr, "  hubcap title                 Get page title")
+	fmt.Fprintln(cfg.Stderr, "  hubcap click 'button#submit' Click an element")
+	fmt.Fprintln(cfg.Stderr)
 	fmt.Fprintln(cfg.Stderr, "flags:")
 	fs.PrintDefaults()
 	fmt.Fprintln(cfg.Stderr)
