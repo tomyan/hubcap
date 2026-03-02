@@ -193,16 +193,6 @@ func applyProfile(cfg *Config, flagProfile string) int {
 		cfg.Target = p.Target
 	}
 
-	// Ephemeral profile: auto-launch Chrome if needed
-	if p.Ephemeral {
-		port, err := ensureEphemeralRunning(dir, name, p)
-		if err != nil {
-			fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
-			return ExitError
-		}
-		cfg.Port = port
-	}
-
 	return -1
 }
 
@@ -290,6 +280,7 @@ func withClient(cfg *Config, fn func(ctx context.Context, client *chrome.Client)
 	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		fmt.Fprintln(cfg.Stderr, "hint: run 'hubcap setup launch' to start Chrome")
 		return ExitConnFailed
 	}
 	defer client.Close()
@@ -315,6 +306,7 @@ func withClientTarget(cfg *Config, fn func(ctx context.Context, client *chrome.C
 	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
 	if err != nil {
 		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		fmt.Fprintln(cfg.Stderr, "hint: run 'hubcap setup launch' to start Chrome")
 		return ExitConnFailed
 	}
 	defer client.Close()

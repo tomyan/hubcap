@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomyan/hubcap/internal/chrome"
 	"github.com/tomyan/hubcap/internal/chrome/launcher"
 )
 
@@ -283,6 +285,64 @@ func containsImpl(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestWithClient_HintOnConnectionFailure(t *testing.T) {
+	// Given — a config pointing at a port with nothing listening
+	cfg := &Config{
+		Port:    19999,
+		Host:    "localhost",
+		Timeout: 2 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+
+	// When — withClient tries to connect
+	code := withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
+		return nil, nil
+	})
+
+	// Then — should fail with hint
+	if code != ExitConnFailed {
+		t.Errorf("expected ExitConnFailed, got %d", code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "hubcap setup launch") {
+		t.Errorf("expected hint about 'hubcap setup launch' in stderr, got: %s", stderr)
+	}
+}
+
+func TestApplyProfile_NoAutoLaunch(t *testing.T) {
+	// Given — an ephemeral profile
+	dir := t.TempDir()
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+
+	pf := &ProfilesFile{
+		Default: "eph",
+		Profiles: map[string]Profile{
+			"eph": {Host: "localhost", Port: 19883, Ephemeral: true, Headless: true},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	cfg := &Config{
+		Timeout: 5 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+
+	// When — applyProfile is called
+	code := applyProfile(cfg, "")
+
+	// Then — should succeed without launching Chrome
+	if code != -1 {
+		t.Errorf("expected -1 (success), got %d", code)
+	}
+	if launcher.IsPortOpen("localhost", 19883) {
+		t.Error("Chrome should not have been launched by applyProfile")
+	}
 }
 
 func intToStr(i int) string {

@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestEphemeralAutoLaunch(t *testing.T) {
+func TestEphemeralProfile_NoAutoLaunch(t *testing.T) {
+	// Given — an ephemeral profile on an unused port
 	dir := t.TempDir()
 	t.Setenv("HUBCAP_CONFIG_DIR", dir)
 
-	// Create an ephemeral profile
 	pf := &ProfilesFile{
 		Default: "eph",
 		Profiles: map[string]Profile{
@@ -31,43 +32,22 @@ func TestEphemeralAutoLaunch(t *testing.T) {
 	cfg := &Config{
 		Host:    "localhost",
 		Port:    9222,
-		Timeout: 30 * time.Second,
+		Timeout: 5 * time.Second,
 		Output:  "json",
 		Stdout:  &bytes.Buffer{},
 		Stderr:  &bytes.Buffer{},
 	}
 
-	// Using --profile eph should auto-launch Chrome and connect on its port
+	// When — running a command with the ephemeral profile
 	code := run([]string{"--profile", "eph", "tabs"}, cfg)
-	if code != ExitSuccess {
-		stderr := cfg.Stderr.(*bytes.Buffer).String()
-		t.Fatalf("ephemeral auto-launch failed (exit %d): %s", code, stderr)
-	}
 
-	// Verify an ephemeral session file was created
-	ephDir := filepath.Join(dir, "ephemeral")
-	files, _ := os.ReadDir(ephDir)
-	found := false
-	for _, f := range files {
-		if f.Name() == "eph.json" {
-			found = true
-		}
+	// Then — should fail to connect (no auto-launch)
+	if code != ExitConnFailed {
+		t.Errorf("expected ExitConnFailed, got %d", code)
 	}
-	if !found {
-		t.Error("ephemeral session file eph.json should exist")
-	}
-
-	// Clean up: read session file to get PID, kill Chrome
-	data, err := os.ReadFile(filepath.Join(ephDir, "eph.json"))
-	if err == nil {
-		var sess ephemeralSession
-		json.Unmarshal(data, &sess)
-		if sess.PID > 0 {
-			proc, _ := os.FindProcess(sess.PID)
-			if proc != nil {
-				proc.Kill()
-			}
-		}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "hubcap setup launch") {
+		t.Errorf("expected hint about 'hubcap setup launch', got: %s", stderr)
 	}
 }
 
