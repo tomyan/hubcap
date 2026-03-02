@@ -120,6 +120,12 @@ func saveEphemeralSession(dir, name string, sess *ephemeralSession) error {
 	return os.WriteFile(filepath.Join(ephDir, name+".json"), data, 0644)
 }
 
+// removeEphemeralSession deletes an ephemeral session file.
+func removeEphemeralSession(dir, name string) {
+	path := filepath.Join(dir, "ephemeral", name+".json")
+	os.Remove(path)
+}
+
 // touchEphemeralSession updates the mtime of an ephemeral session file.
 func touchEphemeralSession(dir, name string) {
 	path := filepath.Join(dir, "ephemeral", name+".json")
@@ -236,6 +242,11 @@ func cleanupStaleEphemeral(dir string) {
 		timeout, err := time.ParseDuration(sess.Timeout)
 		if err != nil {
 			timeout = 10 * time.Minute
+		}
+
+		// Timeout of 0 means no auto-cleanup (explicitly launched)
+		if timeout == 0 {
+			continue
 		}
 
 		// Check if session has exceeded its timeout (based on mtime)

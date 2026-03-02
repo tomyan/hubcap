@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomyan/hubcap/internal/chrome/launcher"
 )
 
 func setupTestConfig(t *testing.T) (*Config, string) {
@@ -548,6 +550,93 @@ func TestSetup_CreatesDefaultProfileOnFirstRun(t *testing.T) {
 	}
 	if _, ok := pf.Profiles["default"]; !ok {
 		t.Error("expected 'default' profile to be created")
+	}
+}
+
+func TestSetupStop_KillsChrome(t *testing.T) {
+	cfg, dir := setupTestConfig(t)
+
+	// Given — launch Chrome on a test port
+	pf := &ProfilesFile{
+		Profiles: map[string]Profile{
+			"stoptest": {Port: 19885, Headless: true},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	code := run([]string{"setup", "launch", "stoptest"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("launch failed: %s", stderr)
+	}
+
+	// When — stop Chrome (reuse same config dir)
+	cfg2 := &Config{
+		Port:    testChromePort,
+		Host:    "localhost",
+		Timeout: 5 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+	code = run([]string{"setup", "stop", "stoptest"}, cfg2)
+
+	// Then — should succeed
+	if code != ExitSuccess {
+		stderr := cfg2.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("stop failed: %s", stderr)
+	}
+
+	// Port should be closed
+	time.Sleep(500 * time.Millisecond)
+	if launcher.IsPortOpen("localhost", 19885) {
+		t.Error("Chrome should be stopped after 'setup stop'")
+	}
+
+	// Output should confirm
+	stdout := cfg2.Stdout.(*bytes.Buffer).String()
+	if !strings.Contains(stdout, "stoptest") {
+		t.Errorf("expected profile name in output, got: %s", stdout)
+	}
+}
+
+func TestSetupStop_NotRunning(t *testing.T) {
+	cfg, dir := setupTestConfig(t)
+
+	// Given — a profile with no Chrome running
+	pf := &ProfilesFile{
+		Profiles: map[string]Profile{
+			"idle": {Port: 19886, Headless: true},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	// When — stop
+	code := run([]string{"setup", "stop", "idle"}, cfg)
+
+	// Then — should report not running
+	if code != ExitError {
+		t.Errorf("expected ExitError, got %d", code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "not running") {
+		t.Errorf("expected 'not running' in stderr, got: %s", stderr)
+	}
+}
+
+func TestSetupStop_NoProfile(t *testing.T) {
+	cfg, _ := setupTestConfig(t)
+
+	// When — stop a nonexistent profile
+	code := run([]string{"setup", "stop", "nonexistent"}, cfg)
+
+	// Then — should error
+	if code != ExitError {
+		t.Errorf("expected ExitError, got %d", code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "not found") {
+		t.Errorf("expected 'not found' in stderr, got: %s", stderr)
 	}
 }
 

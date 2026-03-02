@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -27,6 +28,7 @@ var setupSubcommands = map[string]string{
 	"default": "Get or set the default profile",
 	"status":  "Check Chrome connectivity",
 	"launch":  "Launch Chrome for a profile",
+	"stop":    "Stop Chrome for a profile",
 }
 
 func cmdSetup(cfg *Config, args []string) int {
@@ -59,9 +61,11 @@ func cmdSetup(cfg *Config, args []string) int {
 		return cmdSetupStatus(cfg, subArgs)
 	case "launch":
 		return cmdSetupLaunch(cfg, subArgs)
+	case "stop":
+		return cmdSetupStop(cfg, subArgs)
 	default:
 		fmt.Fprintf(cfg.Stderr, "unknown setup subcommand: %s\n", sub)
-		fmt.Fprintln(cfg.Stderr, "subcommands: list, show, add, edit, remove, default, status, launch")
+		fmt.Fprintln(cfg.Stderr, "subcommands: list, show, add, edit, remove, default, status, launch, stop")
 		return ExitError
 	}
 }
@@ -587,8 +591,14 @@ func cmdSetupLaunch(cfg *Config, args []string) int {
 		DataDir string `json:"data_dir"`
 	}
 
-	// Note: we don't call inst.Stop() — the Chrome process stays running
-	_ = inst
+	// Save session file so 'setup stop' can find the process
+	sess := &ephemeralSession{
+		PID:     inst.PID,
+		Port:    port,
+		DataDir: inst.DataDir,
+		Timeout: "0",
+	}
+	saveEphemeralSession(dir, name, sess)
 
 	return outputResult(cfg, launchResult{
 		Profile: name,
@@ -596,6 +606,54 @@ func cmdSetupLaunch(cfg *Config, args []string) int {
 		Port:    port,
 		PID:     inst.PID,
 		DataDir: inst.DataDir,
+	})
+}
+
+func cmdSetupStop(cfg *Config, args []string) int {
+	dir := configDir()
+	pf, err := loadProfilesFile(dir)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitError
+	}
+
+	name := ""
+	if len(args) > 0 {
+		name = args[0]
+	}
+	if name == "" {
+		name = pf.Default
+	}
+	if name == "" {
+		fmt.Fprintln(cfg.Stderr, "error: no profile specified and no default set")
+		return ExitError
+	}
+
+	if _, ok := pf.Profiles[name]; !ok {
+		fmt.Fprintf(cfg.Stderr, "error: profile %q not found\n", name)
+		return ExitError
+	}
+
+	sess, err := loadEphemeralSession(dir, name)
+	if err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: Chrome is not running for profile %q\n", name)
+		return ExitError
+	}
+
+	// Kill the Chrome process
+	if sess.PID > 0 {
+		proc, err := os.FindProcess(sess.PID)
+		if err == nil {
+			proc.Kill()
+		}
+	}
+
+	// Remove the session file
+	removeEphemeralSession(dir, name)
+
+	return outputResult(cfg, map[string]interface{}{
+		"stopped": name,
+		"pid":     sess.PID,
 	})
 }
 
