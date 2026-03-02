@@ -8,4 +8,4 @@ Go CLI for Chrome DevTools Protocol.
 2. Wait for the workflow to complete: `gh run watch`
 3. Done — the workflow builds binaries, publishes the GitHub release, and updates the Homebrew tap automatically
 
-The workflow requires a `HOMEBREW_TAP_TOKEN` secret (fine-grained PAT with `Contents: read+write` on `tomyan/homebrew-tap`). If the secret is not set, the Homebrew tap step is skipped.
+The workflow requires `HOMEBREW_APP_ID` and `HOMEBREW_APP_PRIVATE_KEY` secrets (from the `homebrew-tap-publisher` GitHub App). If not set, the Homebrew tap step is skipped.
