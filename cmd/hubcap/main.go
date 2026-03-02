@@ -96,6 +96,25 @@ func run(args []string, cfg *Config) int {
 		explicitFlags[f.Name] = true
 	})
 
+	if *helpCommands {
+		printFullCommandList(cfg)
+		return ExitSuccess
+	}
+
+	// Validate command before applying profile (which may launch Chrome)
+	remaining := fs.Args()
+	if len(remaining) < 1 {
+		printBriefUsage(cfg, fs)
+		return ExitError
+	}
+
+	cmd := remaining[0]
+	info, ok := commands[cmd]
+	if !ok {
+		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
+		return ExitError
+	}
+
 	// Clean up stale ephemeral sessions
 	dir := configDir()
 	cleanupStaleEphemeral(dir)
@@ -121,24 +140,6 @@ func run(args []string, cfg *Config) int {
 	// 4. Re-apply explicit CLI flags on top of everything
 	reapplyExplicitFlags(cfg, &fv, explicitFlags)
 
-	if *helpCommands {
-		printFullCommandList(cfg)
-		return ExitSuccess
-	}
-
-	remaining := fs.Args()
-	if len(remaining) < 1 {
-		printBriefUsage(cfg, fs)
-		return ExitError
-	}
-
-	cmd := remaining[0]
-
-	info, ok := commands[cmd]
-	if !ok {
-		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
-		return ExitError
-	}
 	return info.Run(cfg, remaining[1:])
 }
 

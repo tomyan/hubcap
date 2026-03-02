@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomyan/hubcap/internal/chrome/launcher"
 )
 
 func TestRun_WithProfile(t *testing.T) {
@@ -126,6 +129,42 @@ func TestRun_NoProfileBackwardCompat(t *testing.T) {
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Errorf("expected success (backward compat), got %d: %s", code, stderr)
+	}
+}
+
+func TestRun_UnknownCommandDoesNotLaunchChrome(t *testing.T) {
+	// Given — an ephemeral default profile that would launch Chrome
+	dir := t.TempDir()
+	t.Setenv("HUBCAP_CONFIG_DIR", dir)
+	pf := &ProfilesFile{
+		Default: "default",
+		Profiles: map[string]Profile{
+			"default": {Host: "localhost", Port: 19881, Ephemeral: true, Headless: true},
+		},
+	}
+	saveProfilesFile(dir, pf)
+
+	cfg := &Config{
+		Timeout: 5 * time.Second,
+		Output:  "json",
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	}
+
+	// When — run an unknown command
+	code := run([]string{"hep"}, cfg)
+
+	// Then — should fail without launching Chrome
+	if code != ExitError {
+		t.Errorf("expected ExitError, got %d", code)
+	}
+	stderr := cfg.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "unknown command") {
+		t.Errorf("expected 'unknown command' in stderr, got: %s", stderr)
+	}
+	// Verify no Chrome was launched on the ephemeral port
+	if launcher.IsPortOpen("localhost", 19881) {
+		t.Error("Chrome should not have been launched for an unknown command")
 	}
 }
 
