@@ -13,10 +13,68 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${VERSION}$" | head -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          breaking=""
+          features=""
+          fixes=""
+          other=""
+
+          while IFS= read -r line; do
+            msg="${line#* }"
+            case "$msg" in
+              feat!:*|feat\!:*)
+                breaking+=$'\n'"- ${msg#*: }"
+                ;;
+              feat:*)
+                features+=$'\n'"- ${msg#*: }"
+                ;;
+              fix:*)
+                fixes+=$'\n'"- ${msg#*: }"
+                ;;
+              *)
+                other+=$'\n'"- ${msg#*: }"
+                ;;
+            esac
+          done < <(git log --oneline "$RANGE")
+
+          notes="## What's Changed"
+          if [ -n "$breaking" ]; then
+            notes+=$'\n\n'"### Breaking changes${breaking}"
+          fi
+          if [ -n "$features" ]; then
+            notes+=$'\n\n'"### New features${features}"
+          fi
+          if [ -n "$fixes" ]; then
+            notes+=$'\n\n'"### Fixes${fixes}"
+          fi
+          if [ -n "$other" ]; then
+            notes+=$'\n\n'"### Other${other}"
+          fi
+          notes+=$'\n\n'"**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}"
+
+          {
+            echo "NOTES<<NOTES_EOF"
+            echo "$notes"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build binaries
         run: |
@@ -58,7 +116,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.NOTES }}
           files: |
             dist/*.tar.gz
             dist/*.zip
