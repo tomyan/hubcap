@@ -124,7 +124,7 @@ jobs:
 
       - name: Generate Homebrew tap token
         id: app-token
-        if: ${{ vars.HOMEBREW_APP_ID != '' || secrets.HOMEBREW_APP_ID != '' }}
+        continue-on-error: true
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.HOMEBREW_APP_ID }}
@@ -133,7 +133,7 @@ jobs:
           repositories: homebrew-tap
 
       - name: Update Homebrew tap
-        if: steps.app-token.outputs.token != ''
+        if: steps.app-token.outcome == 'success'
         env:
           TAP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
