@@ -178,7 +178,9 @@ jobs:
           # Remove leading whitespace from heredoc indentation
           sed -i 's/^          //' /tmp/hubcap.rb
 
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/tomyan/homebrew-tap.git" /tmp/homebrew-tap
+          git config --global credential.helper store
+          echo "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com" > ~/.git-credentials
+          git clone "https://github.com/tomyan/homebrew-tap.git" /tmp/homebrew-tap
           cp /tmp/hubcap.rb /tmp/homebrew-tap/Formula/hubcap.rb
           cd /tmp/homebrew-tap
           git config user.name "github-actions[bot]"
