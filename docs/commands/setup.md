@@ -18,13 +18,14 @@ hubcap setup remove <name>      Remove a profile
 hubcap setup default [name]     Get or set the default profile
 hubcap setup status [name]      Check Chrome connectivity for a profile
 hubcap setup launch [name]      Launch Chrome for a profile
+hubcap setup stop [name]        Stop Chrome for a profile
 ```
 
 ## Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| subcommand | no | One of: list, show, add, edit, remove, default, status, launch |
+| subcommand | no | One of: list, show, add, edit, remove, default, status, launch, stop |
 | name | varies | Profile name (required for add, edit, remove; optional for others) |
 
 ## Flags (add/edit)
@@ -92,15 +93,38 @@ Output format depends on the subcommand. All subcommands support `--output json`
 }
 ```
 
+### setup stop
+
+```json
+{
+  "stopped": "local",
+  "pid": 12345
+}
+```
+
 ## Errors
 
 | Condition | Exit code | Stderr |
 |-----------|-----------|--------|
 | Profile not found | 1 | `error: profile "name" not found` |
 | Duplicate profile name | 1 | `error: profile "name" already exists` |
+| Chrome not running | 1 | `error: Chrome is not running for profile "name"` |
 | Unknown subcommand | 1 | `unknown setup subcommand: ...` |
 
 ## Examples
+
+Start Chrome and verify it's running:
+
+```
+hubcap setup launch
+hubcap setup status
+```
+
+Stop Chrome for a profile:
+
+```
+hubcap setup stop
+```
 
 Create a profile for local development:
 
@@ -111,7 +135,7 @@ hubcap setup add local --host localhost --port 9222 --set-default
 Create a headless CI profile:
 
 ```
-hubcap setup add ci --port 9333 --headless --ephemeral --ephemeral-timeout 10m
+hubcap setup add ci --port 9333 --headless
 ```
 
 Check if Chrome is reachable for a profile:

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -89,14 +90,14 @@ func cmdSetupDashboard(cfg *Config) int {
 
 func printFirstRunMessage(cfg *Config) {
 	w := cfg.Stdout
-	fmt.Fprintln(w, "Hubcap is ready! A default profile will launch Chrome automatically.")
+	fmt.Fprintln(w, "Default profile created.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Try:")
-	fmt.Fprintln(w, "  hubcap tabs")
-	fmt.Fprintln(w, "  hubcap title")
-	fmt.Fprintln(w, "  hubcap goto https://example.com")
+	fmt.Fprintln(w, "Quick start:")
+	fmt.Fprintln(w, "  hubcap setup launch           Start Chrome")
+	fmt.Fprintln(w, "  hubcap tabs                   List open tabs")
+	fmt.Fprintln(w, "  hubcap goto https://example   Navigate to a URL")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Run 'hubcap setup add <name>' to create additional profiles.")
+	fmt.Fprintln(w, "Run 'hubcap setup' to see profile status.")
 }
 
 func printProfileTable(cfg *Config, pf *ProfilesFile) {
@@ -143,6 +144,20 @@ func printProfileTable(cfg *Config, pf *ProfilesFile) {
 	for _, r := range rows {
 		fmt.Fprintf(w, "%s %-12s %-16s %-6d %s\n", r.marker, r.name, r.host, r.port, r.status)
 	}
+
+	printSubcommandGuide(w)
+}
+
+func printSubcommandGuide(w io.Writer) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Manage profiles:")
+	fmt.Fprintln(w, "  hubcap setup add <name>     Add a profile")
+	fmt.Fprintln(w, "  hubcap setup edit <name>    Edit a profile")
+	fmt.Fprintln(w, "  hubcap setup remove <name>  Remove a profile")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Start/stop Chrome:")
+	fmt.Fprintln(w, "  hubcap setup launch [name]  Start Chrome for a profile")
+	fmt.Fprintln(w, "  hubcap setup stop [name]    Stop Chrome for a profile")
 }
 
 func cmdSetupList(cfg *Config) int {

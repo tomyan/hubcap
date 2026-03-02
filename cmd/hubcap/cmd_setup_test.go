@@ -488,6 +488,16 @@ func TestSetupDashboard_ShowsTable(t *testing.T) {
 	if !strings.Contains(stdout, "* local") {
 		t.Errorf("expected '* local' for default profile, got:\n%s", stdout)
 	}
+	// Should show subcommand guide
+	if !strings.Contains(stdout, "hubcap setup add") {
+		t.Errorf("expected subcommand guide with 'hubcap setup add', got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "hubcap setup launch") {
+		t.Errorf("expected subcommand guide with 'hubcap setup launch', got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "hubcap setup stop") {
+		t.Errorf("expected subcommand guide with 'hubcap setup stop', got:\n%s", stdout)
+	}
 }
 
 func TestSetupDashboard_FirstRun(t *testing.T) {
@@ -506,12 +516,12 @@ func TestSetupDashboard_FirstRun(t *testing.T) {
 
 	stdout := cfg.Stdout.(*bytes.Buffer).String()
 
-	// Should show welcome message
+	// Should guide user to launch Chrome first
+	if !strings.Contains(stdout, "hubcap setup launch") {
+		t.Errorf("expected 'hubcap setup launch' in welcome message, got:\n%s", stdout)
+	}
 	if !strings.Contains(stdout, "hubcap tabs") {
 		t.Errorf("expected 'hubcap tabs' in welcome message, got:\n%s", stdout)
-	}
-	if !strings.Contains(stdout, "hubcap setup add") {
-		t.Errorf("expected 'hubcap setup add' in welcome message, got:\n%s", stdout)
 	}
 }
 
