@@ -121,3 +121,64 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/checksums.txt
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          darwin_arm64=$(grep "darwin-arm64.tar.gz" dist/checksums.txt | awk '{print $1}')
+          darwin_amd64=$(grep "darwin-amd64.tar.gz" dist/checksums.txt | awk '{print $1}')
+          linux_arm64=$(grep "linux-arm64.tar.gz" dist/checksums.txt | awk '{print $1}')
+          linux_amd64=$(grep "linux-amd64.tar.gz" dist/checksums.txt | awk '{print $1}')
+
+          cat > /tmp/hubcap.rb <<FORMULA
+          class Hubcap < Formula
+            desc "CLI for Chrome DevTools Protocol"
+            homepage "https://github.com/tomyan/hubcap"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/tomyan/hubcap/releases/download/v${VERSION}/hubcap-v${VERSION}-darwin-arm64.tar.gz"
+                sha256 "${darwin_arm64}"
+              else
+                url "https://github.com/tomyan/hubcap/releases/download/v${VERSION}/hubcap-v${VERSION}-darwin-amd64.tar.gz"
+                sha256 "${darwin_amd64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/tomyan/hubcap/releases/download/v${VERSION}/hubcap-v${VERSION}-linux-arm64.tar.gz"
+                sha256 "${linux_arm64}"
+              else
+                url "https://github.com/tomyan/hubcap/releases/download/v${VERSION}/hubcap-v${VERSION}-linux-amd64.tar.gz"
+                sha256 "${linux_amd64}"
+              end
+            end
+
+            def install
+              bin.install "hubcap"
+            end
+
+            test do
+              assert_match "unknown command", shell_output("#{bin}/hubcap notacommand 2>&1", 1)
+            end
+          end
+          FORMULA
+
+          # Remove leading whitespace from heredoc indentation
+          sed -i 's/^          //' /tmp/hubcap.rb
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/tomyan/homebrew-tap.git" /tmp/homebrew-tap
+          cp /tmp/hubcap.rb /tmp/homebrew-tap/Formula/hubcap.rb
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/hubcap.rb
+          git commit -m "hubcap ${VERSION}"
+          git push
