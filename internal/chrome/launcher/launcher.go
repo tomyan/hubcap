@@ -137,6 +137,7 @@ func Launch(opts LaunchOptions) (*Instance, error) {
 		"--disable-background-networking",
 		"--disable-sync",
 		"--disable-translate",
+		"--disable-session-crashed-bubble",
 		"--mute-audio",
 		"--no-first-run",
 		"--disable-default-apps",
