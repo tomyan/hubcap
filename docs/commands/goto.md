@@ -16,7 +16,7 @@ hubcap goto [--wait] <url>
 
 | Argument | Type   | Required | Description            |
 |----------|--------|----------|------------------------|
-| url      | string | Yes      | The URL to navigate to |
+| url      | string | Yes      | The URL to navigate to. If no scheme is provided, `https://` is prepended automatically. |
 
 ## Flags
 
@@ -63,13 +63,19 @@ With `--wait`:
 Navigate to a URL:
 
 ```
+hubcap goto example.com
+```
+
+Navigate with an explicit scheme:
+
+```
 hubcap goto https://example.com
 ```
 
 Navigate and wait for load:
 
 ```
-hubcap goto --wait https://example.com
+hubcap goto --wait example.com
 ```
 
 Navigate, wait, then take a screenshot (chaining):

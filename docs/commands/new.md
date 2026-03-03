@@ -16,7 +16,7 @@ hubcap new [url]
 
 | Argument | Type   | Required | Description                                      |
 |----------|--------|----------|--------------------------------------------------|
-| url      | string | No       | URL to open in new tab (defaults to about:blank)  |
+| url      | string | No       | URL to open in new tab (defaults to about:blank). If no scheme is provided, `https://` is prepended automatically. |
 
 ## Flags
 
@@ -51,13 +51,13 @@ hubcap new
 Open a new tab and navigate to a URL:
 
 ```
-hubcap new https://example.com
+hubcap new example.com
 ```
 
 Open a tab and capture its ID for later use (chaining):
 
 ```
-TAB_ID=$(hubcap new https://example.com | jq -r '.targetId') && hubcap -target "$TAB_ID" title
+TAB_ID=$(hubcap new example.com | jq -r '.targetId') && hubcap -target "$TAB_ID" title
 ```
 
 ## See also
