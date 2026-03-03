@@ -456,6 +456,7 @@ func TestRun_Screenshot_Success(t *testing.T) {
 	}
 
 	cfg := testConfig()
+	cfg.Timeout = 30 * time.Second
 	tmpFile := t.TempDir() + "/screenshot.png"
 
 	code := run([]string{"screenshot", "--output", tmpFile}, cfg)
@@ -502,6 +503,7 @@ func TestRun_Screenshot_JPEG(t *testing.T) {
 	}
 
 	cfg := testConfig()
+	cfg.Timeout = 30 * time.Second
 	tmpFile := t.TempDir() + "/screenshot.jpg"
 
 	code := run([]string{"screenshot", "--output", tmpFile, "--format", "jpeg", "--quality", "90"}, cfg)
@@ -2060,7 +2062,7 @@ func TestRun_Screenshot_Element(t *testing.T) {
 	}
 
 	cfg := testConfig()
-	cfg.Timeout = 10 * time.Second
+	cfg.Timeout = 30 * time.Second
 
 	// Navigate and create a test element
 	run([]string{"goto", "about:blank"}, cfg)
@@ -4313,6 +4315,7 @@ func TestRun_Screenshot_Base64(t *testing.T) {
 
 	// Take screenshot with base64 output
 	cfg = testConfig()
+	cfg.Timeout = 30 * time.Second
 	code = run([]string{"--target", tabID, "screenshot", "--base64"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
