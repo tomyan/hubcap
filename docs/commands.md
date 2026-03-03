@@ -245,6 +245,7 @@ All commands accept these flags before the command name:
 | Read commands from stdin | `pipe` | Pipe-compatible format |
 | Interactive REPL | `shell` | `.quit`, `.target`, `.output` |
 | Record interactions | `record` | `--output`, `--duration` |
+| Configure profiles & Chrome | `setup [subcommand]` | `launch`, `stop`, `status`, `list`, `add`, `edit`, `remove`, `default`, `show` |
 | Show help | `help [cmd]` | |
 
 ## Advanced

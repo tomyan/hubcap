@@ -4,17 +4,10 @@ A command-line interface for Chrome DevTools Protocol. Control headless and head
 
 ## Quick start
 
-Start Chrome with remote debugging enabled:
+Set up and launch Chrome:
 
 ```bash
-# macOS
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-
-# Linux
-google-chrome --remote-debugging-port=9222
-
-# Headless
-google-chrome --headless --remote-debugging-port=9222
+hubcap setup launch
 ```
 
 Then use hubcap:
@@ -45,15 +38,13 @@ hubcap waitidle
 ## Install
 
 ```bash
-go install github.com/tomyan/hubcap/cmd/hubcap@latest
+brew install tomyan/tap/hubcap
 ```
 
-Or build from source:
+Or with Go:
 
 ```bash
-git clone https://github.com/tomyan/hubcap.git
-cd hubcap
-go build -o hubcap ./cmd/hubcap
+go install github.com/tomyan/hubcap/cmd/hubcap@latest
 ```
 
 ## How it works
@@ -302,7 +293,7 @@ There are 113 commands organized into these categories:
 - **Analysis** — metrics, a11y, coverage, csscoverage, stylesheets, listeners, domsnapshot
 - **Profiling** — heapsnapshot, trace
 - **Assert** — assert (text, title, url, exists, visible, count)
-- **Utility** — retry, pipe, shell, record, help
+- **Utility** — retry, pipe, shell, record, setup, help
 - **Advanced** — eval, evalframe, run, raw, dialog, highlight
 
 ## Testing
