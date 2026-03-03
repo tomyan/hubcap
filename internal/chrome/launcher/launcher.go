@@ -112,6 +112,28 @@ func WaitForPort(host string, port int, timeout time.Duration) error {
 	}
 }
 
+// WaitForDebugReady waits for Chrome's HTTP debug endpoint to respond.
+// This goes beyond WaitForPort (TCP connectivity) by verifying that
+// /json/version returns valid data.
+func WaitForDebugReady(host string, port int, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for debug endpoint at %s:%d", host, port)
+		case <-ticker.C:
+			if _, err := DetectRunning(host, port); err == nil {
+				return nil
+			}
+		}
+	}
+}
+
 // Launch starts a Chrome instance with the given options.
 func Launch(opts LaunchOptions) (*Instance, error) {
 	chromePath := FindChrome(opts.ChromePath)
@@ -171,6 +193,11 @@ func Launch(opts LaunchOptions) (*Instance, error) {
 	if err := WaitForPort("localhost", opts.Port, 30*time.Second); err != nil {
 		inst.Stop()
 		return nil, fmt.Errorf("Chrome failed to start: %w", err)
+	}
+
+	if err := WaitForDebugReady("localhost", opts.Port, 30*time.Second); err != nil {
+		inst.Stop()
+		return nil, fmt.Errorf("Chrome debug endpoint not ready: %w", err)
 	}
 
 	return inst, nil

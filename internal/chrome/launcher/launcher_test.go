@@ -146,6 +146,47 @@ func TestDetectRunning_Closed(t *testing.T) {
 	}
 }
 
+func TestWaitForDebugReady_Timeout(t *testing.T) {
+	t.Parallel()
+
+	// Given a port with nothing listening
+	// When we wait for the debug endpoint
+	err := WaitForDebugReady("localhost", 19999, 200*time.Millisecond)
+
+	// Then it should timeout
+	if err == nil {
+		t.Error("expected timeout error for closed port")
+	}
+}
+
+func TestWaitForDebugReady_Success(t *testing.T) {
+	t.Parallel()
+
+	chromePath := FindChrome("")
+	if chromePath == "" {
+		t.Skip("Chrome not found on this system")
+	}
+
+	// Given a running Chrome instance
+	inst, err := Launch(LaunchOptions{
+		ChromePath: chromePath,
+		Port:       19880,
+		Headless:   true,
+	})
+	if err != nil {
+		t.Fatalf("Launch failed: %v", err)
+	}
+	defer inst.Stop()
+
+	// When we wait for the debug endpoint (it should already be ready after Launch)
+	err = WaitForDebugReady("localhost", 19880, 5*time.Second)
+
+	// Then it should succeed
+	if err != nil {
+		t.Errorf("WaitForDebugReady failed: %v", err)
+	}
+}
+
 func TestLaunch_CustomDataDir(t *testing.T) {
 	t.Parallel()
 
