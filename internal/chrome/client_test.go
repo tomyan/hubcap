@@ -2860,7 +2860,7 @@ func TestClient_ScrollToBottomAndTop(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
+	waitForTab(t, client, ctx, tabID)
 
 	// Scroll to bottom
 	err = client.ScrollToBottom(ctx, tabID)
