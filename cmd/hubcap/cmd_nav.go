@@ -4,9 +4,24 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/tomyan/hubcap/internal/chrome"
 )
+
+// normalizeURL prepends "https://" if the URL has no scheme.
+// Special schemes (about:, data:, javascript:, file:) are left alone.
+func normalizeURL(rawURL string) string {
+	if strings.Contains(rawURL, "://") {
+		return rawURL
+	}
+	for _, prefix := range []string{"about:", "data:", "javascript:", "file:"} {
+		if strings.HasPrefix(rawURL, prefix) {
+			return rawURL
+		}
+	}
+	return "https://" + rawURL
+}
 
 func cmdVersion(cfg *Config) int {
 	return withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
@@ -47,7 +62,7 @@ func cmdGoto(cfg *Config, args []string) int {
 		return ExitError
 	}
 
-	url := remaining[0]
+	url := normalizeURL(remaining[0])
 
 	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		if *wait {
@@ -161,6 +176,9 @@ type NewTabResult struct {
 }
 
 func cmdNew(cfg *Config, url string) int {
+	if url != "" {
+		url = normalizeURL(url)
+	}
 	return withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
 		targetID, err := client.NewTab(ctx, url)
 		if err != nil {
