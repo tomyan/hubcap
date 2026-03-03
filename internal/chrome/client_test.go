@@ -81,6 +81,14 @@ func getSharedClient(t *testing.T) *chrome.Client {
 	return sharedClient
 }
 
+// waitForTab waits for a tab to finish loading, replacing flaky time.Sleep calls.
+func waitForTab(t *testing.T, client *chrome.Client, ctx context.Context, tabID string) {
+	t.Helper()
+	if err := client.WaitForLoad(ctx, tabID); err != nil {
+		t.Fatalf("waitForTab: %v", err)
+	}
+}
+
 // createTestTab creates a new isolated tab for tests that modify state.
 // Returns the tab ID and a cleanup function that must be deferred.
 // This prevents tests from interfering with each other's page state.
@@ -2531,7 +2539,7 @@ func TestClient_GetValue(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
+	waitForTab(t, client, ctx, tabID)
 
 	// Get value
 	value, err := client.GetValue(ctx, tabID, "#test-input")
