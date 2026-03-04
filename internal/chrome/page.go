@@ -45,6 +45,69 @@ func (c *Client) Screenshot(ctx context.Context, targetID string, opts Screensho
 	return data, nil
 }
 
+// ScreenshotFull captures a screenshot of the entire page including content below the viewport.
+func (c *Client) ScreenshotFull(ctx context.Context, targetID string, opts ScreenshotOptions) ([]byte, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the full page content dimensions
+	metricsResult, err := c.CallSession(ctx, sessionID, "Page.getLayoutMetrics", nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting layout metrics: %w", err)
+	}
+
+	var metrics struct {
+		ContentSize struct {
+			Width  float64 `json:"width"`
+			Height float64 `json:"height"`
+		} `json:"contentSize"`
+	}
+	if err := json.Unmarshal(metricsResult, &metrics); err != nil {
+		return nil, fmt.Errorf("parsing layout metrics: %w", err)
+	}
+
+	format := opts.Format
+	if format == "" {
+		format = "png"
+	}
+
+	params := map[string]interface{}{
+		"format":                format,
+		"captureBeyondViewport": true,
+		"clip": map[string]interface{}{
+			"x":      0,
+			"y":      0,
+			"width":  metrics.ContentSize.Width,
+			"height": metrics.ContentSize.Height,
+			"scale":  1,
+		},
+	}
+	if (format == "jpeg" || format == "webp") && opts.Quality > 0 {
+		params["quality"] = opts.Quality
+	}
+
+	result, err := c.CallSession(ctx, sessionID, "Page.captureScreenshot", params)
+	if err != nil {
+		return nil, fmt.Errorf("capturing screenshot: %w", err)
+	}
+
+	var screenshotResp struct {
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal(result, &screenshotResp); err != nil {
+		return nil, fmt.Errorf("parsing screenshot response: %w", err)
+	}
+
+	data, err := base64.StdEncoding.DecodeString(screenshotResp.Data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding screenshot data: %w", err)
+	}
+
+	return data, nil
+}
+
 // ScreenshotElement captures a screenshot of a specific element.
 func (c *Client) ScreenshotElement(ctx context.Context, targetID string, selector string, opts ScreenshotOptions) ([]byte, *BoundingBox, error) {
 	// First get the bounding box

@@ -519,6 +519,56 @@ func TestClient_Screenshot_ReturnsJPEG(t *testing.T) {
 	}
 }
 
+func TestClient_ScreenshotFull_CapturesEntirePage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page that is taller than the viewport
+	dataURL := `data:text/html,<html><body style="margin:0"><div style="width:100px;height:3000px;background:linear-gradient(red,blue)"></div></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(200 * time.Millisecond)
+
+	// When we take a full-page screenshot
+	data, err := client.ScreenshotFull(ctx, tabID, chrome.ScreenshotOptions{Format: "png"})
+
+	// Then it succeeds and produces a valid PNG
+	if err != nil {
+		t.Fatalf("failed to take full screenshot: %v", err)
+	}
+	if len(data) < 8 {
+		t.Fatal("screenshot data too small")
+	}
+	pngMagic := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	for i, b := range pngMagic {
+		if data[i] != b {
+			t.Fatalf("not a valid PNG: byte %d is %x, expected %x", i, data[i], b)
+		}
+	}
+
+	// And the full screenshot is larger than a viewport screenshot
+	viewportData, err := client.Screenshot(ctx, tabID, chrome.ScreenshotOptions{Format: "png"})
+	if err != nil {
+		t.Fatalf("failed to take viewport screenshot: %v", err)
+	}
+	if len(data) <= len(viewportData) {
+		t.Errorf("full screenshot (%d bytes) should be larger than viewport screenshot (%d bytes)", len(data), len(viewportData))
+	}
+}
+
 func TestClient_Eval_SimpleExpression(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

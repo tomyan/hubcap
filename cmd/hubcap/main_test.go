@@ -2103,6 +2103,56 @@ func TestRun_Screenshot_Element(t *testing.T) {
 	}
 }
 
+func TestRun_Screenshot_Full(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 30 * time.Second
+
+	// Given a page taller than the viewport
+	run([]string{"goto", "about:blank"}, cfg)
+	time.Sleep(50 * time.Millisecond)
+	run([]string{"eval", `document.body.style.margin='0'; document.body.innerHTML = '<div style="width:100px;height:3000px;background:linear-gradient(red,blue)"></div>'`}, cfg)
+	time.Sleep(50 * time.Millisecond)
+
+	tmpFile := t.TempDir() + "/full.png"
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// When we take a full-page screenshot
+	code := run([]string{"screenshot", "--output", tmpFile, "--full"}, cfg)
+
+	// Then it succeeds
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// And produces a valid PNG
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read screenshot: %v", err)
+	}
+	if len(data) < 8 || data[0] != 0x89 || data[1] != 0x50 {
+		t.Error("output is not a valid PNG")
+	}
+
+	// And the full screenshot is larger than a viewport screenshot
+	viewportFile := t.TempDir() + "/viewport.png"
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	run([]string{"screenshot", "--output", viewportFile}, cfg)
+	viewportData, err := os.ReadFile(viewportFile)
+	if err != nil {
+		t.Fatalf("failed to read viewport screenshot: %v", err)
+	}
+	if len(data) <= len(viewportData) {
+		t.Errorf("full screenshot (%d bytes) should be larger than viewport screenshot (%d bytes)", len(data), len(viewportData))
+	}
+}
+
 func TestRun_Styles_Success(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

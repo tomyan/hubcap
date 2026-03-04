@@ -33,6 +33,7 @@ func cmdScreenshot(cfg *Config, args []string) int {
 	format := fs.String("format", "png", "Image format: png, jpeg, webp")
 	quality := fs.Int("quality", 80, "JPEG/WebP quality (0-100)")
 	selector := fs.String("selector", "", "CSS selector for element screenshot")
+	full := fs.Bool("full", false, "Capture the full scrollable page")
 	base64Flag := fs.Bool("base64", false, "Return base64 data instead of writing to file")
 
 	if err := fs.Parse(args); err != nil {
@@ -59,10 +60,10 @@ func cmdScreenshot(cfg *Config, args []string) int {
 		var err error
 
 		if *selector != "" {
-			// Element-specific screenshot
 			data, bounds, err = client.ScreenshotElement(ctx, target.ID, *selector, opts)
+		} else if *full {
+			data, err = client.ScreenshotFull(ctx, target.ID, opts)
 		} else {
-			// Full page screenshot
 			data, err = client.Screenshot(ctx, target.ID, opts)
 		}
 

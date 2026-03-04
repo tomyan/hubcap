@@ -4,7 +4,7 @@ Capture a screenshot of the page or a specific element.
 
 ## When to use
 
-Use `screenshot` to capture an image of the current page or a specific element selected by CSS. Use `--base64` to get inline image data instead of writing to a file. Use `pdf` for PDF export instead.
+Use `screenshot` to capture an image of the current page or a specific element selected by CSS. Use `--full` to capture the entire scrollable page. Use `--base64` to get inline image data instead of writing to a file. Use `pdf` for PDF export instead.
 
 ## Usage
 
@@ -25,6 +25,7 @@ None.
 | --format   | string | "png"   | Image format: png, jpeg, or webp         |
 | --quality  | int    | 80      | JPEG/WebP quality 0-100                  |
 | --selector | string | ""      | CSS selector for element screenshot      |
+| --full     | bool   | false   | Capture the full scrollable page         |
 | --base64   | bool   | false   | Return base64 data instead of file       |
 
 ## Output
@@ -58,10 +59,16 @@ With `--base64`:
 
 ## Examples
 
-Capture a full-page screenshot:
+Capture the visible viewport:
 
 ```
 hubcap screenshot --output page.png
+```
+
+Capture the full scrollable page:
+
+```
+hubcap screenshot --output full.png --full
 ```
 
 Capture as JPEG with reduced quality:
