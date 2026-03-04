@@ -1179,7 +1179,7 @@ func TestClient_WaitFor_Timeout(t *testing.T) {
 	// Wait for non-existent element with short timeout
 	err = client.WaitFor(ctx, tabID, "#never-exists", 500*time.Millisecond)
 	if err == nil {
-		t.Error("expected timeout error")
+		t.Fatal("expected timeout error")
 	}
 
 	if !strings.Contains(err.Error(), "timeout") {
@@ -2762,7 +2762,7 @@ func TestClient_WaitForFunction_Timeout(t *testing.T) {
 	// Wait for function with short timeout
 	err = client.WaitForFunction(ctx, tabID, "window.ready", 200*time.Millisecond)
 	if err == nil {
-		t.Error("expected timeout error")
+		t.Fatal("expected timeout error")
 	}
 	if !strings.Contains(err.Error(), "timeout") {
 		t.Errorf("expected timeout error, got: %v", err)
@@ -3182,7 +3182,7 @@ func TestClient_WaitForGone_Timeout(t *testing.T) {
 	// Should timeout
 	err = client.WaitForGone(ctx, tabID, "#permanent", 200*time.Millisecond)
 	if err == nil {
-		t.Error("expected timeout error")
+		t.Fatal("expected timeout error")
 	}
 	if !strings.Contains(err.Error(), "timeout") {
 		t.Errorf("expected timeout error, got: %v", err)
