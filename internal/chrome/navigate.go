@@ -329,6 +329,56 @@ func (c *Client) NewTab(ctx context.Context, url string) (string, error) {
 	return resp.TargetID, nil
 }
 
+// NewTabAndWait creates a new tab, navigates to the URL, and waits for the page to load.
+func (c *Client) NewTabAndWait(ctx context.Context, url string) (string, error) {
+	if url == "" {
+		url = "about:blank"
+	}
+
+	// Create the tab
+	targetID, err := c.NewTab(ctx, url)
+	if err != nil {
+		return "", err
+	}
+
+	// Attach and wait for load event
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return targetID, fmt.Errorf("attaching to new tab: %w", err)
+	}
+
+	if _, err := c.CallSession(ctx, sessionID, "Page.enable", nil); err != nil {
+		return targetID, fmt.Errorf("enabling Page domain: %w", err)
+	}
+
+	loadCh := c.subscribeEvent(sessionID, "Page.loadEventFired")
+	defer c.unsubscribeEvent(sessionID, "Page.loadEventFired", loadCh)
+
+	// Check if the page already loaded (for fast data: URLs)
+	readyResult, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    "document.readyState",
+		"returnByValue": true,
+	})
+	if err == nil {
+		var evalResp struct {
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
+		}
+		if json.Unmarshal(readyResult, &evalResp) == nil && evalResp.Result.Value == "complete" {
+			return targetID, nil
+		}
+	}
+
+	// Wait for load event
+	select {
+	case <-loadCh:
+		return targetID, nil
+	case <-ctx.Done():
+		return targetID, ctx.Err()
+	}
+}
+
 // CloseTab closes a browser tab by its target ID.
 func (c *Client) CloseTab(ctx context.Context, targetID string) error {
 	// Remove session from cache before closing

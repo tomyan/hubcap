@@ -175,11 +175,35 @@ type NewTabResult struct {
 	URL      string `json:"url"`
 }
 
-func cmdNew(cfg *Config, url string) int {
-	if url != "" {
-		url = normalizeURL(url)
+func cmdNew(cfg *Config, args []string) int {
+	fs := flag.NewFlagSet("new", flag.ContinueOnError)
+	fs.SetOutput(cfg.Stderr)
+	wait := fs.Bool("wait", false, "Wait for page load to complete")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return ExitSuccess
+		}
+		return ExitError
 	}
+
+	url := ""
+	if remaining := fs.Args(); len(remaining) > 0 {
+		url = normalizeURL(remaining[0])
+	}
+
 	return withClient(cfg, func(ctx context.Context, client *chrome.Client) (interface{}, error) {
+		if *wait {
+			targetID, err := client.NewTabAndWait(ctx, url)
+			if err != nil {
+				return nil, err
+			}
+			if url == "" {
+				url = "about:blank"
+			}
+			return NewTabWaitResult{TargetID: targetID, URL: url, Loaded: true}, nil
+		}
+
 		targetID, err := client.NewTab(ctx, url)
 		if err != nil {
 			return nil, err
@@ -189,6 +213,13 @@ func cmdNew(cfg *Config, url string) int {
 		}
 		return NewTabResult{TargetID: targetID, URL: url}, nil
 	})
+}
+
+// NewTabWaitResult is returned by the new command with --wait.
+type NewTabWaitResult struct {
+	TargetID string `json:"targetId"`
+	URL      string `json:"url"`
+	Loaded   bool   `json:"loaded"`
 }
 
 // CloseTabResult is returned by the close command.

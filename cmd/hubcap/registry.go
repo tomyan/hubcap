@@ -21,13 +21,7 @@ var commands = map[string]CommandInfo{
 	"back":    {Name: "back", Desc: "Go back in history", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdBack(cfg) }},
 	"forward": {Name: "forward", Desc: "Go forward in history", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdForward(cfg) }},
 	"reload":  {Name: "reload", Desc: "Reload the page", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdReload(cfg, args) }},
-	"new":     {Name: "new", Desc: "Open a new tab", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int {
-		url := ""
-		if len(args) > 0 {
-			url = args[0]
-		}
-		return cmdNew(cfg, url)
-	}},
+	"new":     {Name: "new", Desc: "Open a new tab", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdNew(cfg, args) }},
 	"close":   {Name: "close", Desc: "Close the current tab", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdClose(cfg) }},
 	"tabs":    {Name: "tabs", Desc: "List open tabs", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdTabs(cfg) }},
 	"version": {Name: "version", Desc: "Show browser version", Category: "Navigate & manage tabs", Run: func(cfg *Config, args []string) int { return cmdVersion(cfg) }},

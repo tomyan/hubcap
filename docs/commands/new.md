@@ -9,7 +9,7 @@ Use `new` to open a new browser tab, optionally navigating to a URL. Use the `-t
 ## Usage
 
 ```
-hubcap new [url]
+hubcap new [--wait] [url]
 ```
 
 ## Arguments
@@ -20,7 +20,9 @@ hubcap new [url]
 
 ## Flags
 
-None.
+| Flag   | Type | Default | Description                        |
+|--------|------|---------|------------------------------------|
+| --wait | bool | false   | Wait for page load to complete     |
 
 ## Output
 
@@ -28,9 +30,16 @@ None.
 |----------|--------|--------------------------------------|
 | targetId | string | Unique identifier for the new tab    |
 | url      | string | The URL opened in the new tab        |
+| loaded   | bool   | Whether the page loaded (only with --wait) |
 
 ```json
 {"targetId":"A1B2C3D4E5F6","url":"about:blank"}
+```
+
+With `--wait`:
+
+```json
+{"targetId":"A1B2C3D4E5F6","url":"https://example.com","loaded":true}
 ```
 
 ## Errors
@@ -54,10 +63,16 @@ Open a new tab and navigate to a URL:
 hubcap new example.com
 ```
 
+Open a tab and wait for the page to fully load:
+
+```
+hubcap new --wait example.com
+```
+
 Open a tab and capture its ID for later use (chaining):
 
 ```
-TAB_ID=$(hubcap new example.com | jq -r '.targetId') && hubcap -target "$TAB_ID" title
+TAB_ID=$(hubcap new --wait example.com | jq -r '.targetId') && hubcap -target "$TAB_ID" title
 ```
 
 ## See also

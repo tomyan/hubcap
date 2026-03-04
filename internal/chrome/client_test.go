@@ -2028,6 +2028,45 @@ func TestClient_NewTab_Success(t *testing.T) {
 	client.CloseTab(ctx, targetID)
 }
 
+func TestClient_NewTabAndWait_PageLoaded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a URL with content
+	dataURL := `data:text/html,<html><body><h1>Loaded</h1></body></html>`
+
+	// When we create a new tab and wait for load
+	targetID, err := client.NewTabAndWait(ctx, dataURL)
+
+	// Then it succeeds and the page is loaded
+	if err != nil {
+		t.Fatalf("failed to create and wait: %v", err)
+	}
+	if targetID == "" {
+		t.Error("expected non-empty target ID")
+	}
+	defer client.CloseTab(ctx, targetID)
+
+	// And the content is accessible immediately (no need for additional wait)
+	result, err := client.Eval(ctx, targetID, "document.querySelector('h1').textContent")
+	if err != nil {
+		t.Fatalf("failed to eval: %v", err)
+	}
+	if result.Value != "Loaded" {
+		t.Errorf("expected 'Loaded', got %v", result.Value)
+	}
+}
+
 func TestClient_DoubleClick_Success(t *testing.T) {
 	// Uses isolated tab - not parallel due to Chrome resource contention
 	client := getSharedClient(t)

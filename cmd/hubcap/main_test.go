@@ -1651,6 +1651,46 @@ func TestRun_New_Success(t *testing.T) {
 	run([]string{"close"}, cfg)
 }
 
+func TestRun_New_Wait(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	cfg.Timeout = 30 * time.Second
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+
+	// When we create a new tab with --wait
+	code := run([]string{"new", "--wait", "about:blank"}, cfg)
+
+	// Then it succeeds
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	// And the output includes targetId and loaded: true
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if result["targetId"] == "" {
+		t.Error("expected non-empty targetId")
+	}
+	if result["loaded"] != true {
+		t.Errorf("expected loaded: true, got %v", result["loaded"])
+	}
+
+	// Clean up
+	if targetID, ok := result["targetId"].(string); ok {
+		cfg.Target = targetID
+		cfg.Stdout = &bytes.Buffer{}
+		run([]string{"close"}, cfg)
+	}
+}
+
 func TestRun_New_NoChrome(t *testing.T) {
 	cfg := testConfig()
 	cfg.Port = 1 // Invalid port
