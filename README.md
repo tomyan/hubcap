@@ -271,6 +271,11 @@ hubcap -output ndjson console --duration 5s
 # {"type":"warn","text":"Deprecated API"}
 ```
 
+## Documentation
+
+- [Documentation site](https://hubcap.tomyandell.dev) — full command reference and skill page
+- [Introducing Hubcap](https://tomyandell.dev/blog/introducing-hubcap) — blog post on the motivation and design
+
 ## Command reference
 
 See [docs/commands.md](docs/commands.md) for the full command directory, or individual command docs in the [docs/commands/](docs/commands/) folder.
