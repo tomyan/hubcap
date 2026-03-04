@@ -52,17 +52,17 @@ func (c *Client) ScreenshotFull(ctx context.Context, targetID string, opts Scree
 		return nil, err
 	}
 
-	// Get the full page content dimensions
+	// Get the full page content dimensions in CSS pixels
 	metricsResult, err := c.CallSession(ctx, sessionID, "Page.getLayoutMetrics", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting layout metrics: %w", err)
 	}
 
 	var metrics struct {
-		ContentSize struct {
+		CSSContentSize struct {
 			Width  float64 `json:"width"`
 			Height float64 `json:"height"`
-		} `json:"contentSize"`
+		} `json:"cssContentSize"`
 	}
 	if err := json.Unmarshal(metricsResult, &metrics); err != nil {
 		return nil, fmt.Errorf("parsing layout metrics: %w", err)
@@ -79,8 +79,8 @@ func (c *Client) ScreenshotFull(ctx context.Context, targetID string, opts Scree
 		"clip": map[string]interface{}{
 			"x":      0,
 			"y":      0,
-			"width":  metrics.ContentSize.Width,
-			"height": metrics.ContentSize.Height,
+			"width":  metrics.CSSContentSize.Width,
+			"height": metrics.CSSContentSize.Height,
 			"scale":  1,
 		},
 	}

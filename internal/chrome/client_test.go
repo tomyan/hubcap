@@ -1,10 +1,12 @@
 package chrome_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image/png"
 	"os"
 	"strings"
 	"sync"
@@ -566,6 +568,50 @@ func TestClient_ScreenshotFull_CapturesEntirePage(t *testing.T) {
 	}
 	if len(data) <= len(viewportData) {
 		t.Errorf("full screenshot (%d bytes) should be larger than viewport screenshot (%d bytes)", len(data), len(viewportData))
+	}
+}
+
+func TestClient_ScreenshotFull_DimensionsMatchContent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page with default body margin and a 200x500 div
+	dataURL := `data:text/html,<html><body><div style="width:200px;height:500px;background:red"></div></body></html>`
+	tabID, err := client.NewTab(ctx, dataURL)
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(200 * time.Millisecond)
+
+	// When we take a full-page screenshot
+	data, err := client.ScreenshotFull(ctx, tabID, chrome.ScreenshotOptions{Format: "png"})
+	if err != nil {
+		t.Fatalf("failed to take full screenshot: %v", err)
+	}
+
+	// Then the screenshot height should be close to the content height (500 + margins)
+	// not massively larger due to inflated layout metrics
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to decode PNG: %v", err)
+	}
+
+	bounds := img.Bounds()
+	// With default 8px body margin, content is ~516px tall
+	// Allow some slack but it should not be viewport height (typically 600-900px)
+	if bounds.Dy() > 600 {
+		t.Errorf("screenshot height %d is too tall — expected close to content height (~516px), likely capturing excess whitespace", bounds.Dy())
 	}
 }
 
