@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // BridgeEvent represents an event from a bridge session.
@@ -59,13 +60,14 @@ func generateBridgeID() string {
 }
 
 // bridgeScript returns the JS that sets up the async iterator, send function,
-// and wraps the user's script.
+// keepalive watchdog, and wraps the user's script.
 func bridgeScript(id, bindingName, closedBindingName, userScript string) string {
 	return fmt.Sprintf(`
 (async () => {
 	const __sendBinding = %q;
 	const __closedBinding = %q;
 	const __pushName = %q;
+	const __heartbeatName = %q;
 
 	// Async iterator backed by a promise queue
 	const __buffer = [];
@@ -88,6 +90,18 @@ func bridgeScript(id, bindingName, closedBindingName, userScript string) string 
 		}
 		__waiters.length = 0;
 	}
+
+	// Keepalive watchdog — close iterator if no heartbeat for 6 seconds
+	let __lastHeartbeat = Date.now();
+	window[__heartbeatName] = function() {
+		__lastHeartbeat = Date.now();
+	};
+	const __watchdog = setInterval(() => {
+		if (Date.now() - __lastHeartbeat > 6000) {
+			clearInterval(__watchdog);
+			__closePush();
+		}
+	}, 1000);
 
 	const messages = {
 		[Symbol.asyncIterator]() { return this; },
@@ -116,10 +130,33 @@ func bridgeScript(id, bindingName, closedBindingName, userScript string) string 
 		window[__sendBinding](JSON.stringify({__bridge_error: true, message: e.message, stack: e.stack}));
 	}
 
+	clearInterval(__watchdog);
 	__closePush();
 	window[__closedBinding](JSON.stringify({reason: "script ended"}));
 })();
-`, bindingName, closedBindingName, id+"_push", userScript)
+`, bindingName, closedBindingName, id+"_push", id+"_heartbeat", userScript)
+}
+
+// sendHeartbeats sends periodic heartbeats to the JS watchdog.
+// Returns when done channel is closed or context is cancelled.
+func (b *Bridge) sendHeartbeats(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	heartbeatExpr := fmt.Sprintf(`window[%q] && window[%q]()`, b.id+"_heartbeat", b.id+"_heartbeat")
+	for {
+		select {
+		case <-b.done:
+			return
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			b.client.CallSession(ctx, b.sessionID, "Runtime.evaluate", map[string]interface{}{
+				"expression":    heartbeatExpr,
+				"returnByValue": true,
+			})
+		}
+	}
 }
 
 // StartBridge establishes a bidirectional message channel with client-side JS.
@@ -220,6 +257,9 @@ func (c *Client) StartBridge(ctx context.Context, targetID string, script string
 			}
 		}
 	}()
+
+	// Start keepalive heartbeats
+	go bridge.sendHeartbeats(ctx)
 
 	// Emit ready before running the script
 	events <- BridgeEvent{Type: "ready"}

@@ -231,6 +231,73 @@ func TestBridge_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestBridge_Keepalive(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page
+	tabID, err := client.NewTabAndWait(ctx, "data:text/html,<html><body>keepalive test</body></html>")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+
+	// When we start a bridge with keepalive enabled
+	bridge, err := client.StartBridge(ctx, tabID, `
+		for await (const msg of messages) {
+			send({got: msg});
+		}
+		send({status: "iterator closed"});
+	`)
+	if err != nil {
+		t.Fatalf("failed to start bridge: %v", err)
+	}
+
+	// Wait for ready
+	ev := <-bridge.Events
+	if ev.Type != "ready" {
+		t.Fatalf("expected ready, got %s", ev.Type)
+	}
+
+	// Send a message to confirm bridge is working
+	err = bridge.Send(ctx, "ping")
+	if err != nil {
+		t.Fatalf("failed to send: %v", err)
+	}
+	ev = <-bridge.Events
+	if ev.Type != "message" {
+		t.Fatalf("expected message, got %s", ev.Type)
+	}
+
+	// Stop keepalive by closing the bridge (simulates hubcap dying)
+	bridge.Close()
+
+	// The JS should detect the missed heartbeats and close the iterator,
+	// which triggers the "iterator closed" send and then "closed" event.
+	// We just need the events channel to close without hanging.
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case _, ok := <-bridge.Events:
+			if !ok {
+				return // channel closed, test passes
+			}
+		case <-timeout:
+			t.Fatal("bridge events channel did not close after stopping keepalive")
+		}
+	}
+}
+
 func TestBridge_ClosedOnScriptEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
