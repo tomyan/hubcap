@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.1
+
+- `eval` and `run` now support top-level `await` (e.g. `hubcap eval 'await fetch("/api/data")'`)
+
 ## v1.8.0
 
 - New `bridge` command — persistent bidirectional message channel between CLI and client-side JavaScript via LDJSON over stdio
