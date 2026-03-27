@@ -4,7 +4,7 @@ Evaluate a JavaScript expression in the page context and return the result.
 
 ## When to use
 
-Evaluate a JavaScript expression in the page context. Returns the result value and type. Use `run` to execute a JS file instead of an inline expression. Use `evalframe` to evaluate inside a specific frame.
+Evaluate a JavaScript expression in the page context. Returns the result value and type. If the expression returns a Promise, it is automatically awaited. Use `run` to execute a JS file instead of an inline expression. Use `evalframe` to evaluate inside a specific frame.
 
 ## Usage
 
@@ -59,6 +59,12 @@ Return a JSON object:
 
 ```
 hubcap eval '({width: window.innerWidth, height: window.innerHeight})'
+```
+
+Await an async operation:
+
+```
+hubcap eval 'fetch("/api/data").then(r => r.json())'
 ```
 
 Chain with jq to extract the value and use in a shell pipeline:

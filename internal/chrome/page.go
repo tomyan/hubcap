@@ -465,6 +465,7 @@ func (c *Client) Eval(ctx context.Context, targetID string, expression string) (
 	evalResult, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
 		"expression":    expression,
 		"returnByValue": true,
+		"awaitPromise":  true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluating expression: %w", err)

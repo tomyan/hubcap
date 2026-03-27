@@ -578,6 +578,29 @@ func TestRun_Eval_Success(t *testing.T) {
 	}
 }
 
+func TestRun_Eval_AwaitsPromise(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cfg := testConfig()
+	code := run([]string{"eval", "new Promise(resolve => setTimeout(() => resolve(42), 50))"}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
+	}
+
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+
+	if result["value"] != float64(42) {
+		t.Errorf("expected value 42, got %v", result["value"])
+	}
+}
+
 func TestRun_Eval_String(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

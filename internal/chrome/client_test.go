@@ -727,6 +727,40 @@ func TestClient_Eval_JSONSerializable(t *testing.T) {
 	}
 }
 
+func TestClient_Eval_AwaitsPromise(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given
+	tabID, err := client.NewTab(ctx, "about:blank")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+	time.Sleep(100 * time.Millisecond)
+
+	// When — evaluate a promise
+	result, err := client.Eval(ctx, tabID, "new Promise(resolve => setTimeout(() => resolve('done'), 50))")
+
+	// Then — should await and return the resolved value
+	if err != nil {
+		t.Fatalf("failed to eval promise: %v", err)
+	}
+	if v, ok := result.Value.(string); !ok || v != "done" {
+		t.Errorf("expected 'done', got %v (%T)", result.Value, result.Value)
+	}
+}
+
 func TestClient_Eval_JSException(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
