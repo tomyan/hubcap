@@ -34,10 +34,92 @@ func (b *Bridge) Close() {
 	})
 }
 
+// Send delivers a message to the JS async iterator.
+func (b *Bridge) Send(ctx context.Context, data interface{}) error {
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("marshalling message: %w", err)
+	}
+
+	pushExpr := fmt.Sprintf(`window[%q](%s)`, b.id+"_push", string(jsonBytes))
+	_, err = b.client.CallSession(ctx, b.sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    pushExpr,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return fmt.Errorf("pushing message to bridge: %w", err)
+	}
+	return nil
+}
+
 func generateBridgeID() string {
 	b := make([]byte, 6)
 	rand.Read(b)
 	return "__hubcap_bridge_" + hex.EncodeToString(b)
+}
+
+// bridgeScript returns the JS that sets up the async iterator, send function,
+// and wraps the user's script.
+func bridgeScript(id, bindingName, closedBindingName, userScript string) string {
+	return fmt.Sprintf(`
+(async () => {
+	const __sendBinding = %q;
+	const __closedBinding = %q;
+	const __pushName = %q;
+
+	// Async iterator backed by a promise queue
+	const __buffer = [];
+	const __waiters = [];
+	let __closed = false;
+
+	window[__pushName] = function(data) {
+		if (__closed) return;
+		if (__waiters.length > 0) {
+			__waiters.shift().resolve({value: data, done: false});
+		} else {
+			__buffer.push(data);
+		}
+	};
+
+	function __closePush() {
+		__closed = true;
+		for (const w of __waiters) {
+			w.resolve({value: undefined, done: true});
+		}
+		__waiters.length = 0;
+	}
+
+	const messages = {
+		[Symbol.asyncIterator]() { return this; },
+		next() {
+			if (__buffer.length > 0) {
+				return Promise.resolve({value: __buffer.shift(), done: false});
+			}
+			if (__closed) {
+				return Promise.resolve({value: undefined, done: true});
+			}
+			return new Promise(resolve => __waiters.push({resolve}));
+		},
+		return() {
+			__closePush();
+			return Promise.resolve({value: undefined, done: true});
+		}
+	};
+
+	function send(data) {
+		window[__sendBinding](JSON.stringify(data));
+	}
+
+	try {
+		%s
+	} catch (e) {
+		window[__sendBinding](JSON.stringify({__bridge_error: true, message: e.message, stack: e.stack}));
+	}
+
+	__closePush();
+	window[__closedBinding](JSON.stringify({reason: "script ended"}));
+})();
+`, bindingName, closedBindingName, id+"_push", userScript)
 }
 
 // StartBridge establishes a bidirectional message channel with client-side JS.
@@ -139,31 +221,11 @@ func (c *Client) StartBridge(ctx context.Context, targetID string, script string
 		}
 	}()
 
-	// Inject the bridge script
-	wrappedScript := fmt.Sprintf(`
-(async () => {
-	const __id = %q;
-	const __sendBinding = %q;
-	const __closedBinding = %q;
-
-	function send(data) {
-		window[__sendBinding](JSON.stringify(data));
-	}
-
-	try {
-		%s
-	} catch (e) {
-		window[__sendBinding](JSON.stringify({__bridge_error: true, message: e.message, stack: e.stack}));
-	}
-
-	window[__closedBinding](JSON.stringify({reason: "script ended"}));
-})();
-`, id, bindingName, closedBindingName, script)
-
 	// Emit ready before running the script
 	events <- BridgeEvent{Type: "ready"}
 
 	// Run the script (fire and forget — it's async)
+	wrappedScript := bridgeScript(id, bindingName, closedBindingName, script)
 	_, err = c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
 		"expression":    wrappedScript,
 		"awaitPromise":  false,

@@ -107,6 +107,130 @@ func TestBridge_MultipleMessages(t *testing.T) {
 	}
 }
 
+func TestBridge_ReceiveFromCLI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page
+	tabID, err := client.NewTabAndWait(ctx, "data:text/html,<html><body>bridge test</body></html>")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+
+	// When we start a bridge that echoes messages back
+	bridge, err := client.StartBridge(ctx, tabID, `
+		for await (const msg of messages) {
+			send({echo: msg});
+		}
+	`)
+	if err != nil {
+		t.Fatalf("failed to start bridge: %v", err)
+	}
+	defer bridge.Close()
+
+	// Wait for ready
+	ev := <-bridge.Events
+	if ev.Type != "ready" {
+		t.Fatalf("expected ready, got %s", ev.Type)
+	}
+
+	// Send a message to JS
+	err = bridge.Send(ctx, map[string]interface{}{"ping": "pong"})
+	if err != nil {
+		t.Fatalf("failed to send: %v", err)
+	}
+
+	// Then we receive the echo
+	ev = <-bridge.Events
+	if ev.Type != "message" {
+		t.Fatalf("expected message, got %s", ev.Type)
+	}
+
+	data := ev.Data.(map[string]interface{})
+	echo := data["echo"].(map[string]interface{})
+	if echo["ping"] != "pong" {
+		t.Errorf("expected ping=pong, got %v", echo["ping"])
+	}
+}
+
+func TestBridge_RoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page
+	tabID, err := client.NewTabAndWait(ctx, "data:text/html,<html><body>bridge test</body></html>")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+
+	// When we start a bridge that doubles numbers
+	bridge, err := client.StartBridge(ctx, tabID, `
+		for await (const msg of messages) {
+			if (msg.done) break;
+			send({result: msg.n * 2});
+		}
+	`)
+	if err != nil {
+		t.Fatalf("failed to start bridge: %v", err)
+	}
+	defer bridge.Close()
+
+	// Wait for ready
+	ev := <-bridge.Events
+	if ev.Type != "ready" {
+		t.Fatalf("expected ready, got %s", ev.Type)
+	}
+
+	// Send 3 numbers and collect results
+	for i := 1; i <= 3; i++ {
+		err = bridge.Send(ctx, map[string]interface{}{"n": i})
+		if err != nil {
+			t.Fatalf("failed to send: %v", err)
+		}
+
+		ev = <-bridge.Events
+		if ev.Type != "message" {
+			t.Fatalf("expected message, got %s", ev.Type)
+		}
+		data := ev.Data.(map[string]interface{})
+		expected := float64(i * 2)
+		if data["result"] != expected {
+			t.Errorf("expected result=%v, got %v", expected, data["result"])
+		}
+	}
+
+	// Signal done
+	bridge.Send(ctx, map[string]interface{}{"done": true})
+
+	// Should get closed
+	ev = <-bridge.Events
+	if ev.Type != "closed" {
+		t.Fatalf("expected closed, got %s", ev.Type)
+	}
+}
+
 func TestBridge_ClosedOnScriptEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

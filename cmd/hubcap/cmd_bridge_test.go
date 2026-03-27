@@ -90,3 +90,62 @@ func TestRun_Bridge_SendMessage(t *testing.T) {
 		t.Errorf("expected type 'closed', got %v", closed["type"])
 	}
 }
+
+func TestRun_Bridge_RoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "--wait", "data:text/html,<html><body>bridge</body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %s", cfg.Stderr.(*bytes.Buffer).String())
+	}
+
+	// Provide stdin with a message followed by close
+	stdinData := `{"data":{"n":7}}` + "\n" + `{"type":"close"}` + "\n"
+
+	// Run bridge with a script that echoes messages
+	cfg = testConfig()
+	cfg.Timeout = 5 * time.Second
+	cfg.Stdin = strings.NewReader(stdinData)
+	code = run([]string{"--target", tabID, "bridge", `
+		for await (const msg of messages) {
+			send({doubled: msg.n * 2});
+			break;
+		}
+	`}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+
+	// Parse output — expect ready, message (doubled), closed
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("expected at least 3 lines, got %d: %s", len(lines), stdout)
+	}
+
+	// Find the message line
+	var found bool
+	for _, line := range lines {
+		var ev map[string]interface{}
+		json.Unmarshal([]byte(line), &ev)
+		if ev["type"] == "message" {
+			data := ev["data"].(map[string]interface{})
+			if data["doubled"] != float64(14) {
+				t.Errorf("expected doubled=14, got %v", data["doubled"])
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("no message event found in output: %s", stdout)
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -66,6 +67,45 @@ func cmdBridge(cfg *Config, args []string) int {
 		return ExitError
 	}
 	defer bridge.Close()
+
+	// Read stdin in a goroutine and forward messages to the bridge
+	stdinDone := make(chan struct{})
+	go func() {
+		defer close(stdinDone)
+		if cfg.Stdin == nil {
+			return
+		}
+		scanner := bufio.NewScanner(cfg.Stdin)
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			var envelope struct {
+				Type string          `json:"type"`
+				Data json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal(line, &envelope); err != nil {
+				fmt.Fprintf(cfg.Stderr, "error: invalid JSON on stdin: %v\n", err)
+				continue
+			}
+
+			if envelope.Type == "close" {
+				bridge.Close()
+				return
+			}
+
+			var data interface{}
+			if err := json.Unmarshal(envelope.Data, &data); err != nil {
+				fmt.Fprintf(cfg.Stderr, "error: invalid data in message: %v\n", err)
+				continue
+			}
+
+			if err := bridge.Send(ctx, data); err != nil {
+				fmt.Fprintf(cfg.Stderr, "error: sending to bridge: %v\n", err)
+				return
+			}
+		}
+		// stdin EOF — close the bridge
+		bridge.Close()
+	}()
 
 	enc := json.NewEncoder(cfg.Stdout)
 	for ev := range bridge.Events {
