@@ -298,6 +298,49 @@ func TestBridge_Keepalive(t *testing.T) {
 	}
 }
 
+func TestBridge_JSError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page
+	tabID, err := client.NewTabAndWait(ctx, "data:text/html,<html><body>error test</body></html>")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+
+	// When the bridge script throws an error
+	bridge, err := client.StartBridge(ctx, tabID, `throw new Error("test error")`)
+	if err != nil {
+		t.Fatalf("failed to start bridge: %v", err)
+	}
+	defer bridge.Close()
+
+	// Then we get ready, then an error event, then closed
+	ev := <-bridge.Events
+	if ev.Type != "ready" {
+		t.Fatalf("expected ready, got %s", ev.Type)
+	}
+
+	ev = <-bridge.Events
+	if ev.Type != "error" {
+		t.Fatalf("expected error, got %s: %+v", ev.Type, ev)
+	}
+	if ev.Error == "" {
+		t.Error("expected non-empty error message")
+	}
+}
+
 func TestBridge_ClosedOnScriptEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

@@ -252,6 +252,16 @@ func (c *Client) StartBridge(ctx context.Context, targetID string, script string
 						events <- BridgeEvent{Type: "error", Error: fmt.Sprintf("invalid JSON from send(): %s", binding.Payload)}
 						continue
 					}
+
+					// Check for bridge error wrapper
+					if m, ok := data.(map[string]interface{}); ok {
+						if _, isErr := m["__bridge_error"]; isErr {
+							msg, _ := m["message"].(string)
+							events <- BridgeEvent{Type: "error", Error: msg}
+							continue
+						}
+					}
+
 					events <- BridgeEvent{Type: "message", Data: data}
 				}
 			}
