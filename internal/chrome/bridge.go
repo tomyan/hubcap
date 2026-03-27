@@ -35,6 +35,20 @@ func (b *Bridge) Close() {
 	})
 }
 
+// CloseIterator signals the JS async iterator to close, allowing the script
+// to finish cleanly. The bridge remains open to receive the final closed event.
+func (b *Bridge) CloseIterator(ctx context.Context) error {
+	closeExpr := fmt.Sprintf(`window[%q] && window[%q]()`, b.id+"_close", b.id+"_close")
+	_, err := b.client.CallSession(ctx, b.sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":    closeExpr,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return fmt.Errorf("closing bridge iterator: %w", err)
+	}
+	return nil
+}
+
 // Send delivers a message to the JS async iterator.
 func (b *Bridge) Send(ctx context.Context, data interface{}) error {
 	jsonBytes, err := json.Marshal(data)
@@ -68,6 +82,7 @@ func bridgeScript(id, bindingName, closedBindingName, userScript string) string 
 	const __closedBinding = %q;
 	const __pushName = %q;
 	const __heartbeatName = %q;
+	const __closeName = %q;
 
 	// Async iterator backed by a promise queue
 	const __buffer = [];
@@ -95,6 +110,11 @@ func bridgeScript(id, bindingName, closedBindingName, userScript string) string 
 	let __lastHeartbeat = Date.now();
 	window[__heartbeatName] = function() {
 		__lastHeartbeat = Date.now();
+	};
+
+	// Close function — called from CLI to gracefully shut down the iterator
+	window[__closeName] = function() {
+		__closePush();
 	};
 	const __watchdog = setInterval(() => {
 		if (Date.now() - __lastHeartbeat > 6000) {
@@ -134,7 +154,7 @@ func bridgeScript(id, bindingName, closedBindingName, userScript string) string 
 	__closePush();
 	window[__closedBinding](JSON.stringify({reason: "script ended"}));
 })();
-`, bindingName, closedBindingName, id+"_push", id+"_heartbeat", userScript)
+`, bindingName, closedBindingName, id+"_push", id+"_heartbeat", id+"_close", userScript)
 }
 
 // sendHeartbeats sends periodic heartbeats to the JS watchdog.

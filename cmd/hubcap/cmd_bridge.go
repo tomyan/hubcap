@@ -88,7 +88,9 @@ func cmdBridge(cfg *Config, args []string) int {
 			}
 
 			if envelope.Type == "close" {
-				bridge.Close()
+				if err := bridge.CloseIterator(ctx); err != nil {
+					fmt.Fprintf(cfg.Stderr, "error: closing bridge iterator: %v\n", err)
+				}
 				return
 			}
 
@@ -103,8 +105,10 @@ func cmdBridge(cfg *Config, args []string) int {
 				return
 			}
 		}
-		// stdin EOF — close the bridge
-		bridge.Close()
+		// stdin EOF — signal JS to close gracefully
+		if err := bridge.CloseIterator(ctx); err != nil {
+			fmt.Fprintf(cfg.Stderr, "error: closing bridge iterator: %v\n", err)
+		}
 	}()
 
 	enc := json.NewEncoder(cfg.Stdout)

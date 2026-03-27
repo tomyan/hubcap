@@ -166,7 +166,7 @@ func TestRun_Bridge_RoundTrip(t *testing.T) {
 	stdout := cfg.Stdout.(*bytes.Buffer).String()
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
 	if len(lines) < 3 {
-		t.Fatalf("expected at least 3 lines, got %d: %s", len(lines), stdout)
+		t.Fatalf("expected at least 3 lines (ready, message, closed), got %d: %s", len(lines), stdout)
 	}
 
 	// Find the message line
@@ -185,5 +185,12 @@ func TestRun_Bridge_RoundTrip(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no message event found in output: %s", stdout)
+	}
+
+	// Verify closed event is present
+	var lastLine map[string]interface{}
+	json.Unmarshal([]byte(lines[len(lines)-1]), &lastLine)
+	if lastLine["type"] != "closed" {
+		t.Errorf("expected last line to be closed event, got: %s", lines[len(lines)-1])
 	}
 }
