@@ -23,6 +23,30 @@ var keyCodeMap = map[string]int{
 	"Space":      32,
 }
 
+// keyToText maps keys that produce text to their text value.
+var keyToText = map[string]string{
+	"Enter": "\r",
+	"Tab":   "\t",
+}
+
+// keyToCode maps key names to their physical key codes (KeyboardEvent.code).
+var keyToCode = map[string]string{
+	"Enter":      "Enter",
+	"Tab":        "Tab",
+	"Escape":     "Escape",
+	"Backspace":  "Backspace",
+	"Delete":     "Delete",
+	"ArrowUp":    "ArrowUp",
+	"ArrowDown":  "ArrowDown",
+	"ArrowLeft":  "ArrowLeft",
+	"ArrowRight": "ArrowRight",
+	"Home":       "Home",
+	"End":        "End",
+	"PageUp":     "PageUp",
+	"PageDown":   "PageDown",
+	"Space":      "Space",
+}
+
 // Click clicks on the first element matching a CSS selector.
 func (c *Client) Click(ctx context.Context, targetID string, selector string) error {
 	sessionID, err := c.attachToTarget(ctx, targetID)
@@ -485,6 +509,12 @@ func (c *Client) PressKeyWithModifiers(ctx context.Context, targetID string, key
 	if hasKeyCode {
 		params["windowsVirtualKeyCode"] = keyCode
 		params["nativeVirtualKeyCode"] = keyCode
+	}
+	if code, ok := keyToCode[key]; ok {
+		params["code"] = code
+	}
+	if text, ok := keyToText[key]; ok {
+		params["text"] = text
 	}
 
 	// keyDown

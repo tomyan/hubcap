@@ -352,7 +352,6 @@ func TestClient_Navigate_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	result, err := client.Navigate(ctx, tabID, "https://example.com")
 	if err != nil {
@@ -387,7 +386,6 @@ func TestClient_Navigate_InvalidURL(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Navigate to invalid URL - should still work but result in error page
 	result, err := client.Navigate(ctx, tabID, "not-a-valid-url")
@@ -417,7 +415,6 @@ func TestNavigateResult_JSONSerializable(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	result, err := client.Navigate(ctx, tabID, "https://example.com")
 	if err != nil {
@@ -455,12 +452,11 @@ func TestClient_Screenshot_ReturnsPNG(t *testing.T) {
 
 	// Create isolated tab with content
 	dataURL := `data:text/html,<html><body><h1>Screenshot Test</h1></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	data, err := client.Screenshot(ctx, tabID, chrome.ScreenshotOptions{
 		Format: "png",
@@ -497,12 +493,11 @@ func TestClient_Screenshot_ReturnsJPEG(t *testing.T) {
 
 	// Create isolated tab with content
 	dataURL := `data:text/html,<html><body><h1>Screenshot Test</h1></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	data, err := client.Screenshot(ctx, tabID, chrome.ScreenshotOptions{
 		Format:  "jpeg",
@@ -537,12 +532,11 @@ func TestClient_ScreenshotFull_CapturesEntirePage(t *testing.T) {
 
 	// Given a page that is taller than the viewport
 	dataURL := `data:text/html,<html><body style="margin:0"><div style="width:100px;height:3000px;background:linear-gradient(red,blue)"></div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// When we take a full-page screenshot
 	data, err := client.ScreenshotFull(ctx, tabID, chrome.ScreenshotOptions{Format: "png"})
@@ -587,12 +581,11 @@ func TestClient_ScreenshotFull_DimensionsMatchContent(t *testing.T) {
 
 	// Given a page with default body margin and a 200x500 div
 	dataURL := `data:text/html,<html><body><div style="width:200px;height:500px;background:red"></div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// When we take a full-page screenshot
 	data, err := client.ScreenshotFull(ctx, tabID, chrome.ScreenshotOptions{Format: "png"})
@@ -635,7 +628,6 @@ func TestClient_Eval_SimpleExpression(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	result, err := client.Eval(ctx, tabID, "1 + 2")
 	if err != nil {
@@ -673,7 +665,6 @@ func TestClient_Eval_StringExpression(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	result, err := client.Eval(ctx, tabID, "'hello' + ' world'")
 	if err != nil {
@@ -705,7 +696,6 @@ func TestClient_Eval_JSONSerializable(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	result, err := client.Eval(ctx, tabID, "({a: 1, b: 'test'})")
 	if err != nil {
@@ -747,7 +737,6 @@ func TestClient_Eval_AwaitsPromise(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// When — evaluate a promise
 	result, err := client.Eval(ctx, tabID, "new Promise(resolve => setTimeout(() => resolve('done'), 50))")
@@ -781,7 +770,6 @@ func TestClient_Eval_JSException(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	_, err = client.Eval(ctx, tabID, "throw new Error('test error')")
 	if err == nil {
@@ -809,12 +797,11 @@ func TestClient_Query_FindsElement(t *testing.T) {
 
 	// Create isolated tab
 	dataURL := `data:text/html,<html><body><div id="test">Test</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Query for body element
 	result, err := client.Query(ctx, tabID, "body")
@@ -850,7 +837,6 @@ func TestClient_Query_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Query for non-existent element
 	result, err := client.Query(ctx, tabID, "#nonexistent-element-12345")
@@ -883,7 +869,6 @@ func TestClient_Query_JSONSerializable(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	result, err := client.Query(ctx, tabID, "body")
 	if err != nil {
@@ -924,12 +909,11 @@ func TestClient_Click_Success(t *testing.T) {
 
 	// Create isolated tab with a clickable link
 	dataURL := `data:text/html,<html><body><a id="link" href="about:blank">Click me</a><script>window.clicked=false;document.getElementById('link').addEventListener('click',e=>{e.preventDefault();window.clicked=true});</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Click the link
 	err = client.Click(ctx, tabID, "#link")
@@ -967,7 +951,6 @@ func TestClient_Click_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Try to click non-existent element
 	err = client.Click(ctx, tabID, "#nonexistent-element-12345")
@@ -996,12 +979,11 @@ func TestClient_Fill_Success(t *testing.T) {
 
 	// Create isolated tab with an input field
 	dataURL := `data:text/html,<html><body><input id="test-input" type="text" /></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Fill the input
 	err = client.Fill(ctx, tabID, "#test-input", "hello world")
@@ -1040,7 +1022,6 @@ func TestClient_Fill_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Try to fill non-existent element
 	err = client.Fill(ctx, tabID, "#nonexistent-input-12345", "test")
@@ -1069,12 +1050,11 @@ func TestClient_GetHTML_Success(t *testing.T) {
 
 	// Create isolated tab with test content
 	dataURL := `data:text/html,<html><body><div id="test"><span>Hello</span></div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Get HTML
 	html, err := client.GetHTML(ctx, tabID, "#test")
@@ -1110,7 +1090,6 @@ func TestClient_GetHTML_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	_, err = client.GetHTML(ctx, tabID, "#nonexistent-12345")
 	if err == nil {
@@ -1134,12 +1113,11 @@ func TestClient_WaitFor_ImmediateMatch(t *testing.T) {
 
 	// Create isolated tab with element already present
 	dataURL := `data:text/html,<html><body><div id="exists">Test</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Wait should return immediately
 	err = client.WaitFor(ctx, tabID, "#exists", 5*time.Second)
@@ -1168,7 +1146,6 @@ func TestClient_WaitFor_DelayedAppear(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Set up delayed element creation (500ms)
 	_, err = client.Eval(ctx, tabID, `
@@ -1208,7 +1185,6 @@ func TestClient_WaitFor_Timeout(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Wait for non-existent element with short timeout
 	err = client.WaitFor(ctx, tabID, "#never-exists", 500*time.Millisecond)
@@ -1237,12 +1213,11 @@ func TestClient_GetText_Success(t *testing.T) {
 
 	// Create isolated tab with test content
 	dataURL := `data:text/html,<html><body><div id="test">Hello <span>World</span>!</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	text, err := client.GetText(ctx, tabID, "#test")
 	if err != nil {
@@ -1271,12 +1246,11 @@ func TestClient_Type_Success(t *testing.T) {
 
 	// Create isolated tab with an input and keydown counter
 	dataURL := `data:text/html,<html><body><input id="test-input" type="text" /><script>window.keydownCount=0;document.getElementById('test-input').addEventListener('keydown',()=>{window.keydownCount++});</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Focus the input first
 	_, err = client.Eval(ctx, tabID, `document.querySelector('#test-input').focus()`)
@@ -1331,7 +1305,6 @@ func TestClient_CaptureConsole_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Start capturing console messages
 	messages, stopCapture, err := client.CaptureConsole(ctx, tabID)
@@ -1379,7 +1352,7 @@ func TestClient_GetCookies_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate
-	tabID, err := client.NewTab(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1413,7 +1386,7 @@ func TestClient_SetCookie_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate to example.com
-	tabID, err := client.NewTab(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1465,12 +1438,11 @@ func TestClient_PrintToPDF_Success(t *testing.T) {
 
 	// Create isolated tab with content
 	dataURL := `data:text/html,<html><body><h1>Test PDF</h1><p>This is test content for PDF generation.</p></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Generate PDF
 	data, err := client.PrintToPDF(ctx, tabID, chrome.PDFOptions{})
@@ -1505,7 +1477,7 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate to example.com
-	tabID, err := client.NewTab(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1571,7 +1543,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate
-	tabID, err := client.NewTab(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1629,12 +1601,11 @@ func TestClient_Focus_Success(t *testing.T) {
 
 	// Create isolated tab with an input element
 	dataURL := `data:text/html,<html><body><input id="focus-test" type="text" /></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Focus the element
 	err = client.Focus(ctx, tabID, "#focus-test")
@@ -1673,7 +1644,6 @@ func TestClient_CaptureNetwork_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Start capturing network events
 	events, stopCapture, err := client.CaptureNetwork(ctx, tabID)
@@ -1722,12 +1692,11 @@ func TestClient_PressKey_Success(t *testing.T) {
 
 	// Use data: URL to create a self-contained test page in isolated tab
 	dataURL := `data:text/html,<html><body><input id="test-input" type="text"/><script>window.lastKey='none';document.getElementById('test-input').addEventListener('keydown',e=>{window.lastKey=e.key});</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Focus the input
 	err = client.Focus(ctx, tabID, "#test-input")
@@ -1770,12 +1739,11 @@ func TestClient_Hover_Success(t *testing.T) {
 
 	// Create isolated tab with self-contained page
 	dataURL := `data:text/html,<html><body><button id="hover-btn" style="width:100px;height:50px;">Hover me</button><script>window.hovered=false;document.getElementById('hover-btn').addEventListener('mouseenter',()=>{window.hovered=true});</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Hover over the button
 	err = client.Hover(ctx, tabID, "#hover-btn")
@@ -1814,7 +1782,6 @@ func TestClient_GetAttribute_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	_, err = client.Eval(ctx, tabID, `document.body.innerHTML = '<a id="link" href="https://example.com" data-value="42">Link</a>'`)
 	if err != nil {
@@ -1863,7 +1830,6 @@ func TestClient_GetAttribute_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Try to get attribute from non-existent element
 	_, err = client.GetAttribute(ctx, tabID, "#nonexistent", "href")
@@ -1887,7 +1853,7 @@ func TestClient_Reload_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate
-	tabID, err := client.NewTab(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1932,7 +1898,6 @@ func TestClient_GoBack_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Navigate to second page
 	_, err = client.Navigate(ctx, tabID, "https://example.com")
@@ -2187,12 +2152,11 @@ func TestClient_CountElements_Success(t *testing.T) {
 
 	// Create isolated tab with test content
 	dataURL := `data:text/html,<html><body><div class="item">1</div><div class="item">2</div><div class="item">3</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	count, err := client.CountElements(ctx, tabID, ".item")
 	if err != nil {
@@ -2224,7 +2188,6 @@ func TestClient_SetViewport_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	err = client.SetViewport(ctx, tabID, 1024, 768)
 	if err != nil {
@@ -2346,7 +2309,6 @@ func TestClient_RawCallSession_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Test session-level command with params
 	params := json.RawMessage(`{"expression":"1+1"}`)
@@ -2389,7 +2351,6 @@ func TestClient_Emulate_Success(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Emulate iPhone 12 - just verify the method succeeds
 	device := chrome.CommonDevices["iPhone 12"]
@@ -2423,7 +2384,6 @@ func TestClient_EnableIntercept(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Enable interception
 	config := chrome.InterceptConfig{
@@ -2507,7 +2467,6 @@ func TestClient_BlockURLs(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Block URLs
 	err = client.BlockURLs(ctx, tabID, []string{"*.js", "*.css"})
@@ -2538,12 +2497,11 @@ func TestClient_Exists_Found(t *testing.T) {
 
 	// Create isolated tab with an element
 	dataURL := `data:text/html,<html><body><div id="test-element">Hello</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Check if element exists
 	exists, err := client.Exists(ctx, tabID, "#test-element")
@@ -2575,7 +2533,6 @@ func TestClient_Exists_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Check if non-existent element exists
 	exists, err := client.Exists(ctx, tabID, "#nonexistent-element")
@@ -2603,12 +2560,11 @@ func TestClient_WaitForNavigation(t *testing.T) {
 
 	// Create isolated tab with a link that navigates
 	dataURL := `data:text/html,<html><body><a id="link" href="about:blank">Navigate</a></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Start waiting for navigation in a goroutine
 	navDone := make(chan error, 1)
@@ -2661,12 +2617,11 @@ func TestClient_UploadFile(t *testing.T) {
 
 	// Create isolated tab with file input
 	dataURL := `data:text/html,<html><body><input type="file" id="file-input"><script>window.fileName='';document.getElementById('file-input').addEventListener('change',e=>{window.fileName=e.target.files[0]?.name||''});</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(200 * time.Millisecond)
 
 	// Upload file
 	err = client.UploadFile(ctx, tabID, "#file-input", []string{tmpFile.Name()})
@@ -2703,7 +2658,7 @@ func TestClient_GetValue(t *testing.T) {
 
 	// Create isolated tab with input
 	dataURL := `data:text/html,<html><body><input id="test-input" value="hello world"></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -2740,7 +2695,6 @@ func TestClient_GetValue_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Get value of non-existent element
 	_, err = client.GetValue(ctx, tabID, "#nonexistent")
@@ -2765,12 +2719,11 @@ func TestClient_WaitForFunction_ImmediateTrue(t *testing.T) {
 
 	// Create isolated tab
 	dataURL := `data:text/html,<html><body><script>window.ready = true;</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Wait for function that's already true
 	err = client.WaitForFunction(ctx, tabID, "window.ready", 5*time.Second)
@@ -2795,12 +2748,11 @@ func TestClient_WaitForFunction_DelayedTrue(t *testing.T) {
 
 	// Create isolated tab with delayed value
 	dataURL := `data:text/html,<html><body><script>window.ready = false; setTimeout(() => { window.ready = true; }, 300);</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Wait for function
 	err = client.WaitForFunction(ctx, tabID, "window.ready", 5*time.Second)
@@ -2825,12 +2777,11 @@ func TestClient_WaitForFunction_Timeout(t *testing.T) {
 
 	// Create isolated tab with value that never becomes true
 	dataURL := `data:text/html,<html><body><script>window.ready = false;</script></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Wait for function with short timeout
 	err = client.WaitForFunction(ctx, tabID, "window.ready", 200*time.Millisecond)
@@ -2867,12 +2818,11 @@ func TestClient_GetForms(t *testing.T) {
 			<input name="q" type="search" placeholder="Search">
 		</form>
 	</body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Get forms
 	forms, err := client.GetForms(ctx, tabID)
@@ -2881,7 +2831,7 @@ func TestClient_GetForms(t *testing.T) {
 	}
 
 	if len(forms) != 2 {
-		t.Errorf("expected 2 forms, got %d", len(forms))
+		t.Fatalf("expected 2 forms, got %d", len(forms))
 	}
 
 	// Check first form
@@ -2917,12 +2867,11 @@ func TestClient_Highlight(t *testing.T) {
 
 	// Create isolated tab with element
 	dataURL := `data:text/html,<html><body><div id="test-element">Test</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Highlight element
 	err = client.Highlight(ctx, tabID, "#test-element")
@@ -2957,7 +2906,6 @@ func TestClient_Highlight_NotFound(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Try to highlight non-existent element
 	err = client.Highlight(ctx, tabID, "#nonexistent")
@@ -2985,12 +2933,11 @@ func TestClient_GetImages(t *testing.T) {
 		<img src="https://example.com/image1.png" alt="Image 1" width="100" height="100">
 		<img src="https://example.com/image2.jpg" alt="Image 2">
 	</body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Get images
 	images, err := client.GetImages(ctx, tabID)
@@ -2999,7 +2946,7 @@ func TestClient_GetImages(t *testing.T) {
 	}
 
 	if len(images) != 2 {
-		t.Errorf("expected 2 images, got %d", len(images))
+		t.Fatalf("expected 2 images, got %d", len(images))
 	}
 
 	// Check first image
@@ -3024,7 +2971,7 @@ func TestClient_ScrollToBottomAndTop(t *testing.T) {
 
 	// Create isolated tab with scrollable content
 	dataURL := `data:text/html,<html><body style="height:5000px"><div id="top">Top</div><div style="position:absolute;bottom:0">Bottom</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -3081,7 +3028,7 @@ func TestClient_GetFrames(t *testing.T) {
 		<h1>Main Page</h1>
 		<iframe id="frame1" name="testframe" srcdoc="<html><body><div id='in-frame'>Inside Frame</div></body></html>"></iframe>
 	</body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -3131,7 +3078,7 @@ func TestClient_EvalInFrame(t *testing.T) {
 		<div id="main-content">Main Page Content</div>
 		<iframe id="frame1" name="testframe" srcdoc="<html><body><div id='frame-content'>Frame Content Here</div></body></html>"></iframe>
 	</body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -3187,7 +3134,6 @@ func TestClient_WaitForGone_ImmediatelyGone(t *testing.T) {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Element doesn't exist, should return immediately
 	err = client.WaitForGone(ctx, tabID, "#nonexistent", 5*time.Second)
@@ -3215,12 +3161,11 @@ func TestClient_WaitForGone_DelayedRemoval(t *testing.T) {
 		<div id="loading">Loading...</div>
 		<script>setTimeout(() => document.getElementById('loading').remove(), 300);</script>
 	</body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Wait for element to be removed
 	err = client.WaitForGone(ctx, tabID, "#loading", 5*time.Second)
@@ -3245,12 +3190,11 @@ func TestClient_WaitForGone_Timeout(t *testing.T) {
 
 	// Create isolated tab with element that never gets removed
 	dataURL := `data:text/html,<html><body><div id="permanent">Always here</div></body></html>`
-	tabID, err := client.NewTab(ctx, dataURL)
+	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
 	defer client.CloseTab(ctx, tabID)
-	time.Sleep(100 * time.Millisecond)
 
 	// Should timeout
 	err = client.WaitForGone(ctx, tabID, "#permanent", 200*time.Millisecond)
