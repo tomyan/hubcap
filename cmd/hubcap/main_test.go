@@ -581,13 +581,13 @@ func TestRun_Eval_Success(t *testing.T) {
 	}
 }
 
-func TestRun_Eval_AwaitsPromise(t *testing.T) {
+func TestRun_Eval_TopLevelAwait(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
 	cfg := testConfig()
-	code := run([]string{"eval", "new Promise(resolve => setTimeout(() => resolve(42), 50))"}, cfg)
+	code := run([]string{"eval", "await new Promise(resolve => setTimeout(() => resolve(42), 50))"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)

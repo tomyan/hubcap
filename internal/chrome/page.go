@@ -466,6 +466,7 @@ func (c *Client) Eval(ctx context.Context, targetID string, expression string) (
 		"expression":    expression,
 		"returnByValue": true,
 		"awaitPromise":  true,
+		"replMode":      true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluating expression: %w", err)

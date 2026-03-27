@@ -717,7 +717,7 @@ func TestClient_Eval_JSONSerializable(t *testing.T) {
 	}
 }
 
-func TestClient_Eval_AwaitsPromise(t *testing.T) {
+func TestClient_Eval_TopLevelAwait(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -738,15 +738,15 @@ func TestClient_Eval_AwaitsPromise(t *testing.T) {
 	}
 	defer client.CloseTab(ctx, tabID)
 
-	// When — evaluate a promise
-	result, err := client.Eval(ctx, tabID, "new Promise(resolve => setTimeout(() => resolve('done'), 50))")
+	// When — use await keyword at the top level
+	result, err := client.Eval(ctx, tabID, "await new Promise(resolve => setTimeout(() => resolve('awaited'), 50))")
 
-	// Then — should await and return the resolved value
+	// Then — should work and return the resolved value
 	if err != nil {
-		t.Fatalf("failed to eval promise: %v", err)
+		t.Fatalf("failed to eval top-level await: %v", err)
 	}
-	if v, ok := result.Value.(string); !ok || v != "done" {
-		t.Errorf("expected 'done', got %v (%T)", result.Value, result.Value)
+	if v, ok := result.Value.(string); !ok || v != "awaited" {
+		t.Errorf("expected 'awaited', got %v (%T)", result.Value, result.Value)
 	}
 }
 
