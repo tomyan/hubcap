@@ -455,11 +455,14 @@ func TestRun_Screenshot_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 30 * time.Second
 	tmpFile := t.TempDir() + "/screenshot.png"
 
-	code := run([]string{"screenshot", "--output", tmpFile}, cfg)
+	code := run([]string{"--target", tabID, "screenshot", "--output", tmpFile}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1223,21 +1226,18 @@ func TestRun_Focus_NoChrome(t *testing.T) {
 }
 
 func TestRun_Network_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
-	// First navigate to about:blank
-	code := run([]string{"goto", "about:blank"}, cfg)
-	if code != ExitSuccess {
-		t.Fatalf("failed to navigate to blank: %d", code)
-	}
-	time.Sleep(50 * time.Millisecond)
-
-	cfg.Stdout = &bytes.Buffer{}
-	cfg.Stderr = &bytes.Buffer{}
-
-	// Run network capture with short duration
-	code = run([]string{"network", "--duration", "500ms"}, cfg)
+	// Run network capture with short duration (must be long enough for connect + setup)
+	code := run([]string{"--target", tabID, "network", "--duration", "3s"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1433,20 +1433,22 @@ func TestRun_Attr_NoChrome(t *testing.T) {
 }
 
 func TestRun_Reload_Success(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
 	// Navigate to a page first
-	code := run([]string{"goto", "https://example.com"}, cfg)
+	code := run([]string{"--target", tabID, "goto", "--wait", "https://example.com"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to navigate: %d", code)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"reload"}, cfg)
+	code = run([]string{"--target", tabID, "reload"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1464,20 +1466,22 @@ func TestRun_Reload_Success(t *testing.T) {
 }
 
 func TestRun_Reload_BypassCache(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
 	// Navigate to a page first
-	code := run([]string{"goto", "https://example.com"}, cfg)
+	code := run([]string{"--target", tabID, "goto", "--wait", "https://example.com"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to navigate: %d", code)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"reload", "--bypass-cache"}, cfg)
+	code = run([]string{"--target", tabID, "reload", "--bypass-cache"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1504,28 +1508,31 @@ func TestRun_Reload_NoChrome(t *testing.T) {
 }
 
 func TestRun_Back_Success(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 15 * time.Second
 
 	// Navigate to first page
-	code := run([]string{"goto", "about:blank"}, cfg)
+	code := run([]string{"--target", tabID, "goto", "--wait", "about:blank"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to navigate to blank: %d", code)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	// Navigate to second page
-	code = run([]string{"goto", "https://example.com"}, cfg)
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "goto", "--wait", "https://example.com"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to navigate to example: %d", code)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
 	// Go back
-	code = run([]string{"back"}, cfg)
+	code = run([]string{"--target", tabID, "back"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1561,18 +1568,22 @@ func TestRun_Forward_NoChrome(t *testing.T) {
 }
 
 func TestRun_Title_Success(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
 	// Navigate to blank page and set title
-	code := run([]string{"goto", "about:blank"}, cfg)
+	code := run([]string{"--target", tabID, "goto", "--wait", "about:blank"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to navigate: %d", code)
 	}
-	time.Sleep(50 * time.Millisecond)
 
 	// Set a title via eval
-	code = run([]string{"eval", `document.title = "Test Title"`}, cfg)
+	cfg.Stdout = &bytes.Buffer{}
+	cfg.Stderr = &bytes.Buffer{}
+	code = run([]string{"--target", tabID, "eval", `document.title = "Test Title"`}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to set title: %d", code)
 	}
@@ -1580,7 +1591,7 @@ func TestRun_Title_Success(t *testing.T) {
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"title"}, cfg)
+	code = run([]string{"--target", tabID, "title"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1607,20 +1618,22 @@ func TestRun_Title_NoChrome(t *testing.T) {
 }
 
 func TestRun_URL_Success(t *testing.T) {
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
 	cfg := testConfig()
 	cfg.Timeout = 10 * time.Second
 
 	// Navigate to about:blank
-	code := run([]string{"goto", "about:blank"}, cfg)
+	code := run([]string{"--target", tabID, "goto", "--wait", "about:blank"}, cfg)
 	if code != ExitSuccess {
 		t.Fatalf("failed to navigate: %d", code)
 	}
-	time.Sleep(50 * time.Millisecond)
 
 	cfg.Stdout = &bytes.Buffer{}
 	cfg.Stderr = &bytes.Buffer{}
 
-	code = run([]string{"url"}, cfg)
+	code = run([]string{"--target", tabID, "url"}, cfg)
 	if code != ExitSuccess {
 		stderr := cfg.Stderr.(*bytes.Buffer).String()
 		t.Fatalf("expected exit code %d, got %d, stderr: %s", ExitSuccess, code, stderr)
@@ -1665,13 +1678,14 @@ func TestRun_New_Success(t *testing.T) {
 		t.Errorf("output is not valid JSON: %v", err)
 	}
 
-	if result["targetId"] == "" {
+	targetID, _ := result["targetId"].(string)
+	if targetID == "" {
 		t.Error("expected non-empty targetId")
 	}
 
-	// Clean up - close the new tab
+	// Clean up - close the new tab by ID
 	cfg.Stdout = &bytes.Buffer{}
-	run([]string{"close"}, cfg)
+	run([]string{"--target", targetID, "close"}, cfg)
 }
 
 func TestRun_New_Wait(t *testing.T) {
