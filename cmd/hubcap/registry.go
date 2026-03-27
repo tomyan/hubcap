@@ -425,6 +425,9 @@ var commands = map[string]CommandInfo{
 	// Record
 	"record": {Name: "record", Desc: "Record browser interactions", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdRecord(cfg, args) }},
 
+	// Bridge
+	"bridge": {Name: "bridge", Desc: "Bidirectional JS message channel", Category: "Advanced", Run: func(cfg *Config, args []string) int { return cmdBridge(cfg, args) }},
+
 }
 
 func init() {
