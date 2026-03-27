@@ -2807,17 +2807,8 @@ func TestClient_GetForms(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Create isolated tab with forms
-	dataURL := `data:text/html,<html><body>
-		<form id="login-form" action="/login" method="post">
-			<input name="username" type="text" placeholder="Username" required>
-			<input name="password" type="password" placeholder="Password" required>
-			<button type="submit">Login</button>
-		</form>
-		<form id="search-form" action="/search" method="get">
-			<input name="q" type="search" placeholder="Search">
-		</form>
-	</body></html>`
+	// Create isolated tab with forms (single-line data URL for macOS compatibility)
+	dataURL := `data:text/html,<html><body><form id="login-form" action="/login" method="post"><input name="username" type="text" placeholder="Username" required><input name="password" type="password" placeholder="Password" required><button type="submit">Login</button></form><form id="search-form" action="/search" method="get"><input name="q" type="search" placeholder="Search"></form></body></html>`
 	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
