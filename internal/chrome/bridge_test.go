@@ -341,6 +341,70 @@ func TestBridge_JSError(t *testing.T) {
 	}
 }
 
+func TestBridge_TwoBridgesSameTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := chrome.Connect(ctx, "localhost", testChromePort)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	// Given a page
+	tabID, err := client.NewTabAndWait(ctx, "data:text/html,<html><body>dual bridge test</body></html>")
+	if err != nil {
+		t.Fatalf("failed to create tab: %v", err)
+	}
+	defer client.CloseTab(ctx, tabID)
+
+	// When we start two bridges in the same tab
+	bridge1, err := client.StartBridge(ctx, tabID, `send({from: "bridge1"})`)
+	if err != nil {
+		t.Fatalf("failed to start bridge1: %v", err)
+	}
+	defer bridge1.Close()
+
+	bridge2, err := client.StartBridge(ctx, tabID, `send({from: "bridge2"})`)
+	if err != nil {
+		t.Fatalf("failed to start bridge2: %v", err)
+	}
+	defer bridge2.Close()
+
+	// Then each bridge receives its own messages
+	// Bridge 1: ready, message
+	ev1 := <-bridge1.Events
+	if ev1.Type != "ready" {
+		t.Fatalf("bridge1: expected ready, got %s", ev1.Type)
+	}
+	ev1 = <-bridge1.Events
+	if ev1.Type != "message" {
+		t.Fatalf("bridge1: expected message, got %s", ev1.Type)
+	}
+	data1 := ev1.Data.(map[string]interface{})
+	if data1["from"] != "bridge1" {
+		t.Errorf("bridge1: expected from=bridge1, got %v", data1["from"])
+	}
+
+	// Bridge 2: ready, message
+	ev2 := <-bridge2.Events
+	if ev2.Type != "ready" {
+		t.Fatalf("bridge2: expected ready, got %s", ev2.Type)
+	}
+	ev2 = <-bridge2.Events
+	if ev2.Type != "message" {
+		t.Fatalf("bridge2: expected message, got %s", ev2.Type)
+	}
+	data2 := ev2.Data.(map[string]interface{})
+	if data2["from"] != "bridge2" {
+		t.Errorf("bridge2: expected from=bridge2, got %v", data2["from"])
+	}
+}
+
 func TestBridge_ClosedOnScriptEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

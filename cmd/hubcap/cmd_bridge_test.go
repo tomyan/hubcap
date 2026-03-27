@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,43 @@ func TestRun_Bridge_SendMessage(t *testing.T) {
 	}
 	if closed["type"] != "closed" {
 		t.Errorf("expected type 'closed', got %v", closed["type"])
+	}
+}
+
+func TestRun_Bridge_File(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tabID, cleanup := createTestTabCLI(t)
+	defer cleanup()
+
+	// Navigate to a page
+	cfg := testConfig()
+	code := run([]string{"--target", tabID, "goto", "--wait", "data:text/html,<html><body>bridge</body></html>"}, cfg)
+	if code != ExitSuccess {
+		t.Fatalf("failed to navigate: %s", cfg.Stderr.(*bytes.Buffer).String())
+	}
+
+	// Write a script file
+	tmpFile := t.TempDir() + "/bridge.js"
+	if err := os.WriteFile(tmpFile, []byte(`send({source: "file"})`), 0644); err != nil {
+		t.Fatalf("failed to write script: %v", err)
+	}
+
+	// Run bridge with --file
+	cfg = testConfig()
+	cfg.Timeout = 5 * time.Second
+	code = run([]string{"--target", tabID, "bridge", "--file", tmpFile}, cfg)
+	if code != ExitSuccess {
+		stderr := cfg.Stderr.(*bytes.Buffer).String()
+		t.Fatalf("expected ExitSuccess, got %d, stderr: %s", code, stderr)
+	}
+
+	// Verify output contains message from file
+	stdout := cfg.Stdout.(*bytes.Buffer).String()
+	if !strings.Contains(stdout, `"source":"file"`) {
+		t.Errorf("expected file message in output: %s", stdout)
 	}
 }
 
