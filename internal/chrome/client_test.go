@@ -2920,10 +2920,7 @@ func TestClient_GetImages(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab with images
-	dataURL := `data:text/html,<html><body>
-		<img src="https://example.com/image1.png" alt="Image 1" width="100" height="100">
-		<img src="https://example.com/image2.jpg" alt="Image 2">
-	</body></html>`
+	dataURL := `data:text/html,<html><body><img src="https://example.com/image1.png" alt="Image 1" width="100" height="100"><img src="https://example.com/image2.jpg" alt="Image 2"></body></html>`
 	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
@@ -3015,10 +3012,7 @@ func TestClient_GetFrames(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab with iframe
-	dataURL := `data:text/html,<html><body>
-		<h1>Main Page</h1>
-		<iframe id="frame1" name="testframe" srcdoc="<html><body><div id='in-frame'>Inside Frame</div></body></html>"></iframe>
-	</body></html>`
+	dataURL := `data:text/html,<html><body><h1>Main Page</h1><iframe id="frame1" name="testframe" srcdoc="<html><body><div id='in-frame'>Inside Frame</div></body></html>"></iframe></body></html>`
 	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
@@ -3065,10 +3059,7 @@ func TestClient_EvalInFrame(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab with iframe containing specific content
-	dataURL := `data:text/html,<html><body>
-		<div id="main-content">Main Page Content</div>
-		<iframe id="frame1" name="testframe" srcdoc="<html><body><div id='frame-content'>Frame Content Here</div></body></html>"></iframe>
-	</body></html>`
+	dataURL := `data:text/html,<html><body><div id="main-content">Main Page Content</div><iframe id="frame1" name="testframe" srcdoc="<html><body><div id='frame-content'>Frame Content Here</div></body></html>"></iframe></body></html>`
 	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
@@ -3148,10 +3139,7 @@ func TestClient_WaitForGone_DelayedRemoval(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab with element that gets removed after delay
-	dataURL := `data:text/html,<html><body>
-		<div id="loading">Loading...</div>
-		<script>setTimeout(() => document.getElementById('loading').remove(), 300);</script>
-	</body></html>`
+	dataURL := `data:text/html,<html><body><div id="loading">Loading...</div><script>setTimeout(() => document.getElementById('loading').remove(), 300);</script></body></html>`
 	tabID, err := client.NewTabAndWait(ctx, dataURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
