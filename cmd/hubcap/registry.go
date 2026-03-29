@@ -435,6 +435,7 @@ func init() {
 	commands["retry"] = CommandInfo{Name: "retry", Desc: "Retry a command on failure", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdRetry(cfg, args) }}
 	commands["pipe"] = CommandInfo{Name: "pipe", Desc: "Read commands from stdin", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdPipe(cfg, args) }}
 	commands["shell"] = CommandInfo{Name: "shell", Desc: "Interactive REPL", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdShell(cfg, args) }}
+	commands["inspect"] = CommandInfo{Name: "inspect", Desc: "Terminal web inspector", Category: "Utility", Run: func(cfg *Config, args []string) int { return cmdInspect(cfg, args) }}
 }
 
 // cmdMissingArg prints a usage message and returns ExitError.
