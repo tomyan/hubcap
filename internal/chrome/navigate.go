@@ -73,11 +73,38 @@ func (c *Client) Pages(ctx context.Context) ([]TargetInfo, error) {
 
 	pages := make([]TargetInfo, 0)
 	for _, t := range targets {
+		if t.Type == "page" && !isInternalPage(t.URL) {
+			pages = append(pages, t)
+		}
+	}
+	return pages, nil
+}
+
+// AllPages returns all page targets including internal pages (DevTools, extensions).
+func (c *Client) AllPages(ctx context.Context) ([]TargetInfo, error) {
+	targets, err := c.Targets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pages := make([]TargetInfo, 0)
+	for _, t := range targets {
 		if t.Type == "page" {
 			pages = append(pages, t)
 		}
 	}
 	return pages, nil
+}
+
+// isInternalPage returns true for browser-internal pages that should be
+// excluded from default target resolution (DevTools, extensions, etc).
+func isInternalPage(url string) bool {
+	for _, prefix := range []string{"devtools://", "chrome://", "chrome-extension://"} {
+		if len(url) >= len(prefix) && url[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
 }
 
 // Navigate navigates a target to the given URL and waits for load.
