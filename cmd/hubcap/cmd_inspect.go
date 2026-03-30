@@ -85,6 +85,9 @@ func (s *inspectSession) connect(ctx context.Context) error {
 		})
 	}
 
+	// Populate tab list.
+	go s.refreshTabs(ctx)
+
 	// Stream console messages until the channel closes (disconnect).
 	go func() {
 		for msg := range messages {
