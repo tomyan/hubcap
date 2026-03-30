@@ -60,6 +60,9 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 							OnClick:     noop,
 							CursorCol:   -1,
 							CursorRow:   -1,
+							Style: sumi.Style{
+								BG: sumi.Color{Name: "black"},
+							},
 							Children: func() []*sumi.Input {
 								var cs []*sumi.Input
 								if connected.Get() {

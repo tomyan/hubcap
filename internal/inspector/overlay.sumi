@@ -1,6 +1,6 @@
 <style>
 .backdrop { position: fixed; }
-.overlay { border: single; border-title: "Connection"; padding: 1 2; min-width: 56; }
+.overlay { border: single; border-title: "Connection"; padding: 1 2; min-width: 56; background: black; }
 .status-ok { bold: true; color: #50fa7b; }
 .status-err { bold: true; color: #ff5555; }
 .url { dim: true; }
