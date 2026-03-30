@@ -137,6 +137,56 @@ func (s *inspectSession) refreshTabs(ctx context.Context) {
 	}
 }
 
+func (s *inspectSession) switchTarget(ctx context.Context, newTargetID string) {
+	s.mu.Lock()
+	client := s.client
+	if s.stopCapture != nil {
+		s.stopCapture()
+		s.stopCapture = nil
+	}
+	s.mu.Unlock()
+	if client == nil {
+		return
+	}
+
+	messages, stop, err := client.CaptureConsole(ctx, newTargetID)
+	if err != nil {
+		return
+	}
+
+	title, _ := client.GetTitle(ctx, newTargetID)
+	url, _ := client.GetURL(ctx, newTargetID)
+
+	s.mu.Lock()
+	s.activeTargetID = newTargetID
+	s.stopCapture = stop
+	s.mu.Unlock()
+
+	if s.app != nil {
+		s.app.Do(func() {
+			s.targetID.Set(newTargetID)
+			s.pageTitle.Set(title)
+			s.pageURL.Set(url)
+			s.entries.Set([]console.Entry{})
+		})
+	}
+
+	// Stream console messages from new target.
+	go func() {
+		for msg := range messages {
+			text, level := msg.Text, msg.Type
+			if s.app != nil {
+				s.app.Do(func() {
+					s.entries.Update(func(cur []console.Entry) []console.Entry {
+						return append(cur, console.Entry{Text: text, Level: level})
+					})
+				})
+			}
+		}
+		s.handleDisconnect(ctx)
+	}()
+}
+
 func (s *inspectSession) eval(ctx context.Context, expr string) (*chrome.EvalResult, error) {
 	s.mu.Lock()
 	client := s.client
@@ -294,6 +344,15 @@ func cmdInspect(cfg *Config, args []string) int {
 				t := tabs.Get()
 				if selectedIdx.Get() < len(t)-1 {
 					selectedIdx.Set(selectedIdx.Get() + 1)
+				}
+				return
+			}
+			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEnter {
+				t := tabs.Get()
+				idx := selectedIdx.Get()
+				if idx >= 0 && idx < len(t) {
+					overlayVisible.Set(false)
+					go sess.switchTarget(ctx, t[idx].ID)
 				}
 				return
 			}
