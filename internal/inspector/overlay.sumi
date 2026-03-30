@@ -5,7 +5,15 @@
 .status-err { bold: true; color: #ff5555; }
 .url { dim: true; }
 .meta { dim: true; }
-.hints { dim: true; border-top: single; padding: 1 0 0 0; }
+.tab-header { dim: true; border-bottom: single; padding: 1 0 0 0; }
+.tab-list { overflow: auto; }
+.tab { padding: 0 1; }
+.tab:hover { color: white; }
+.tab-current { color: #50fa7b; }
+.tab-selected { bold: true; color: white; }
+.tab-title { }
+.tab-url { dim: true; }
+.hints { dim: true; border-top: single; padding: 1 0 0 0; direction: row; gap: 2; }
 </style>
 
 <script>
@@ -17,6 +25,8 @@ var pageTitle *sumi.Signal[string]
 var pageURL *sumi.Signal[string]
 var targetID *sumi.Signal[string]
 var browserVersion *sumi.Signal[string]
+var tabs *sumi.Signal[[]TabInfo]
+var selectedIdx *sumi.Signal[int]
 
 func close() {
 	visible.Set(false)
@@ -37,8 +47,29 @@ func noop() {
             <box class="status-err"><text>● Disconnected — reconnecting every 2s</text></box>
             <box class="url"><text>Last: {pageTitle} — {pageURL}</text></box>
         {/if}
-        <text> </text>
-        <box class="hints"><text>Esc Close</text></box>
+        <box class="tab-header"><text>Tabs</text></box>
+        <box class="tab-list">
+            {for i, tab := range tabs.Get()}
+                {if tab.ID == targetID.Get() && i == selectedIdx.Get()}
+                    <box class="tab tab-current tab-selected"><text>→ {tab.Title}</text></box>
+                {else}
+                    {if tab.ID == targetID.Get()}
+                        <box class="tab tab-current"><text>→ {tab.Title}</text></box>
+                    {else}
+                        {if i == selectedIdx.Get()}
+                            <box class="tab tab-selected"><text>  {tab.Title}</text></box>
+                        {else}
+                            <box class="tab"><text>  {tab.Title}</text></box>
+                        {/if}
+                    {/if}
+                {/if}
+            {/for}
+        </box>
+        <box class="hints">
+            <text>↑↓ Select</text>
+            <text>Enter Switch</text>
+            <text>Esc Close</text>
+        </box>
     </box>
 </box>
 {/if}

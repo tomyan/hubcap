@@ -31,6 +31,8 @@ type inspectSession struct {
 	pageURL        *sumi.Signal[string]
 	targetID       *sumi.Signal[string]
 	browserVersion *sumi.Signal[string]
+	tabs           *sumi.Signal[[]inspector.TabInfo]
+	selectedIdx    *sumi.Signal[int]
 	app            *sumi.App
 
 	stopCapture func()
@@ -106,6 +108,32 @@ func (s *inspectSession) reconnectLoop(ctx context.Context) {
 			return // reconnected
 		}
 		// Still disconnected — keep trying.
+	}
+}
+
+func (s *inspectSession) refreshTabs(ctx context.Context) {
+	s.mu.Lock()
+	client := s.client
+	s.mu.Unlock()
+	if client == nil {
+		return
+	}
+	pages, err := client.Pages(ctx)
+	if err != nil {
+		return
+	}
+	tabInfos := make([]inspector.TabInfo, len(pages))
+	for i, p := range pages {
+		tabInfos[i] = inspector.TabInfo{ID: p.ID, Title: p.Title, URL: p.URL}
+	}
+	if s.app != nil {
+		s.app.Do(func() {
+			s.tabs.Set(tabInfos)
+			// Clamp selection if tabs list shrunk.
+			if s.selectedIdx.Get() >= len(tabInfos) {
+				s.selectedIdx.Set(max(0, len(tabInfos)-1))
+			}
+		})
 	}
 }
 
@@ -186,6 +214,8 @@ func cmdInspect(cfg *Config, args []string) int {
 	pageURL := sumi.New("")
 	targetID := sumi.New("")
 	browserVersion := sumi.New("")
+	tabs := sumi.New([]inspector.TabInfo{})
+	selectedIdx := sumi.New(0)
 
 	sess := &inspectSession{
 		host:           cfg.Host,
@@ -197,6 +227,8 @@ func cmdInspect(cfg *Config, args []string) int {
 		pageURL:        pageURL,
 		targetID:       targetID,
 		browserVersion: browserVersion,
+		tabs:           tabs,
+		selectedIdx:    selectedIdx,
 	}
 
 	// Initial connection.
@@ -221,6 +253,8 @@ func cmdInspect(cfg *Config, args []string) int {
 		PageURL:        pageURL,
 		TargetID:       targetID,
 		BrowserVersion: browserVersion,
+		Tabs:           tabs,
+		SelectedIdx:    selectedIdx,
 	})
 
 	var app *sumi.App
@@ -237,6 +271,9 @@ func cmdInspect(cfg *Config, args []string) int {
 
 		// Ctrl+I (Tab) toggles connection overlay.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyTab {
+			if !overlayVisible.Get() {
+				go sess.refreshTabs(ctx)
+			}
 			overlayVisible.Set(!overlayVisible.Get())
 			return
 		}
@@ -245,6 +282,20 @@ func cmdInspect(cfg *Config, args []string) int {
 		if overlayVisible.Get() {
 			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEscape {
 				overlayVisible.Set(false)
+				return
+			}
+			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyUp {
+				if selectedIdx.Get() > 0 {
+					selectedIdx.Set(selectedIdx.Get() - 1)
+				}
+				return
+			}
+			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyDown {
+				t := tabs.Get()
+				if selectedIdx.Get() < len(t)-1 {
+					selectedIdx.Set(selectedIdx.Get() + 1)
+				}
+				return
 			}
 			return
 		}

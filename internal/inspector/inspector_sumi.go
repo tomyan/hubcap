@@ -16,6 +16,8 @@ type InspectorProps struct {
 	PageURL        *sumi.Signal[string]
 	TargetID       *sumi.Signal[string]
 	BrowserVersion *sumi.Signal[string]
+	Tabs           *sumi.Signal[[]TabInfo]
+	SelectedIdx    *sumi.Signal[int]
 }
 
 func NewInspector(props InspectorProps) *sumi.Component {
@@ -28,6 +30,8 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	pageURL := props.PageURL
 	targetID := props.TargetID
 	browserVersion := props.BrowserVersion
+	tabs := props.Tabs
+	selectedIdx := props.SelectedIdx
 
 	toggleOverlay := func() {
 		overlayVisible.Set(!overlayVisible.Get())
@@ -43,6 +47,8 @@ func NewInspector(props InspectorProps) *sumi.Component {
 		PageURL:        pageURL,
 		TargetID:       targetID,
 		BrowserVersion: browserVersion,
+		Tabs:           tabs,
+		SelectedIdx:    selectedIdx,
 		Visible:        overlayVisible,
 		Connected:      connected,
 	})
