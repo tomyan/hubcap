@@ -7,10 +7,11 @@ import (
 )
 
 type InspectorProps struct {
-	Entries   *sumi.Signal[[]console.Entry]
-	Prompt    *sumi.Signal[string]
-	Cursor    *sumi.Signal[int]
-	Connected *sumi.Signal[bool]
+	Entries        *sumi.Signal[[]console.Entry]
+	Prompt         *sumi.Signal[string]
+	Cursor         *sumi.Signal[int]
+	Connected      *sumi.Signal[bool]
+	OverlayVisible *sumi.Signal[bool]
 }
 
 func NewInspector(props InspectorProps) *sumi.Component {
@@ -18,11 +19,16 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	prompt := props.Prompt
 	cursor := props.Cursor
 	connected := props.Connected
+	overlayVisible := props.OverlayVisible
 
 	console0 := console.NewConsole(console.ConsoleProps{
+		Entries: entries,
 		Prompt:  prompt,
 		Cursor:  cursor,
-		Entries: entries,
+	})
+	overlay1 := NewOverlay(OverlayProps{
+		Visible:   overlayVisible,
+		Connected: connected,
 	})
 
 	box0 := &sumi.Input{
@@ -56,6 +62,7 @@ func NewInspector(props InspectorProps) *sumi.Component {
 							console0.Tree,
 						},
 					},
+					overlay1.Tree,
 				},
 			},
 		},

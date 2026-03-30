@@ -1,0 +1,26 @@
+<style>
+.overlay { position: fixed; border: single; padding: 1 2; min-width: 56; }
+.overlay-title { bold: true; }
+.status-ok { bold: true; color: #50fa7b; }
+.status-err { bold: true; color: #ff5555; }
+.hints { dim: true; border-top: single; padding: 1 0 0 0; }
+</style>
+
+<script>
+var visible *sumi.Signal[bool]
+var connected *sumi.Signal[bool]
+</script>
+
+{if visible.Get()}
+<box class="overlay">
+    <box class="overlay-title"><text>Connection</text></box>
+    <text> </text>
+    {if connected.Get()}
+        <box class="status-ok"><text>● Connected</text></box>
+    {else}
+        <box class="status-err"><text>● Disconnected — reconnecting every 2s</text></box>
+    {/if}
+    <text> </text>
+    <box class="hints"><text>Esc Close</text></box>
+</box>
+{/if}

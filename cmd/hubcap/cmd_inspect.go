@@ -162,6 +162,7 @@ func cmdInspect(cfg *Config, args []string) int {
 	prompt := sumi.New("")
 	cursor := sumi.New(0)
 	connected := sumi.New(false)
+	overlayVisible := sumi.New(false)
 
 	sess := &inspectSession{
 		host:      cfg.Host,
@@ -184,10 +185,11 @@ func cmdInspect(cfg *Config, args []string) int {
 	}
 
 	comp := inspector.NewInspector(inspector.InspectorProps{
-		Entries:   entries,
-		Prompt:    prompt,
-		Cursor:    cursor,
-		Connected: connected,
+		Entries:        entries,
+		Prompt:         prompt,
+		Cursor:         cursor,
+		Connected:      connected,
+		OverlayVisible: overlayVisible,
 	})
 
 	var app *sumi.App
@@ -199,6 +201,20 @@ func cmdInspect(cfg *Config, args []string) int {
 		}
 		if evt.Ctrl && evt.Rune == 'c' {
 			sumi.Quit()
+			return
+		}
+
+		// Ctrl+I toggles connection overlay.
+		if evt.Ctrl && evt.Rune == 'i' {
+			overlayVisible.Set(!overlayVisible.Get())
+			return
+		}
+
+		// When overlay is visible, capture all input.
+		if overlayVisible.Get() {
+			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEscape {
+				overlayVisible.Set(false)
+			}
 			return
 		}
 

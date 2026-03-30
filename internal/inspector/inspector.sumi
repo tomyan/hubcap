@@ -18,6 +18,7 @@ var entries *sumi.Signal[[]console.Entry]
 var prompt *sumi.Signal[string]
 var cursor *sumi.Signal[int]
 var connected *sumi.Signal[bool]
+var overlayVisible *sumi.Signal[bool]
 </script>
 
 <box>
@@ -37,4 +38,5 @@ var connected *sumi.Signal[bool]
     <box class="panel">
         <console.Console entries={entries} prompt={prompt} cursor={cursor} />
     </box>
+    <Overlay visible={overlayVisible} connected={connected} />
 </box>
