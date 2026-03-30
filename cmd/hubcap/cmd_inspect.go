@@ -33,6 +33,7 @@ type inspectSession struct {
 	browserVersion *sumi.Signal[string]
 	tabs           *sumi.Signal[[]inspector.TabInfo]
 	selectedIdx    *sumi.Signal[int]
+	overlayVisible *sumi.Signal[bool]
 	app            *sumi.App
 
 	stopCapture func()
@@ -75,6 +76,7 @@ func (s *inspectSession) connect(ctx context.Context) error {
 	if s.app != nil {
 		s.app.Do(func() {
 			s.connected.Set(true)
+			s.overlayVisible.Set(false)
 			s.pageTitle.Set(title)
 			s.pageURL.Set(url)
 			s.targetID.Set(target.ID)
@@ -243,7 +245,10 @@ func (s *inspectSession) handleDisconnect(ctx context.Context) {
 	}
 
 	if s.app != nil {
-		s.app.Do(func() { s.connected.Set(false) })
+		s.app.Do(func() {
+			s.connected.Set(false)
+			s.overlayVisible.Set(true)
+		})
 	}
 
 	go s.reconnectLoop(ctx)
@@ -301,6 +306,7 @@ func cmdInspect(cfg *Config, args []string) int {
 		browserVersion: browserVersion,
 		tabs:           tabs,
 		selectedIdx:    selectedIdx,
+		overlayVisible: overlayVisible,
 	}
 
 	// Initial connection.
