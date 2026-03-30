@@ -29,18 +29,22 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	targetID := props.TargetID
 	browserVersion := props.BrowserVersion
 
+	toggleOverlay := func() {
+		overlayVisible.Set(!overlayVisible.Get())
+	}
+
 	console0 := console.NewConsole(console.ConsoleProps{
+		Cursor:  cursor,
 		Entries: entries,
 		Prompt:  prompt,
-		Cursor:  cursor,
 	})
 	overlay1 := NewOverlay(OverlayProps{
+		Visible:        overlayVisible,
 		Connected:      connected,
 		PageTitle:      pageTitle,
 		PageURL:        pageURL,
 		TargetID:       targetID,
 		BrowserVersion: browserVersion,
-		Visible:        overlayVisible,
 	})
 
 	box0 := &sumi.Input{
@@ -87,11 +91,15 @@ func NewInspector(props InspectorProps) *sumi.Component {
 				cs = append(cs, &sumi.Input{
 					Kind:      sumi.KindBox,
 					Padding:   sumi.ParsePadding("0 1"),
+					OnClick:   toggleOverlay,
 					CursorCol: -1,
 					CursorRow: -1,
 					Style: sumi.Style{
 						FG:   sumi.Color{IsRGB: true, R: 80, G: 250, B: 123},
 						Bold: true,
+					},
+					HoverStyle: sumi.Style{
+						FG: sumi.Color{Name: "white"},
 					},
 					Children: []*sumi.Input{
 						{
@@ -104,11 +112,15 @@ func NewInspector(props InspectorProps) *sumi.Component {
 				cs = append(cs, &sumi.Input{
 					Kind:      sumi.KindBox,
 					Padding:   sumi.ParsePadding("0 1"),
+					OnClick:   toggleOverlay,
 					CursorCol: -1,
 					CursorRow: -1,
 					Style: sumi.Style{
 						FG:   sumi.Color{IsRGB: true, R: 255, G: 85, B: 85},
 						Bold: true,
+					},
+					HoverStyle: sumi.Style{
+						FG: sumi.Color{Name: "white"},
 					},
 					Children: []*sumi.Input{
 						{

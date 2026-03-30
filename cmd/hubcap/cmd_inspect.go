@@ -235,8 +235,8 @@ func cmdInspect(cfg *Config, args []string) int {
 			return
 		}
 
-		// Ctrl+I toggles connection overlay.
-		if evt.Ctrl && evt.Rune == 'i' {
+		// Ctrl+I (Tab) toggles connection overlay.
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyTab {
 			overlayVisible.Set(!overlayVisible.Get())
 			return
 		}

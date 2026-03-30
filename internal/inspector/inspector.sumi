@@ -5,7 +5,9 @@
 <style>
 .topbar { direction: row; border-bottom: single; dim: true; }
 .dot-ok { color: #50fa7b; bold: true; padding: 0 1; }
+.dot-ok:hover { color: white; }
 .dot-err { color: #ff5555; bold: true; padding: 0 1; }
+.dot-err:hover { color: white; }
 .tabs { direction: row; }
 .tab { dim: true; padding: 0 1; }
 .tab:hover { color: white; }
@@ -23,14 +25,18 @@ var pageTitle *sumi.Signal[string]
 var pageURL *sumi.Signal[string]
 var targetID *sumi.Signal[string]
 var browserVersion *sumi.Signal[string]
+
+func toggleOverlay() {
+	overlayVisible.Set(!overlayVisible.Get())
+}
 </script>
 
 <box>
     <box class="topbar">
         {if connected.Get()}
-            <box class="dot-ok"><text>●</text></box>
+            <box class="dot-ok" onclick={toggleOverlay}><text>●</text></box>
         {else}
-            <box class="dot-err"><text>●</text></box>
+            <box class="dot-err" onclick={toggleOverlay}><text>●</text></box>
         {/if}
         <box class="tabs">
             <box class="tab-active"><text>Console</text></box>
