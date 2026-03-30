@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/tomyan/hubcap/internal/chrome"
+	"github.com/tomyan/hubcap/internal/inspector"
+	"github.com/tomyan/sumi/runtime/edit"
 	sumi "github.com/tomyan/sumi/runtime/prelude"
 	"github.com/tomyan/sumi-ui/components/console"
 )
@@ -39,15 +42,24 @@ func cmdInspect(cfg *Config, args []string) int {
 	defer stopCapture()
 
 	// Signals.
-	entries := sumi.New([]console.Entry{
-		{Text: fmt.Sprintf("Connected to %s", title), Level: "verbose"},
-	})
+	entries := sumi.New([]console.Entry{})
+	ed := &edit.State{}
 	prompt := sumi.New("")
+	cursor := sumi.New(0)
+	connected := sumi.New(true)
 
-	// Console component.
-	comp := console.NewConsole(console.ConsoleProps{
-		Entries: entries,
-		Prompt:  prompt,
+	// syncPrompt updates the prompt signal and cursor from the edit state.
+	syncPrompt := func() {
+		prompt.Set(ed.Value)
+		cursor.Set(ed.Cursor)
+	}
+
+	// Inspector component (topbar + console panel).
+	comp := inspector.NewInspector(inspector.InspectorProps{
+		Entries:   entries,
+		Prompt:    prompt,
+		Cursor:    cursor,
+		Connected: connected,
 	})
 
 	// App reference for Wake().
@@ -63,36 +75,141 @@ func cmdInspect(cfg *Config, args []string) int {
 			sumi.Quit()
 			return
 		}
+
+		// Submit.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEnter {
-			expr := prompt.Get()
+			expr := ed.Submit()
 			if expr != "" {
-				prompt.Set("")
+				syncPrompt()
 				go evalAndAppend(client, ctx, target.ID, expr, entries, app)
 			}
 			return
 		}
+
+		// History.
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyUp {
+			ed.HistoryUp()
+			syncPrompt()
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyDown {
+			ed.HistoryDown()
+			syncPrompt()
+			return
+		}
+
+		// Navigation.
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyLeft {
+			ed.Left()
+			syncPrompt()
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyRight {
+			ed.Right()
+			syncPrompt()
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyHome {
+			ed.Home()
+			syncPrompt()
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEnd {
+			ed.End()
+			syncPrompt()
+			return
+		}
+
+		// Deletion.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyBackspace {
-			val := []rune(prompt.Get())
-			if len(val) > 0 {
-				prompt.Set(string(val[:len(val)-1]))
+			ed.Backspace()
+			syncPrompt()
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyDelete {
+			ed.Delete()
+			syncPrompt()
+			return
+		}
+
+		// Readline shortcuts.
+		if evt.Ctrl {
+			switch evt.Rune {
+			case 'a':
+				ed.Home()
+			case 'e':
+				ed.End()
+			case 'k':
+				ed.KillToEnd()
+			case 'u':
+				ed.KillToStart()
+			case 'w':
+				ed.KillWord()
+			case 'y':
+				ed.Yank()
+			case 't':
+				ed.TransposeChars()
+			case '_':
+				ed.Undo()
+			default:
+				return
+			}
+			syncPrompt()
+			return
+		}
+
+		// Alt key combinations.
+		if evt.Alt {
+			if evt.Kind == sumi.EventKey {
+				switch evt.Rune {
+				case 'b':
+					ed.WordLeft()
+				case 'f':
+					ed.WordRight()
+				case 'd':
+					ed.KillWordForward()
+				case 'y':
+					ed.YankPop()
+				case 'u':
+					ed.UppercaseWord()
+				case 'l':
+					ed.LowercaseWord()
+				case 'c':
+					ed.CapitalizeWord()
+				default:
+					return
+				}
+				syncPrompt()
 			}
 			return
 		}
-		if evt.Kind == sumi.EventKey && evt.Rune >= 32 && !evt.Ctrl && !evt.Alt {
-			prompt.Update(func(cur string) string {
-				return cur + string(evt.Rune)
-			})
+
+		// Paste.
+		if evt.Kind == sumi.EventPaste {
+			for _, ch := range evt.PasteText {
+				ed.Insert(ch)
+			}
+			syncPrompt()
+			return
+		}
+
+		// Printable characters.
+		if evt.Kind == sumi.EventKey && evt.Rune >= 32 {
+			ed.Insert(evt.Rune)
+			syncPrompt()
 		}
 	}
 
-	// Stream CDP console messages.
+	// Stream CDP console messages — mutations via app.Do() to stay on main goroutine.
 	go func() {
 		for msg := range messages {
-			entries.Update(func(cur []console.Entry) []console.Entry {
-				return append(cur, console.Entry{Text: msg.Text, Level: msg.Type})
-			})
+			text, level := msg.Text, msg.Type
 			if app != nil {
-				app.Wake()
+				app.Do(func() {
+					entries.Update(func(cur []console.Entry) []console.Entry {
+						return append(cur, console.Entry{Text: text, Level: level})
+					})
+				})
 			}
 		}
 	}()
@@ -104,21 +221,25 @@ func cmdInspect(cfg *Config, args []string) int {
 }
 
 func evalAndAppend(client *chrome.Client, ctx context.Context, targetID, expr string, entries *sumi.Signal[[]console.Entry], app *sumi.App) {
-	appendEntry(entries, "❯ "+expr, "info", app)
+	appendEntry(entries, expr, "submitted", app)
 	result, err := client.Eval(ctx, targetID, expr)
+	// Small yield to let any console output from the expression (e.g. console.log)
+	// arrive via the CDP event stream before we append the return value.
+	time.Sleep(50 * time.Millisecond)
 	if err != nil {
 		appendEntry(entries, "Error: "+err.Error(), "error", app)
 		return
 	}
-	appendEntry(entries, formatEvalResult(result), "verbose", app)
+	appendEntry(entries, formatEvalResult(result), "result", app)
 }
 
 func appendEntry(entries *sumi.Signal[[]console.Entry], text, level string, app *sumi.App) {
-	entries.Update(func(cur []console.Entry) []console.Entry {
-		return append(cur, console.Entry{Text: text, Level: level})
-	})
 	if app != nil {
-		app.Wake()
+		app.Do(func() {
+			entries.Update(func(cur []console.Entry) []console.Entry {
+				return append(cur, console.Entry{Text: text, Level: level})
+			})
+		})
 	}
 }
 

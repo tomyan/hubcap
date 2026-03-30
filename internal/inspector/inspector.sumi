@@ -1,0 +1,39 @@
+<sumi:imports>
+"github.com/tomyan/sumi-ui/components/console"
+</sumi:imports>
+
+<style>
+.topbar { direction: row; border-bottom: single; dim: true; }
+.dot-ok { color: green; bold: true; padding: 0 1; }
+.dot-err { color: red; bold: true; padding: 0 1; }
+.tabs { direction: row; }
+.tab { dim: true; padding: 0 1; }
+.tab-active { bold: true; padding: 0 1; }
+.panel { flex-grow: 1; }
+</style>
+
+<script>
+var entries *sumi.Signal[[]console.Entry]
+var prompt *sumi.Signal[string]
+var cursor *sumi.Signal[int]
+var connected *sumi.Signal[bool]
+</script>
+
+<box>
+    <box class="topbar">
+        {if connected.Get()}
+            <box class="dot-ok"><text>●</text></box>
+        {else}
+            <box class="dot-err"><text>●</text></box>
+        {/if}
+        <box class="tabs">
+            <box class="tab-active"><text>Console</text></box>
+            <box class="tab"><text>Elements</text></box>
+            <box class="tab"><text>Network</text></box>
+            <box class="tab"><text>Sources</text></box>
+        </box>
+    </box>
+    <box class="panel">
+        <console.Console entries={entries} prompt={prompt} cursor={cursor} />
+    </box>
+</box>
