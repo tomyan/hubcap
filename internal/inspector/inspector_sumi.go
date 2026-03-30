@@ -71,7 +71,7 @@ func NewInspector(props InspectorProps) *sumi.Component {
 					CursorCol: -1,
 					CursorRow: -1,
 					Style: sumi.Style{
-						FG:   sumi.Color{Name: "green"},
+						FG:   sumi.Color{IsRGB: true, R: 80, G: 250, B: 123},
 						Bold: true,
 					},
 					Children: []*sumi.Input{
@@ -88,7 +88,7 @@ func NewInspector(props InspectorProps) *sumi.Component {
 					CursorCol: -1,
 					CursorRow: -1,
 					Style: sumi.Style{
-						FG:   sumi.Color{Name: "red"},
+						FG:   sumi.Color{IsRGB: true, R: 255, G: 85, B: 85},
 						Bold: true,
 					},
 					Children: []*sumi.Input{
@@ -111,6 +111,7 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						CursorCol: -1,
 						CursorRow: -1,
 						Style: sumi.Style{
+							FG:   sumi.Color{IsRGB: true, R: 139, G: 233, B: 253},
 							Bold: true,
 						},
 						Children: []*sumi.Input{

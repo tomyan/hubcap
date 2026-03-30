@@ -4,11 +4,11 @@
 
 <style>
 .topbar { direction: row; border-bottom: single; dim: true; }
-.dot-ok { color: green; bold: true; padding: 0 1; }
-.dot-err { color: red; bold: true; padding: 0 1; }
+.dot-ok { color: #50fa7b; bold: true; padding: 0 1; }
+.dot-err { color: #ff5555; bold: true; padding: 0 1; }
 .tabs { direction: row; }
 .tab { dim: true; padding: 0 1; }
-.tab-active { bold: true; padding: 0 1; }
+.tab-active { bold: true; padding: 0 1; color: #8be9fd; }
 .panel { flex-grow: 1; }
 </style>
 
