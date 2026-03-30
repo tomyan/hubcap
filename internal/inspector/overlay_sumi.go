@@ -302,6 +302,7 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 													}
 												}
 											}
+											cs[len(cs)-1].Key = sumi.Sprint(tab.ID)
 										}
 										return cs
 									}(),

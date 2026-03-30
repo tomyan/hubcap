@@ -73,7 +73,7 @@ func noop() {
             <box class="filter-text"><text>{filter}</text></box>
         </box>
         <box class="tab-list">
-            {for i, tab := range getFilteredTabs()}
+            {for i, tab := range getFilteredTabs() key=tab.ID}
                 {if tab.ID == targetID.Get() && i == selectedIdx.Get()}
                     <box class="tab tab-current tab-selected"><text>→ {tab.Title}</text></box>
                 {else}
