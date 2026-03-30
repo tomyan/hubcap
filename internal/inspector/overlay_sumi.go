@@ -274,6 +274,14 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 										},
 										{
 											Kind:    sumi.KindText,
+											Content: "f Focus",
+										},
+										{
+											Kind:    sumi.KindText,
+											Content: "n New Tab",
+										},
+										{
+											Kind:    sumi.KindText,
 											Content: "Esc Close",
 										},
 									},

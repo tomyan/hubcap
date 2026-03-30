@@ -111,6 +111,28 @@ func (s *inspectSession) reconnectLoop(ctx context.Context) {
 	}
 }
 
+func (s *inspectSession) focusTab(ctx context.Context, tabTargetID string) {
+	s.mu.Lock()
+	client := s.client
+	s.mu.Unlock()
+	if client == nil {
+		return
+	}
+	client.Call(ctx, "Target.activateTarget", map[string]interface{}{
+		"targetId": tabTargetID,
+	})
+}
+
+func (s *inspectSession) newTab(ctx context.Context) {
+	s.mu.Lock()
+	client := s.client
+	s.mu.Unlock()
+	if client == nil {
+		return
+	}
+	client.NewTab(ctx, "")
+}
+
 func (s *inspectSession) refreshTabs(ctx context.Context) {
 	s.mu.Lock()
 	client := s.client
@@ -354,6 +376,21 @@ func cmdInspect(cfg *Config, args []string) int {
 					overlayVisible.Set(false)
 					go sess.switchTarget(ctx, t[idx].ID)
 				}
+				return
+			}
+			if evt.Kind == sumi.EventKey && evt.Rune == 'f' {
+				t := tabs.Get()
+				idx := selectedIdx.Get()
+				if idx >= 0 && idx < len(t) {
+					go sess.focusTab(ctx, t[idx].ID)
+				}
+				return
+			}
+			if evt.Kind == sumi.EventKey && evt.Rune == 'n' {
+				go func() {
+					sess.newTab(ctx)
+					sess.refreshTabs(ctx)
+				}()
 				return
 			}
 			return

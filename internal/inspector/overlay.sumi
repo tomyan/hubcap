@@ -68,6 +68,8 @@ func noop() {
         <box class="hints">
             <text>↑↓ Select</text>
             <text>Enter Switch</text>
+            <text>f Focus</text>
+            <text>n New Tab</text>
             <text>Esc Close</text>
         </box>
     </box>
