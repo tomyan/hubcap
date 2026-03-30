@@ -1,6 +1,8 @@
 package inspector
 
 import (
+	"strings"
+
 	sumi "github.com/tomyan/sumi/runtime/prelude"
 )
 
@@ -13,6 +15,7 @@ type OverlayProps struct {
 	BrowserVersion *sumi.Signal[string]
 	Tabs           *sumi.Signal[[]TabInfo]
 	SelectedIdx    *sumi.Signal[int]
+	Filter         *sumi.Signal[string]
 }
 
 func NewOverlay(props OverlayProps) *sumi.Component {
@@ -24,9 +27,24 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 	browserVersion := props.BrowserVersion
 	tabs := props.Tabs
 	selectedIdx := props.SelectedIdx
+	filter := props.Filter
 
 	termW := sumi.Env[int]("width")
 	termH := sumi.Env[int]("height")
+
+	getFilteredTabs := func() []TabInfo {
+		f := strings.ToLower(filter.Get())
+		if f == "" {
+			return tabs.Get()
+		}
+		filtered := []TabInfo{}
+		for _, t := range tabs.Get() {
+			if strings.Contains(strings.ToLower(t.Title), f) || strings.Contains(strings.ToLower(t.URL), f) {
+				filtered = append(filtered, t)
+			}
+		}
+		return filtered
+	}
 
 	close := func() {
 		visible.Set(false)
@@ -162,12 +180,48 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 								})
 								cs = append(cs, &sumi.Input{
 									Kind:      sumi.KindBox,
+									Direction: "row",
+									CursorCol: -1,
+									CursorRow: -1,
+									Children: []*sumi.Input{
+										{
+											Kind:      sumi.KindBox,
+											CursorCol: -1,
+											CursorRow: -1,
+											Style: sumi.Style{
+												Bold: true,
+											},
+											Children: []*sumi.Input{
+												{
+													Kind:    sumi.KindText,
+													Content: "❯ ",
+												},
+											},
+										},
+										{
+											Kind:      sumi.KindBox,
+											CursorCol: -1,
+											CursorRow: -1,
+											Style: sumi.Style{
+												FG: sumi.Color{IsRGB: true, R: 241, G: 250, B: 140},
+											},
+											Children: []*sumi.Input{
+												{
+													Kind:    sumi.KindText,
+													Content: sumi.Sprintf("%v", filter.Get()),
+												},
+											},
+										},
+									},
+								})
+								cs = append(cs, &sumi.Input{
+									Kind:      sumi.KindBox,
 									Overflow:  "auto",
 									CursorCol: -1,
 									CursorRow: -1,
 									Children: func() []*sumi.Input {
 										var cs []*sumi.Input
-										for i, tab := range tabs.Get() {
+										for i, tab := range getFilteredTabs() {
 											if tab.ID == targetID.Get() && i == selectedIdx.Get() {
 												cs = append(cs, &sumi.Input{
 													Kind:      sumi.KindBox,

@@ -1,3 +1,7 @@
+<sumi:imports>
+"strings"
+</sumi:imports>
+
 <style>
 .backdrop { position: fixed; }
 .overlay { border: single; border-title: "Connection"; padding: 1 2; min-width: 56; background: black; }
@@ -6,13 +10,14 @@
 .url { dim: true; }
 .meta { dim: true; }
 .tab-header { dim: true; border-bottom: single; padding: 1 0 0 0; }
+.filter { direction: row; }
+.filter-prompt { bold: true; }
+.filter-text { color: #f1fa8c; }
 .tab-list { overflow: auto; }
 .tab { padding: 0 1; }
 .tab:hover { color: white; }
 .tab-current { color: #50fa7b; }
 .tab-selected { bold: true; color: white; }
-.tab-title { }
-.tab-url { dim: true; }
 .hints { dim: true; border-top: single; padding: 1 0 0 0; direction: row; gap: 2; }
 </style>
 
@@ -27,6 +32,21 @@ var targetID *sumi.Signal[string]
 var browserVersion *sumi.Signal[string]
 var tabs *sumi.Signal[[]TabInfo]
 var selectedIdx *sumi.Signal[int]
+var filter *sumi.Signal[string]
+
+func getFilteredTabs() []TabInfo {
+	f := strings.ToLower(filter.Get())
+	if f == "" {
+		return tabs.Get()
+	}
+	filtered := []TabInfo{}
+	for _, t := range tabs.Get() {
+		if strings.Contains(strings.ToLower(t.Title), f) || strings.Contains(strings.ToLower(t.URL), f) {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
+}
 
 func close() {
 	visible.Set(false)
@@ -48,8 +68,12 @@ func noop() {
             <box class="url"><text>Last: {pageTitle} — {pageURL}</text></box>
         {/if}
         <box class="tab-header"><text>Tabs</text></box>
+        <box class="filter">
+            <box class="filter-prompt"><text>❯ </text></box>
+            <box class="filter-text"><text>{filter}</text></box>
+        </box>
         <box class="tab-list">
-            {for i, tab := range tabs.Get()}
+            {for i, tab := range getFilteredTabs()}
                 {if tab.ID == targetID.Get() && i == selectedIdx.Get()}
                     <box class="tab tab-current tab-selected"><text>→ {tab.Title}</text></box>
                 {else}

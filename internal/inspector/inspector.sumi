@@ -27,6 +27,7 @@ var targetID *sumi.Signal[string]
 var browserVersion *sumi.Signal[string]
 var tabs *sumi.Signal[[]TabInfo]
 var selectedIdx *sumi.Signal[int]
+var filter *sumi.Signal[string]
 
 func toggleOverlay() {
 	overlayVisible.Set(!overlayVisible.Get())
@@ -50,5 +51,5 @@ func toggleOverlay() {
     <box class="panel">
         <console.Console entries={entries} prompt={prompt} cursor={cursor} />
     </box>
-    <Overlay visible={overlayVisible} connected={connected} pageTitle={pageTitle} pageURL={pageURL} targetID={targetID} browserVersion={browserVersion} tabs={tabs} selectedIdx={selectedIdx} />
+    <Overlay visible={overlayVisible} connected={connected} pageTitle={pageTitle} pageURL={pageURL} targetID={targetID} browserVersion={browserVersion} tabs={tabs} selectedIdx={selectedIdx} filter={filter} />
 </box>

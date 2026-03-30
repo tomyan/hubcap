@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -277,6 +278,20 @@ func (s *inspectSession) getTitle(ctx context.Context) string {
 	return title
 }
 
+func filteredTabs(allTabs []inspector.TabInfo, filter string) []inspector.TabInfo {
+	if filter == "" {
+		return allTabs
+	}
+	f := strings.ToLower(filter)
+	var result []inspector.TabInfo
+	for _, t := range allTabs {
+		if strings.Contains(strings.ToLower(t.Title), f) || strings.Contains(strings.ToLower(t.URL), f) {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
 func cmdInspect(cfg *Config, args []string) int {
 	ctx := context.Background()
 
@@ -287,6 +302,7 @@ func cmdInspect(cfg *Config, args []string) int {
 	cursor := sumi.New(0)
 	connected := sumi.New(false)
 	overlayVisible := sumi.New(false)
+	filter := sumi.New("")
 	pageTitle := sumi.New("")
 	pageURL := sumi.New("")
 	targetID := sumi.New("")
@@ -333,6 +349,7 @@ func cmdInspect(cfg *Config, args []string) int {
 		BrowserVersion: browserVersion,
 		Tabs:           tabs,
 		SelectedIdx:    selectedIdx,
+		Filter:         filter,
 	})
 
 	var app *sumi.App
@@ -350,6 +367,8 @@ func cmdInspect(cfg *Config, args []string) int {
 		// Ctrl+I (Tab) toggles connection overlay.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyTab {
 			if !overlayVisible.Get() {
+				filter.Set("")
+				selectedIdx.Set(0)
 				go sess.refreshTabs(ctx)
 			}
 			overlayVisible.Set(!overlayVisible.Get())
@@ -369,34 +388,52 @@ func cmdInspect(cfg *Config, args []string) int {
 				return
 			}
 			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyDown {
-				t := tabs.Get()
-				if selectedIdx.Get() < len(t)-1 {
+				ft := filteredTabs(tabs.Get(), filter.Get())
+				if selectedIdx.Get() < len(ft)-1 {
 					selectedIdx.Set(selectedIdx.Get() + 1)
 				}
 				return
 			}
 			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEnter {
-				t := tabs.Get()
+				ft := filteredTabs(tabs.Get(), filter.Get())
 				idx := selectedIdx.Get()
-				if idx >= 0 && idx < len(t) {
+				if idx >= 0 && idx < len(ft) {
 					overlayVisible.Set(false)
-					go sess.switchTarget(ctx, t[idx].ID)
+					go sess.switchTarget(ctx, ft[idx].ID)
 				}
 				return
 			}
-			if evt.Kind == sumi.EventKey && evt.Rune == 'f' {
-				t := tabs.Get()
-				idx := selectedIdx.Get()
-				if idx >= 0 && idx < len(t) {
-					go sess.focusTab(ctx, t[idx].ID)
+			// Shortcuts only when filter is empty.
+			if filter.Get() == "" {
+				if evt.Kind == sumi.EventKey && evt.Rune == 'f' {
+					ft := filteredTabs(tabs.Get(), filter.Get())
+					idx := selectedIdx.Get()
+					if idx >= 0 && idx < len(ft) {
+						go sess.focusTab(ctx, ft[idx].ID)
+					}
+					return
+				}
+				if evt.Kind == sumi.EventKey && evt.Rune == 'n' {
+					go func() {
+						sess.newTab(ctx)
+						sess.refreshTabs(ctx)
+					}()
+					return
+				}
+			}
+			// Backspace deletes filter char.
+			if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyBackspace {
+				f := filter.Get()
+				if len(f) > 0 {
+					filter.Set(f[:len(f)-1])
+					selectedIdx.Set(0)
 				}
 				return
 			}
-			if evt.Kind == sumi.EventKey && evt.Rune == 'n' {
-				go func() {
-					sess.newTab(ctx)
-					sess.refreshTabs(ctx)
-				}()
+			// Printable chars append to filter.
+			if evt.Kind == sumi.EventKey && evt.Rune >= 32 {
+				filter.Set(filter.Get() + string(evt.Rune))
+				selectedIdx.Set(0)
 				return
 			}
 			return

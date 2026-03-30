@@ -18,6 +18,7 @@ type InspectorProps struct {
 	BrowserVersion *sumi.Signal[string]
 	Tabs           *sumi.Signal[[]TabInfo]
 	SelectedIdx    *sumi.Signal[int]
+	Filter         *sumi.Signal[string]
 }
 
 func NewInspector(props InspectorProps) *sumi.Component {
@@ -32,25 +33,27 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	browserVersion := props.BrowserVersion
 	tabs := props.Tabs
 	selectedIdx := props.SelectedIdx
+	filter := props.Filter
 
 	toggleOverlay := func() {
 		overlayVisible.Set(!overlayVisible.Get())
 	}
 
 	console0 := console.NewConsole(console.ConsoleProps{
-		Cursor:  cursor,
 		Entries: entries,
 		Prompt:  prompt,
+		Cursor:  cursor,
 	})
 	overlay1 := NewOverlay(OverlayProps{
-		TargetID:       targetID,
-		BrowserVersion: browserVersion,
-		Tabs:           tabs,
-		SelectedIdx:    selectedIdx,
-		Visible:        overlayVisible,
-		Connected:      connected,
-		PageTitle:      pageTitle,
 		PageURL:        pageURL,
+		BrowserVersion: browserVersion,
+		SelectedIdx:    selectedIdx,
+		Filter:         filter,
+		Visible:        overlayVisible,
+		PageTitle:      pageTitle,
+		TargetID:       targetID,
+		Tabs:           tabs,
+		Connected:      connected,
 	})
 
 	box0 := &sumi.Input{
