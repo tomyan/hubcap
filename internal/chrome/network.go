@@ -29,6 +29,13 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 	// Subscribe to console API events
 	eventCh := c.subscribeEvent(sessionID, "Runtime.consoleAPICalled")
 
+	// Enable target discovery so we receive targetDestroyed events.
+	c.Call(ctx, "Target.setDiscoverTargets", map[string]interface{}{"discover": true})
+
+	// Subscribe to target destruction — fires when the tab is closed.
+	// This is a browser-level event (empty session ID).
+	destroyedCh := c.subscribeEvent("", "Target.targetDestroyed")
+
 	// Create output channel
 	output := make(chan ConsoleMessage, 100)
 
@@ -41,6 +48,7 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 		stopOnce.Do(func() {
 			close(done)
 			c.unsubscribeEvent(sessionID, "Runtime.consoleAPICalled", eventCh)
+			c.unsubscribeEvent("", "Target.targetDestroyed", destroyedCh)
 			// Best effort to disable Runtime domain
 			disableCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -84,6 +92,16 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 				case output <- ConsoleMessage{Type: event.Type, Text: text}:
 				default:
 					// Drop if channel is full
+				}
+			case rawParams, ok := <-destroyedCh:
+				if !ok {
+					return
+				}
+				var ev struct {
+					TargetID string `json:"targetId"`
+				}
+				if json.Unmarshal(rawParams, &ev) == nil && ev.TargetID == targetID {
+					return
 				}
 			case <-done:
 				return

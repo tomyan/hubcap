@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tomyan/hubcap/internal/chrome"
@@ -13,48 +14,175 @@ import (
 	"github.com/tomyan/sumi-ui/components/console"
 )
 
-func cmdInspect(cfg *Config, args []string) int {
-	ctx := context.Background()
+// inspectSession manages the CDP connection lifecycle with auto-reconnect.
+type inspectSession struct {
+	host      string
+	port      int
+	targetCfg string // target selector from config
 
-	client, err := chrome.Connect(ctx, cfg.Host, cfg.Port)
+	mu       sync.Mutex
+	client   *chrome.Client
+	targetID string
+
+	// Signals updated on the main goroutine via app.Do.
+	connected *sumi.Signal[bool]
+	entries   *sumi.Signal[[]console.Entry]
+	app       *sumi.App
+
+	stopCapture func()
+}
+
+func (s *inspectSession) connect(ctx context.Context) error {
+	client, err := chrome.Connect(ctx, s.host, s.port)
 	if err != nil {
-		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
-		return ExitConnFailed
+		return err
 	}
-	defer client.Close()
-
+	cfg := &Config{Host: s.host, Port: s.port, Target: s.targetCfg}
 	target, err := resolveTarget(ctx, client, cfg)
 	if err != nil {
-		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
-		return ExitError
+		client.Close()
+		return err
 	}
 
-	title, _ := client.GetTitle(ctx, target.ID)
-	if title == "" {
-		title = target.URL
-	}
-
-	messages, stopCapture, err := client.CaptureConsole(ctx, target.ID)
+	messages, stop, err := client.CaptureConsole(ctx, target.ID)
 	if err != nil {
-		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
-		return ExitError
+		client.Close()
+		return err
 	}
-	defer stopCapture()
+
+	s.mu.Lock()
+	s.client = client
+	s.targetID = target.ID
+	s.stopCapture = stop
+	s.mu.Unlock()
+
+	// Update connected status on main goroutine.
+	if s.app != nil {
+		s.app.Do(func() { s.connected.Set(true) })
+	}
+
+	// Stream console messages until the channel closes (disconnect).
+	go func() {
+		for msg := range messages {
+			text, level := msg.Text, msg.Type
+			if s.app != nil {
+				s.app.Do(func() {
+					s.entries.Update(func(cur []console.Entry) []console.Entry {
+						return append(cur, console.Entry{Text: text, Level: level})
+					})
+				})
+			}
+		}
+		// Channel closed — connection lost.
+		s.handleDisconnect(ctx)
+	}()
+
+	return nil
+}
+
+func (s *inspectSession) reconnectLoop(ctx context.Context) {
+	for {
+		time.Sleep(2 * time.Second)
+		if err := s.connect(ctx); err == nil {
+			return // reconnected
+		}
+		// Still disconnected — keep trying.
+	}
+}
+
+func (s *inspectSession) eval(ctx context.Context, expr string) (*chrome.EvalResult, error) {
+	s.mu.Lock()
+	client := s.client
+	targetID := s.targetID
+	s.mu.Unlock()
+	if client == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	result, err := client.Eval(ctx, targetID, expr)
+	if err != nil {
+		// Session errors mean the target is gone — trigger disconnect.
+		s.handleDisconnect(ctx)
+	}
+	return result, err
+}
+
+func (s *inspectSession) handleDisconnect(ctx context.Context) {
+	s.mu.Lock()
+	alreadyDisconnected := s.client == nil
+	if s.stopCapture != nil {
+		s.stopCapture()
+		s.stopCapture = nil
+	}
+	if s.client != nil {
+		s.client.Close()
+		s.client = nil
+	}
+	s.mu.Unlock()
+
+	if alreadyDisconnected {
+		return
+	}
+
+	if s.app != nil {
+		s.app.Do(func() { s.connected.Set(false) })
+	}
+
+	go s.reconnectLoop(ctx)
+}
+
+func (s *inspectSession) close() {
+	s.mu.Lock()
+	if s.stopCapture != nil {
+		s.stopCapture()
+	}
+	if s.client != nil {
+		s.client.Close()
+	}
+	s.mu.Unlock()
+}
+
+func (s *inspectSession) getTitle(ctx context.Context) string {
+	s.mu.Lock()
+	client := s.client
+	targetID := s.targetID
+	s.mu.Unlock()
+	if client == nil {
+		return ""
+	}
+	title, _ := client.GetTitle(ctx, targetID)
+	return title
+}
+
+func cmdInspect(cfg *Config, args []string) int {
+	ctx := context.Background()
 
 	// Signals.
 	entries := sumi.New([]console.Entry{})
 	ed := &edit.State{}
 	prompt := sumi.New("")
 	cursor := sumi.New(0)
-	connected := sumi.New(true)
+	connected := sumi.New(false)
 
-	// syncPrompt updates the prompt signal and cursor from the edit state.
+	sess := &inspectSession{
+		host:      cfg.Host,
+		port:      cfg.Port,
+		targetCfg: cfg.Target,
+		connected: connected,
+		entries:   entries,
+	}
+
+	// Initial connection.
+	if err := sess.connect(ctx); err != nil {
+		fmt.Fprintf(cfg.Stderr, "error: %v\n", err)
+		return ExitConnFailed
+	}
+	defer sess.close()
+
 	syncPrompt := func() {
 		prompt.Set(ed.Value)
 		cursor.Set(ed.Cursor)
 	}
 
-	// Inspector component (topbar + console panel).
 	comp := inspector.NewInspector(inspector.InspectorProps{
 		Entries:   entries,
 		Prompt:    prompt,
@@ -62,10 +190,8 @@ func cmdInspect(cfg *Config, args []string) int {
 		Connected: connected,
 	})
 
-	// App reference for Wake().
 	var app *sumi.App
 
-	// Key handling.
 	comp.OnEvent = func(evt sumi.Event) {
 		if evt.Kind == sumi.EventSignal {
 			sumi.Quit()
@@ -76,17 +202,15 @@ func cmdInspect(cfg *Config, args []string) int {
 			return
 		}
 
-		// Submit.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEnter {
 			expr := ed.Submit()
 			if expr != "" {
 				syncPrompt()
-				go evalAndAppend(client, ctx, target.ID, expr, entries, app)
+				go evalAndAppendSession(sess, ctx, expr, entries, app)
 			}
 			return
 		}
 
-		// History.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyUp {
 			ed.HistoryUp()
 			syncPrompt()
@@ -97,8 +221,6 @@ func cmdInspect(cfg *Config, args []string) int {
 			syncPrompt()
 			return
 		}
-
-		// Navigation.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyLeft {
 			ed.Left()
 			syncPrompt()
@@ -119,8 +241,6 @@ func cmdInspect(cfg *Config, args []string) int {
 			syncPrompt()
 			return
 		}
-
-		// Deletion.
 		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyBackspace {
 			ed.Backspace()
 			syncPrompt()
@@ -132,7 +252,6 @@ func cmdInspect(cfg *Config, args []string) int {
 			return
 		}
 
-		// Readline shortcuts.
 		if evt.Ctrl {
 			switch evt.Rune {
 			case 'a':
@@ -158,7 +277,6 @@ func cmdInspect(cfg *Config, args []string) int {
 			return
 		}
 
-		// Alt key combinations.
 		if evt.Alt {
 			if evt.Kind == sumi.EventKey {
 				switch evt.Rune {
@@ -184,7 +302,6 @@ func cmdInspect(cfg *Config, args []string) int {
 			return
 		}
 
-		// Paste.
 		if evt.Kind == sumi.EventPaste {
 			for _, ch := range evt.PasteText {
 				ed.Insert(ch)
@@ -193,38 +310,25 @@ func cmdInspect(cfg *Config, args []string) int {
 			return
 		}
 
-		// Printable characters.
 		if evt.Kind == sumi.EventKey && evt.Rune >= 32 {
 			ed.Insert(evt.Rune)
 			syncPrompt()
 		}
 	}
 
-	// Stream CDP console messages — mutations via app.Do() to stay on main goroutine.
-	go func() {
-		for msg := range messages {
-			text, level := msg.Text, msg.Type
-			if app != nil {
-				app.Do(func() {
-					entries.Update(func(cur []console.Entry) []console.Entry {
-						return append(cur, console.Entry{Text: text, Level: level})
-					})
-				})
-			}
-		}
-	}()
-
 	sumi.RunWithOptions(comp, sumi.RunOptions{
-		SetApp: func(a *sumi.App) { app = a },
+		SetApp: func(a *sumi.App) {
+			app = a
+			sess.app = a
+			connected.Set(true)
+		},
 	})
 	return ExitSuccess
 }
 
-func evalAndAppend(client *chrome.Client, ctx context.Context, targetID, expr string, entries *sumi.Signal[[]console.Entry], app *sumi.App) {
+func evalAndAppendSession(sess *inspectSession, ctx context.Context, expr string, entries *sumi.Signal[[]console.Entry], app *sumi.App) {
 	appendEntry(entries, expr, "submitted", app)
-	result, err := client.Eval(ctx, targetID, expr)
-	// Small yield to let any console output from the expression (e.g. console.log)
-	// arrive via the CDP event stream before we append the return value.
+	result, err := sess.eval(ctx, expr)
 	time.Sleep(50 * time.Millisecond)
 	if err != nil {
 		appendEntry(entries, "Error: "+err.Error(), "error", app)
