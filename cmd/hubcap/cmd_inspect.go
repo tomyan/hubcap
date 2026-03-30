@@ -146,7 +146,7 @@ func (s *inspectSession) refreshTabs(ctx context.Context) {
 	if client == nil {
 		return
 	}
-	pages, err := client.Pages(ctx)
+	pages, err := client.AllPages(ctx)
 	if err != nil {
 		return
 	}

@@ -222,7 +222,7 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 									Children: func() []*sumi.Input {
 										var cs []*sumi.Input
 										for i, tab := range getFilteredTabs() {
-											if tab.ID == targetID.Get() && i == selectedIdx.Get() {
+											if i == selectedIdx.Get() {
 												cs = append(cs, &sumi.Input{
 													Kind:      sumi.KindBox,
 													Padding:   sumi.ParsePadding("0 1"),
@@ -238,69 +238,26 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 													Children: []*sumi.Input{
 														{
 															Kind:    sumi.KindText,
-															Content: sumi.Sprintf("→ %v", tab.Title),
+															Content: sumi.Sprintf("→ %v — %v", tab.Title, tab.URL),
 														},
 													},
 												})
 											} else {
-												if tab.ID == targetID.Get() {
-													cs = append(cs, &sumi.Input{
-														Kind:      sumi.KindBox,
-														Padding:   sumi.ParsePadding("0 1"),
-														CursorCol: -1,
-														CursorRow: -1,
-														Style: sumi.Style{
-															FG: sumi.Color{IsRGB: true, R: 80, G: 250, B: 123},
+												cs = append(cs, &sumi.Input{
+													Kind:      sumi.KindBox,
+													Padding:   sumi.ParsePadding("0 1"),
+													CursorCol: -1,
+													CursorRow: -1,
+													HoverStyle: sumi.Style{
+														FG: sumi.Color{Name: "white"},
+													},
+													Children: []*sumi.Input{
+														{
+															Kind:    sumi.KindText,
+															Content: sumi.Sprintf("  %v — %v", tab.Title, tab.URL),
 														},
-														HoverStyle: sumi.Style{
-															FG: sumi.Color{Name: "white"},
-														},
-														Children: []*sumi.Input{
-															{
-																Kind:    sumi.KindText,
-																Content: sumi.Sprintf("→ %v", tab.Title),
-															},
-														},
-													})
-												} else {
-													if i == selectedIdx.Get() {
-														cs = append(cs, &sumi.Input{
-															Kind:      sumi.KindBox,
-															Padding:   sumi.ParsePadding("0 1"),
-															CursorCol: -1,
-															CursorRow: -1,
-															Style: sumi.Style{
-																FG:   sumi.Color{Name: "white"},
-																Bold: true,
-															},
-															HoverStyle: sumi.Style{
-																FG: sumi.Color{Name: "white"},
-															},
-															Children: []*sumi.Input{
-																{
-																	Kind:    sumi.KindText,
-																	Content: sumi.Sprintf("  %v", tab.Title),
-																},
-															},
-														})
-													} else {
-														cs = append(cs, &sumi.Input{
-															Kind:      sumi.KindBox,
-															Padding:   sumi.ParsePadding("0 1"),
-															CursorCol: -1,
-															CursorRow: -1,
-															HoverStyle: sumi.Style{
-																FG: sumi.Color{Name: "white"},
-															},
-															Children: []*sumi.Input{
-																{
-																	Kind:    sumi.KindText,
-																	Content: sumi.Sprintf("  %v", tab.Title),
-																},
-															},
-														})
-													}
-												}
+													},
+												})
 											}
 											cs[len(cs)-1].Key = sumi.Sprint(tab.ID)
 										}
