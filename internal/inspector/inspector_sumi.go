@@ -20,9 +20,9 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	connected := props.Connected
 
 	console0 := console.NewConsole(console.ConsoleProps{
-		Entries: entries,
 		Prompt:  prompt,
 		Cursor:  cursor,
+		Entries: entries,
 	})
 
 	box0 := &sumi.Input{
@@ -129,6 +129,9 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Style: sumi.Style{
 							Dim: true,
 						},
+						HoverStyle: sumi.Style{
+							FG: sumi.Color{Name: "white"},
+						},
 						Children: []*sumi.Input{
 							{
 								Kind:    sumi.KindText,
@@ -144,6 +147,9 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Style: sumi.Style{
 							Dim: true,
 						},
+						HoverStyle: sumi.Style{
+							FG: sumi.Color{Name: "white"},
+						},
 						Children: []*sumi.Input{
 							{
 								Kind:    sumi.KindText,
@@ -158,6 +164,9 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						CursorRow: -1,
 						Style: sumi.Style{
 							Dim: true,
+						},
+						HoverStyle: sumi.Style{
+							FG: sumi.Color{Name: "white"},
 						},
 						Children: []*sumi.Input{
 							{

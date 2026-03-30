@@ -8,6 +8,7 @@
 .dot-err { color: #ff5555; bold: true; padding: 0 1; }
 .tabs { direction: row; }
 .tab { dim: true; padding: 0 1; }
+.tab:hover { color: white; }
 .tab-active { bold: true; padding: 0 1; color: #8be9fd; }
 .panel { flex-grow: 1; }
 </style>
