@@ -6,12 +6,8 @@ import (
 	"fmt"
 
 	"github.com/tomyan/hubcap/internal/chrome"
-	"github.com/tomyan/sumi/runtime/input"
-	"github.com/tomyan/sumi/runtime/layout"
-	"github.com/tomyan/sumi/runtime/render"
-	"github.com/tomyan/sumi/runtime/signal"
-	"github.com/tomyan/sumi/runtime/tui"
-	"github.com/tomyan/sumi-ui/components/scrollablelog"
+	sumi "github.com/tomyan/sumi/runtime/prelude"
+	"github.com/tomyan/sumi-ui/components/console"
 )
 
 func cmdInspect(cfg *Config, args []string) int {
@@ -43,127 +39,89 @@ func cmdInspect(cfg *Config, args []string) int {
 	defer stopCapture()
 
 	// Signals.
-	entries := signal.New([]scrollablelog.LogEntry{
+	entries := sumi.New([]console.Entry{
 		{Text: fmt.Sprintf("Connected to %s", title), Level: "verbose"},
 	})
-	prompt := signal.New("")
+	prompt := sumi.New("")
 
-	// Build the log component and extract its tree.
-	logComp := scrollablelog.NewScrollablelog(scrollablelog.ScrollablelogProps{
+	// Console component.
+	comp := console.NewConsole(console.ConsoleProps{
 		Entries: entries,
-	})
-	// Make the log fill available height above the prompt.
-	logComp.Tree.FlexGrow = 1
-
-	// Prompt text node — updated reactively.
-	promptNode := &layout.Input{
-		Kind:    layout.KindText,
-		Content: "> ",
-		Style:   render.Style{Bold: true},
-	}
-
-	// Root layout: log fills space, prompt pinned at bottom.
-	root := &layout.Input{
-		Kind:      layout.KindBox,
-		Direction: "column",
-		CursorCol: -1,
-		CursorRow: -1,
-		Children: []*layout.Input{
-			logComp.Tree,
-			{
-				Kind:      layout.KindBox,
-				CursorCol: 2, // cursor after "> "
-				CursorRow: 0,
-				Children:  []*layout.Input{promptNode},
-			},
-		},
-	}
-
-	// Update prompt text and cursor position reactively.
-	signal.Effect(func() {
-		val := prompt.Get()
-		promptNode.Content = "> " + val
-		// Cursor at end of input.
-		root.Children[1].CursorCol = 2 + len(val)
+		Prompt:  prompt,
 	})
 
 	// App reference for Wake().
-	var app *tui.App
+	var app *sumi.App
 
-	// Append a log entry and wake the render loop.
-	appendEntry := func(text, level string) {
-		entries.Update(func(cur []scrollablelog.LogEntry) []scrollablelog.LogEntry {
-			return append(cur, scrollablelog.LogEntry{Text: text, Level: level})
-		})
-		if app != nil {
-			app.Wake()
-		}
-	}
-
-	// Evaluate JS expression and append result to log.
-	evalExpr := func(expr string) {
-		appendEntry("> "+expr, "info")
-		result, err := client.Eval(ctx, target.ID, expr)
-		if err != nil {
-			appendEntry("Error: "+err.Error(), "error")
+	// Key handling.
+	comp.OnEvent = func(evt sumi.Event) {
+		if evt.Kind == sumi.EventSignal {
+			sumi.Quit()
 			return
 		}
-		text := formatEvalResult(result)
-		appendEntry(text, "verbose")
+		if evt.Ctrl && evt.Rune == 'c' {
+			sumi.Quit()
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyEnter {
+			expr := prompt.Get()
+			if expr != "" {
+				prompt.Set("")
+				go evalAndAppend(client, ctx, target.ID, expr, entries, app)
+			}
+			return
+		}
+		if evt.Kind == sumi.EventSpecial && evt.Special == sumi.KeyBackspace {
+			val := []rune(prompt.Get())
+			if len(val) > 0 {
+				prompt.Set(string(val[:len(val)-1]))
+			}
+			return
+		}
+		if evt.Kind == sumi.EventKey && evt.Rune >= 32 && !evt.Ctrl && !evt.Alt {
+			prompt.Update(func(cur string) string {
+				return cur + string(evt.Rune)
+			})
+		}
 	}
 
-	comp := &tui.Component{
-		Tree:        root,
-		AfterLayout: logComp.AfterLayout,
-		OnEvent: func(evt input.Event) {
-			if evt.Kind == input.EventSignal {
-				tui.Quit()
-				return
-			}
-			if evt.Ctrl && evt.Rune == 'c' {
-				tui.Quit()
-				return
-			}
-			// Enter: evaluate expression.
-			if evt.Kind == input.EventSpecial && evt.Special == input.KeyEnter {
-				expr := prompt.Get()
-				if expr != "" {
-					prompt.Set("")
-					go evalExpr(expr)
-				}
-				return
-			}
-			// Backspace.
-			if evt.Kind == input.EventSpecial && evt.Special == input.KeyBackspace {
-				val := prompt.Get()
-				if len(val) > 0 {
-					prompt.Set(val[:len(val)-1])
-				}
-				return
-			}
-			// Printable characters.
-			if evt.Kind == input.EventKey && evt.Rune >= 32 && !evt.Ctrl && !evt.Alt {
-				prompt.Update(func(cur string) string {
-					return cur + string(evt.Rune)
-				})
-			}
-		},
-	}
-
-	// Background goroutine: stream CDP console messages.
+	// Stream CDP console messages.
 	go func() {
 		for msg := range messages {
-			appendEntry(msg.Text, msg.Type)
+			entries.Update(func(cur []console.Entry) []console.Entry {
+				return append(cur, console.Entry{Text: msg.Text, Level: msg.Type})
+			})
+			if app != nil {
+				app.Wake()
+			}
 		}
 	}()
 
-	tui.RunWithOptions(comp, tui.RunOptions{
-		SetApp: func(a *tui.App) { app = a },
+	sumi.RunWithOptions(comp, sumi.RunOptions{
+		SetApp: func(a *sumi.App) { app = a },
 	})
 	return ExitSuccess
 }
 
-// formatEvalResult converts an eval result to a display string.
+func evalAndAppend(client *chrome.Client, ctx context.Context, targetID, expr string, entries *sumi.Signal[[]console.Entry], app *sumi.App) {
+	appendEntry(entries, "❯ "+expr, "info", app)
+	result, err := client.Eval(ctx, targetID, expr)
+	if err != nil {
+		appendEntry(entries, "Error: "+err.Error(), "error", app)
+		return
+	}
+	appendEntry(entries, formatEvalResult(result), "verbose", app)
+}
+
+func appendEntry(entries *sumi.Signal[[]console.Entry], text, level string, app *sumi.App) {
+	entries.Update(func(cur []console.Entry) []console.Entry {
+		return append(cur, console.Entry{Text: text, Level: level})
+	})
+	if app != nil {
+		app.Wake()
+	}
+}
+
 func formatEvalResult(result *chrome.EvalResult) string {
 	if result == nil {
 		return "undefined"
@@ -176,7 +134,6 @@ func formatEvalResult(result *chrome.EvalResult) string {
 			return fmt.Sprintf("%q", s)
 		}
 	}
-	// For objects, arrays, numbers — JSON encode the value.
 	b, err := json.Marshal(result.Value)
 	if err != nil {
 		return fmt.Sprintf("%v", result.Value)
