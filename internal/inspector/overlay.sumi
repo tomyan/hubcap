@@ -1,24 +1,30 @@
 <style>
-.overlay { position: fixed; border: single; padding: 1 2; min-width: 56; }
-.overlay-title { bold: true; }
+.overlay { position: fixed; border: single; border-title: "Connection"; padding: 1 2; min-width: 56; }
 .status-ok { bold: true; color: #50fa7b; }
 .status-err { bold: true; color: #ff5555; }
+.url { dim: true; }
+.meta { dim: true; }
 .hints { dim: true; border-top: single; padding: 1 0 0 0; }
 </style>
 
 <script>
 var visible *sumi.Signal[bool]
 var connected *sumi.Signal[bool]
+var pageTitle *sumi.Signal[string]
+var pageURL *sumi.Signal[string]
+var targetID *sumi.Signal[string]
+var browserVersion *sumi.Signal[string]
 </script>
 
 {if visible.Get()}
 <box class="overlay">
-    <box class="overlay-title"><text>Connection</text></box>
-    <text> </text>
     {if connected.Get()}
-        <box class="status-ok"><text>● Connected</text></box>
+        <box class="status-ok"><text>● Connected to {pageTitle}</text></box>
+        <box class="url"><text>{pageURL}</text></box>
+        <box class="meta"><text>Target: {targetID}  Browser: {browserVersion}</text></box>
     {else}
         <box class="status-err"><text>● Disconnected — reconnecting every 2s</text></box>
+        <box class="url"><text>Last: {pageTitle} — {pageURL}</text></box>
     {/if}
     <text> </text>
     <box class="hints"><text>Esc Close</text></box>

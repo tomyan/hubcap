@@ -5,13 +5,21 @@ import (
 )
 
 type OverlayProps struct {
-	Visible   *sumi.Signal[bool]
-	Connected *sumi.Signal[bool]
+	Visible        *sumi.Signal[bool]
+	Connected      *sumi.Signal[bool]
+	PageTitle      *sumi.Signal[string]
+	PageURL        *sumi.Signal[string]
+	TargetID       *sumi.Signal[string]
+	BrowserVersion *sumi.Signal[string]
 }
 
 func NewOverlay(props OverlayProps) *sumi.Component {
 	visible := props.Visible
 	connected := props.Connected
+	pageTitle := props.PageTitle
+	pageURL := props.PageURL
+	targetID := props.TargetID
+	browserVersion := props.BrowserVersion
 
 	root := &sumi.Input{
 		Kind:      sumi.KindBox,
@@ -25,33 +33,16 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 			var cs []*sumi.Input
 			if visible.Get() {
 				cs = append(cs, &sumi.Input{
-					Kind:      sumi.KindBox,
-					Padding:   sumi.ParsePadding("1 2"),
-					Border:    "single",
-					MinWidth:  56,
-					Position:  "fixed",
-					CursorCol: -1,
-					CursorRow: -1,
+					Kind:        sumi.KindBox,
+					Padding:     sumi.ParsePadding("1 2"),
+					Border:      "single",
+					BorderTitle: "\"Connection\"",
+					MinWidth:    56,
+					Position:    "fixed",
+					CursorCol:   -1,
+					CursorRow:   -1,
 					Children: func() []*sumi.Input {
 						var cs []*sumi.Input
-						cs = append(cs, &sumi.Input{
-							Kind:      sumi.KindBox,
-							CursorCol: -1,
-							CursorRow: -1,
-							Style: sumi.Style{
-								Bold: true,
-							},
-							Children: []*sumi.Input{
-								{
-									Kind:    sumi.KindText,
-									Content: "Connection",
-								},
-							},
-						})
-						cs = append(cs, &sumi.Input{
-							Kind:    sumi.KindText,
-							Content: " ",
-						})
 						if connected.Get() {
 							cs = append(cs, &sumi.Input{
 								Kind:      sumi.KindBox,
@@ -64,7 +55,35 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 								Children: []*sumi.Input{
 									{
 										Kind:    sumi.KindText,
-										Content: "● Connected",
+										Content: sumi.Sprintf("● Connected to %v", pageTitle.Get()),
+									},
+								},
+							})
+							cs = append(cs, &sumi.Input{
+								Kind:      sumi.KindBox,
+								CursorCol: -1,
+								CursorRow: -1,
+								Style: sumi.Style{
+									Dim: true,
+								},
+								Children: []*sumi.Input{
+									{
+										Kind:    sumi.KindText,
+										Content: sumi.Sprintf("%v", pageURL.Get()),
+									},
+								},
+							})
+							cs = append(cs, &sumi.Input{
+								Kind:      sumi.KindBox,
+								CursorCol: -1,
+								CursorRow: -1,
+								Style: sumi.Style{
+									Dim: true,
+								},
+								Children: []*sumi.Input{
+									{
+										Kind:    sumi.KindText,
+										Content: sumi.Sprintf("Target: %v  Browser: %v", targetID.Get(), browserVersion.Get()),
 									},
 								},
 							})
@@ -81,6 +100,20 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 									{
 										Kind:    sumi.KindText,
 										Content: "● Disconnected — reconnecting every 2s",
+									},
+								},
+							})
+							cs = append(cs, &sumi.Input{
+								Kind:      sumi.KindBox,
+								CursorCol: -1,
+								CursorRow: -1,
+								Style: sumi.Style{
+									Dim: true,
+								},
+								Children: []*sumi.Input{
+									{
+										Kind:    sumi.KindText,
+										Content: sumi.Sprintf("Last: %v — %v", pageTitle.Get(), pageURL.Get()),
 									},
 								},
 							})

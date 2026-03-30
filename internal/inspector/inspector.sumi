@@ -19,6 +19,10 @@ var prompt *sumi.Signal[string]
 var cursor *sumi.Signal[int]
 var connected *sumi.Signal[bool]
 var overlayVisible *sumi.Signal[bool]
+var pageTitle *sumi.Signal[string]
+var pageURL *sumi.Signal[string]
+var targetID *sumi.Signal[string]
+var browserVersion *sumi.Signal[string]
 </script>
 
 <box>
@@ -38,5 +42,5 @@ var overlayVisible *sumi.Signal[bool]
     <box class="panel">
         <console.Console entries={entries} prompt={prompt} cursor={cursor} />
     </box>
-    <Overlay visible={overlayVisible} connected={connected} />
+    <Overlay visible={overlayVisible} connected={connected} pageTitle={pageTitle} pageURL={pageURL} targetID={targetID} browserVersion={browserVersion} />
 </box>

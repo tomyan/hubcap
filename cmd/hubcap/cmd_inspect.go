@@ -20,14 +20,18 @@ type inspectSession struct {
 	port      int
 	targetCfg string // target selector from config
 
-	mu       sync.Mutex
-	client   *chrome.Client
-	targetID string
+	mu             sync.Mutex
+	client         *chrome.Client
+	activeTargetID string
 
 	// Signals updated on the main goroutine via app.Do.
-	connected *sumi.Signal[bool]
-	entries   *sumi.Signal[[]console.Entry]
-	app       *sumi.App
+	connected      *sumi.Signal[bool]
+	entries        *sumi.Signal[[]console.Entry]
+	pageTitle      *sumi.Signal[string]
+	pageURL        *sumi.Signal[string]
+	targetID       *sumi.Signal[string]
+	browserVersion *sumi.Signal[string]
+	app            *sumi.App
 
 	stopCapture func()
 }
@@ -50,15 +54,30 @@ func (s *inspectSession) connect(ctx context.Context) error {
 		return err
 	}
 
+	// Fetch page info for the overlay.
+	title, _ := client.GetTitle(ctx, target.ID)
+	url, _ := client.GetURL(ctx, target.ID)
+	version, _ := client.Version(ctx)
+	browser := ""
+	if version != nil {
+		browser = version.Browser
+	}
+
 	s.mu.Lock()
 	s.client = client
-	s.targetID = target.ID
+	s.activeTargetID = target.ID
 	s.stopCapture = stop
 	s.mu.Unlock()
 
-	// Update connected status on main goroutine.
+	// Update signals on main goroutine.
 	if s.app != nil {
-		s.app.Do(func() { s.connected.Set(true) })
+		s.app.Do(func() {
+			s.connected.Set(true)
+			s.pageTitle.Set(title)
+			s.pageURL.Set(url)
+			s.targetID.Set(target.ID)
+			s.browserVersion.Set(browser)
+		})
 	}
 
 	// Stream console messages until the channel closes (disconnect).
@@ -93,7 +112,7 @@ func (s *inspectSession) reconnectLoop(ctx context.Context) {
 func (s *inspectSession) eval(ctx context.Context, expr string) (*chrome.EvalResult, error) {
 	s.mu.Lock()
 	client := s.client
-	targetID := s.targetID
+	targetID := s.activeTargetID
 	s.mu.Unlock()
 	if client == nil {
 		return nil, fmt.Errorf("not connected")
@@ -144,7 +163,7 @@ func (s *inspectSession) close() {
 func (s *inspectSession) getTitle(ctx context.Context) string {
 	s.mu.Lock()
 	client := s.client
-	targetID := s.targetID
+	targetID := s.activeTargetID
 	s.mu.Unlock()
 	if client == nil {
 		return ""
@@ -163,13 +182,21 @@ func cmdInspect(cfg *Config, args []string) int {
 	cursor := sumi.New(0)
 	connected := sumi.New(false)
 	overlayVisible := sumi.New(false)
+	pageTitle := sumi.New("")
+	pageURL := sumi.New("")
+	targetID := sumi.New("")
+	browserVersion := sumi.New("")
 
 	sess := &inspectSession{
-		host:      cfg.Host,
-		port:      cfg.Port,
-		targetCfg: cfg.Target,
-		connected: connected,
-		entries:   entries,
+		host:           cfg.Host,
+		port:           cfg.Port,
+		targetCfg:      cfg.Target,
+		connected:      connected,
+		entries:        entries,
+		pageTitle:      pageTitle,
+		pageURL:        pageURL,
+		targetID:       targetID,
+		browserVersion: browserVersion,
 	}
 
 	// Initial connection.
@@ -190,6 +217,10 @@ func cmdInspect(cfg *Config, args []string) int {
 		Cursor:         cursor,
 		Connected:      connected,
 		OverlayVisible: overlayVisible,
+		PageTitle:      pageTitle,
+		PageURL:        pageURL,
+		TargetID:       targetID,
+		BrowserVersion: browserVersion,
 	})
 
 	var app *sumi.App

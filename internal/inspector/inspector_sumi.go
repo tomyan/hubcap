@@ -12,6 +12,10 @@ type InspectorProps struct {
 	Cursor         *sumi.Signal[int]
 	Connected      *sumi.Signal[bool]
 	OverlayVisible *sumi.Signal[bool]
+	PageTitle      *sumi.Signal[string]
+	PageURL        *sumi.Signal[string]
+	TargetID       *sumi.Signal[string]
+	BrowserVersion *sumi.Signal[string]
 }
 
 func NewInspector(props InspectorProps) *sumi.Component {
@@ -20,6 +24,10 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	cursor := props.Cursor
 	connected := props.Connected
 	overlayVisible := props.OverlayVisible
+	pageTitle := props.PageTitle
+	pageURL := props.PageURL
+	targetID := props.TargetID
+	browserVersion := props.BrowserVersion
 
 	console0 := console.NewConsole(console.ConsoleProps{
 		Entries: entries,
@@ -27,8 +35,12 @@ func NewInspector(props InspectorProps) *sumi.Component {
 		Cursor:  cursor,
 	})
 	overlay1 := NewOverlay(OverlayProps{
-		Visible:   overlayVisible,
-		Connected: connected,
+		Connected:      connected,
+		PageTitle:      pageTitle,
+		PageURL:        pageURL,
+		TargetID:       targetID,
+		BrowserVersion: browserVersion,
+		Visible:        overlayVisible,
 	})
 
 	box0 := &sumi.Input{
