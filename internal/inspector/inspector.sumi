@@ -5,9 +5,9 @@
 <style>
 .topbar { direction: row; border-bottom: single; dim: true; }
 .dot-ok { color: #50fa7b; bold: true; padding: 0 1; }
-.dot-ok:hover { color: white; }
+.dot-ok:hover { dim: true; }
 .dot-err { color: #ff5555; bold: true; padding: 0 1; }
-.dot-err:hover { color: white; }
+.dot-err:hover { dim: true; }
 .tabs { direction: row; }
 .tab { dim: true; padding: 0 1; }
 .tab:hover { color: white; }

@@ -21,6 +21,13 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 	targetID := props.TargetID
 	browserVersion := props.BrowserVersion
 
+	close := func() {
+		visible.Set(false)
+	}
+
+	noop := func() {
+	}
+
 	root := &sumi.Input{
 		Kind:      sumi.KindBox,
 		Direction: "column",
@@ -33,113 +40,122 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 			var cs []*sumi.Input
 			if visible.Get() {
 				cs = append(cs, &sumi.Input{
-					Kind:        sumi.KindBox,
-					Padding:     sumi.ParsePadding("1 2"),
-					Border:      "single",
-					BorderTitle: "\"Connection\"",
-					MinWidth:    56,
-					Position:    "fixed",
-					CursorCol:   -1,
-					CursorRow:   -1,
-					Children: func() []*sumi.Input {
-						var cs []*sumi.Input
-						if connected.Get() {
-							cs = append(cs, &sumi.Input{
-								Kind:      sumi.KindBox,
-								CursorCol: -1,
-								CursorRow: -1,
-								Style: sumi.Style{
-									FG:   sumi.Color{IsRGB: true, R: 80, G: 250, B: 123},
-									Bold: true,
-								},
-								Children: []*sumi.Input{
-									{
-										Kind:    sumi.KindText,
-										Content: sumi.Sprintf("● Connected to %v", pageTitle.Get()),
-									},
-								},
-							})
-							cs = append(cs, &sumi.Input{
-								Kind:      sumi.KindBox,
-								CursorCol: -1,
-								CursorRow: -1,
-								Style: sumi.Style{
-									Dim: true,
-								},
-								Children: []*sumi.Input{
-									{
-										Kind:    sumi.KindText,
-										Content: sumi.Sprintf("%v", pageURL.Get()),
-									},
-								},
-							})
-							cs = append(cs, &sumi.Input{
-								Kind:      sumi.KindBox,
-								CursorCol: -1,
-								CursorRow: -1,
-								Style: sumi.Style{
-									Dim: true,
-								},
-								Children: []*sumi.Input{
-									{
-										Kind:    sumi.KindText,
-										Content: sumi.Sprintf("Target: %v  Browser: %v", targetID.Get(), browserVersion.Get()),
-									},
-								},
-							})
-						} else {
-							cs = append(cs, &sumi.Input{
-								Kind:      sumi.KindBox,
-								CursorCol: -1,
-								CursorRow: -1,
-								Style: sumi.Style{
-									FG:   sumi.Color{IsRGB: true, R: 255, G: 85, B: 85},
-									Bold: true,
-								},
-								Children: []*sumi.Input{
-									{
-										Kind:    sumi.KindText,
-										Content: "● Disconnected — reconnecting every 2s",
-									},
-								},
-							})
-							cs = append(cs, &sumi.Input{
-								Kind:      sumi.KindBox,
-								CursorCol: -1,
-								CursorRow: -1,
-								Style: sumi.Style{
-									Dim: true,
-								},
-								Children: []*sumi.Input{
-									{
-										Kind:    sumi.KindText,
-										Content: sumi.Sprintf("Last: %v — %v", pageTitle.Get(), pageURL.Get()),
-									},
-								},
-							})
-						}
-						cs = append(cs, &sumi.Input{
-							Kind:    sumi.KindText,
-							Content: " ",
-						})
-						cs = append(cs, &sumi.Input{
-							Kind:      sumi.KindBox,
-							Padding:   sumi.ParsePadding("1 0 0 0"),
-							BorderTop: "single",
-							CursorCol: -1,
-							CursorRow: -1,
-							Style: sumi.Style{
-								Dim: true,
-							},
-							Children: []*sumi.Input{
-								{
+					Kind:      sumi.KindBox,
+					Position:  "fixed",
+					OnClick:   close,
+					CursorCol: -1,
+					CursorRow: -1,
+					Children: []*sumi.Input{
+						{
+							Kind:        sumi.KindBox,
+							Padding:     sumi.ParsePadding("1 2"),
+							Border:      "single",
+							BorderTitle: "\"Connection\"",
+							MinWidth:    56,
+							OnClick:     noop,
+							CursorCol:   -1,
+							CursorRow:   -1,
+							Children: func() []*sumi.Input {
+								var cs []*sumi.Input
+								if connected.Get() {
+									cs = append(cs, &sumi.Input{
+										Kind:      sumi.KindBox,
+										CursorCol: -1,
+										CursorRow: -1,
+										Style: sumi.Style{
+											FG:   sumi.Color{IsRGB: true, R: 80, G: 250, B: 123},
+											Bold: true,
+										},
+										Children: []*sumi.Input{
+											{
+												Kind:    sumi.KindText,
+												Content: sumi.Sprintf("● Connected to %v", pageTitle.Get()),
+											},
+										},
+									})
+									cs = append(cs, &sumi.Input{
+										Kind:      sumi.KindBox,
+										CursorCol: -1,
+										CursorRow: -1,
+										Style: sumi.Style{
+											Dim: true,
+										},
+										Children: []*sumi.Input{
+											{
+												Kind:    sumi.KindText,
+												Content: sumi.Sprintf("%v", pageURL.Get()),
+											},
+										},
+									})
+									cs = append(cs, &sumi.Input{
+										Kind:      sumi.KindBox,
+										CursorCol: -1,
+										CursorRow: -1,
+										Style: sumi.Style{
+											Dim: true,
+										},
+										Children: []*sumi.Input{
+											{
+												Kind:    sumi.KindText,
+												Content: sumi.Sprintf("Target: %v  Browser: %v", targetID.Get(), browserVersion.Get()),
+											},
+										},
+									})
+								} else {
+									cs = append(cs, &sumi.Input{
+										Kind:      sumi.KindBox,
+										CursorCol: -1,
+										CursorRow: -1,
+										Style: sumi.Style{
+											FG:   sumi.Color{IsRGB: true, R: 255, G: 85, B: 85},
+											Bold: true,
+										},
+										Children: []*sumi.Input{
+											{
+												Kind:    sumi.KindText,
+												Content: "● Disconnected — reconnecting every 2s",
+											},
+										},
+									})
+									cs = append(cs, &sumi.Input{
+										Kind:      sumi.KindBox,
+										CursorCol: -1,
+										CursorRow: -1,
+										Style: sumi.Style{
+											Dim: true,
+										},
+										Children: []*sumi.Input{
+											{
+												Kind:    sumi.KindText,
+												Content: sumi.Sprintf("Last: %v — %v", pageTitle.Get(), pageURL.Get()),
+											},
+										},
+									})
+								}
+								cs = append(cs, &sumi.Input{
 									Kind:    sumi.KindText,
-									Content: "Esc Close",
-								},
-							},
-						})
-						return cs
-					}(),
+									Content: " ",
+								})
+								cs = append(cs, &sumi.Input{
+									Kind:      sumi.KindBox,
+									Padding:   sumi.ParsePadding("1 0 0 0"),
+									BorderTop: "single",
+									CursorCol: -1,
+									CursorRow: -1,
+									Style: sumi.Style{
+										Dim: true,
+									},
+									Children: []*sumi.Input{
+										{
+											Kind:    sumi.KindText,
+											Content: "Esc Close",
+										},
+									},
+								})
+								return cs
+							}(),
+						},
+					},
 				})
 			}
 			return cs

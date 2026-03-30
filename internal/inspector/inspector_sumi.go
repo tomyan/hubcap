@@ -34,17 +34,17 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	}
 
 	console0 := console.NewConsole(console.ConsoleProps{
-		Cursor:  cursor,
 		Entries: entries,
 		Prompt:  prompt,
+		Cursor:  cursor,
 	})
 	overlay1 := NewOverlay(OverlayProps{
+		TargetID:       targetID,
+		BrowserVersion: browserVersion,
 		Visible:        overlayVisible,
 		Connected:      connected,
 		PageTitle:      pageTitle,
 		PageURL:        pageURL,
-		TargetID:       targetID,
-		BrowserVersion: browserVersion,
 	})
 
 	box0 := &sumi.Input{
@@ -99,7 +99,7 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Bold: true,
 					},
 					HoverStyle: sumi.Style{
-						FG: sumi.Color{Name: "white"},
+						Dim: true,
 					},
 					Children: []*sumi.Input{
 						{
@@ -120,7 +120,7 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Bold: true,
 					},
 					HoverStyle: sumi.Style{
-						FG: sumi.Color{Name: "white"},
+						Dim: true,
 					},
 					Children: []*sumi.Input{
 						{
