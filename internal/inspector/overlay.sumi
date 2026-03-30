@@ -9,6 +9,8 @@
 </style>
 
 <script>
+termW := sumi.Env[int]("width")
+termH := sumi.Env[int]("height")
 var visible *sumi.Signal[bool]
 var connected *sumi.Signal[bool]
 var pageTitle *sumi.Signal[string]
@@ -25,7 +27,7 @@ func noop() {
 </script>
 
 {if visible.Get()}
-<box class="backdrop" onclick={close}>
+<box class="backdrop" width={termW.Get()} height={termH.Get()} onclick={close}>
     <box class="overlay" onclick={noop}>
         {if connected.Get()}
             <box class="status-ok"><text>● Connected to {pageTitle}</text></box>

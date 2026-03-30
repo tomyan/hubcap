@@ -21,6 +21,9 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 	targetID := props.TargetID
 	browserVersion := props.BrowserVersion
 
+	termW := sumi.Env[int]("width")
+	termH := sumi.Env[int]("height")
+
 	close := func() {
 		visible.Set(false)
 	}
@@ -40,11 +43,13 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 			var cs []*sumi.Input
 			if visible.Get() {
 				cs = append(cs, &sumi.Input{
-					Kind:      sumi.KindBox,
-					Position:  "fixed",
-					OnClick:   close,
-					CursorCol: -1,
-					CursorRow: -1,
+					Kind:        sumi.KindBox,
+					FixedWidth:  termW.Get(),
+					FixedHeight: termH.Get(),
+					Position:    "fixed",
+					OnClick:     close,
+					CursorCol:   -1,
+					CursorRow:   -1,
 					Children: []*sumi.Input{
 						{
 							Kind:        sumi.KindBox,
