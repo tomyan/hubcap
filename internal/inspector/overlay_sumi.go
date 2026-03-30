@@ -225,6 +225,8 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 											if i == selectedIdx.Get() {
 												cs = append(cs, &sumi.Input{
 													Kind:      sumi.KindBox,
+													Direction: "row",
+													Gap:       2,
 													Padding:   sumi.ParsePadding("0 1"),
 													CursorCol: -1,
 													CursorRow: -1,
@@ -237,14 +239,38 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 													},
 													Children: []*sumi.Input{
 														{
-															Kind:    sumi.KindText,
-															Content: sumi.Sprintf("→ %v — %v", tab.Title, tab.URL),
+															Kind:      sumi.KindBox,
+															MinWidth:  24,
+															CursorCol: -1,
+															CursorRow: -1,
+															Children: []*sumi.Input{
+																{
+																	Kind:    sumi.KindText,
+																	Content: sumi.Sprintf("→ %v", tab.Title),
+																},
+															},
+														},
+														{
+															Kind:      sumi.KindBox,
+															CursorCol: -1,
+															CursorRow: -1,
+															Style: sumi.Style{
+																Dim: true,
+															},
+															Children: []*sumi.Input{
+																{
+																	Kind:    sumi.KindText,
+																	Content: sumi.Sprintf("%v", tab.URL),
+																},
+															},
 														},
 													},
 												})
 											} else {
 												cs = append(cs, &sumi.Input{
 													Kind:      sumi.KindBox,
+													Direction: "row",
+													Gap:       2,
 													Padding:   sumi.ParsePadding("0 1"),
 													CursorCol: -1,
 													CursorRow: -1,
@@ -253,8 +279,30 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 													},
 													Children: []*sumi.Input{
 														{
-															Kind:    sumi.KindText,
-															Content: sumi.Sprintf("  %v — %v", tab.Title, tab.URL),
+															Kind:      sumi.KindBox,
+															MinWidth:  24,
+															CursorCol: -1,
+															CursorRow: -1,
+															Children: []*sumi.Input{
+																{
+																	Kind:    sumi.KindText,
+																	Content: sumi.Sprintf("  %v", tab.Title),
+																},
+															},
+														},
+														{
+															Kind:      sumi.KindBox,
+															CursorCol: -1,
+															CursorRow: -1,
+															Style: sumi.Style{
+																Dim: true,
+															},
+															Children: []*sumi.Input{
+																{
+																	Kind:    sumi.KindText,
+																	Content: sumi.Sprintf("%v", tab.URL),
+																},
+															},
 														},
 													},
 												})

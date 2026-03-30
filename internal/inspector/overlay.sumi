@@ -14,10 +14,11 @@
 .filter-prompt { bold: true; }
 .filter-text { color: #f1fa8c; }
 .tab-list { overflow: auto; }
-.tab { padding: 0 1; }
+.tab { padding: 0 1; direction: row; gap: 2; }
 .tab:hover { color: white; }
-.tab-current { color: #50fa7b; }
 .tab-selected { bold: true; color: white; }
+.tab-title { min-width: 24; }
+.tab-url { dim: true; }
 .hints { dim: true; border-top: single; padding: 1 0 0 0; direction: row; gap: 2; }
 </style>
 
@@ -75,9 +76,15 @@ func noop() {
         <box class="tab-list">
             {for i, tab := range getFilteredTabs() key=tab.ID}
                 {if i == selectedIdx.Get()}
-                    <box class="tab tab-selected"><text>→ {tab.Title} — {tab.URL}</text></box>
+                    <box class="tab tab-selected">
+                        <box class="tab-title"><text>→ {tab.Title}</text></box>
+                        <box class="tab-url"><text>{tab.URL}</text></box>
+                    </box>
                 {else}
-                    <box class="tab"><text>  {tab.Title} — {tab.URL}</text></box>
+                    <box class="tab">
+                        <box class="tab-title"><text>  {tab.Title}</text></box>
+                        <box class="tab-url"><text>{tab.URL}</text></box>
+                    </box>
                 {/if}
             {/for}
         </box>

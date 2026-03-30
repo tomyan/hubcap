@@ -46,14 +46,14 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	})
 	overlay1 := NewOverlay(OverlayProps{
 		Visible:        overlayVisible,
-		Connected:      connected,
-		PageTitle:      pageTitle,
-		PageURL:        pageURL,
 		TargetID:       targetID,
 		BrowserVersion: browserVersion,
 		Tabs:           tabs,
-		SelectedIdx:    selectedIdx,
 		Filter:         filter,
+		Connected:      connected,
+		PageTitle:      pageTitle,
+		PageURL:        pageURL,
+		SelectedIdx:    selectedIdx,
 	})
 
 	box0 := &sumi.Input{
