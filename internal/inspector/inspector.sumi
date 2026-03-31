@@ -4,10 +4,10 @@
 
 <style>
 .topbar { direction: row; border-bottom: single; dim: true; }
-.dot-ok { color: #50fa7b; bold: true; padding: 0 1; }
-.dot-ok:hover { color: #2d8a4e; bold: true; }
-.dot-err { color: #ff5555; bold: true; padding: 0 1; }
-.dot-err:hover { color: #aa3333; bold: true; }
+.dot-ok { color: #50fa7b; bold: true; padding: 0 1; transition: color 150ms ease-out; }
+.dot-ok:hover { color: #3dcc64; bold: true; }
+.dot-err { color: #ff5555; bold: true; padding: 0 1; transition: color 150ms ease-out; }
+.dot-err:hover { color: #dd4444; bold: true; }
 .tabs { direction: row; }
 .tab { dim: true; padding: 0 1; }
 .tab:hover { color: white; }

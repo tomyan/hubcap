@@ -44,22 +44,22 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	}
 
 	console0 := console.NewConsole(console.ConsoleProps{
+		PromptSpans: promptSpans,
+		OnToggle:    onToggle,
 		Entries:     entries,
 		Prompt:      prompt,
 		Cursor:      cursor,
-		PromptSpans: promptSpans,
-		OnToggle:    onToggle,
 	})
 	overlay1 := NewOverlay(OverlayProps{
-		SelectedIdx:    selectedIdx,
 		Filter:         filter,
+		Visible:        overlayVisible,
 		Connected:      connected,
 		PageTitle:      pageTitle,
-		BrowserVersion: browserVersion,
-		Visible:        overlayVisible,
+		Tabs:           tabs,
+		SelectedIdx:    selectedIdx,
 		PageURL:        pageURL,
 		TargetID:       targetID,
-		Tabs:           tabs,
+		BrowserVersion: browserVersion,
 	})
 
 	box0 := &sumi.Input{
@@ -114,8 +114,11 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Bold: true,
 					},
 					HoverStyle: sumi.Style{
-						FG:   sumi.Color{IsRGB: true, R: 45, G: 138, B: 78},
+						FG:   sumi.Color{IsRGB: true, R: 61, G: 204, B: 100},
 						Bold: true,
+					},
+					Transitions: []sumi.TransitionSpec{
+						{Property: "color", DurationMs: 150, DelayMs: 0, TimingFunction: sumi.TimingFunction{Name: "ease-out", X1: 0, Y1: 0, X2: 0.58, Y2: 1}},
 					},
 					Children: []*sumi.Input{
 						{
@@ -136,8 +139,11 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Bold: true,
 					},
 					HoverStyle: sumi.Style{
-						FG:   sumi.Color{IsRGB: true, R: 170, G: 51, B: 51},
+						FG:   sumi.Color{IsRGB: true, R: 221, G: 68, B: 68},
 						Bold: true,
+					},
+					Transitions: []sumi.TransitionSpec{
+						{Property: "color", DurationMs: 150, DelayMs: 0, TimingFunction: sumi.TimingFunction{Name: "ease-out", X1: 0, Y1: 0, X2: 0.58, Y2: 1}},
 					},
 					Children: []*sumi.Input{
 						{
