@@ -10,6 +10,8 @@ type InspectorProps struct {
 	Entries        *sumi.Signal[[]console.Entry]
 	Prompt         *sumi.Signal[string]
 	Cursor         *sumi.Signal[int]
+	PromptSpans    *sumi.Signal[[]console.Span]
+	OnToggle       func(string)
 	Connected      *sumi.Signal[bool]
 	OverlayVisible *sumi.Signal[bool]
 	PageTitle      *sumi.Signal[string]
@@ -25,6 +27,8 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	entries := props.Entries
 	prompt := props.Prompt
 	cursor := props.Cursor
+	promptSpans := props.PromptSpans
+	onToggle := props.OnToggle
 	connected := props.Connected
 	overlayVisible := props.OverlayVisible
 	pageTitle := props.PageTitle
@@ -40,20 +44,22 @@ func NewInspector(props InspectorProps) *sumi.Component {
 	}
 
 	console0 := console.NewConsole(console.ConsoleProps{
-		Entries: entries,
-		Prompt:  prompt,
-		Cursor:  cursor,
+		Entries:     entries,
+		Prompt:      prompt,
+		Cursor:      cursor,
+		PromptSpans: promptSpans,
+		OnToggle:    onToggle,
 	})
 	overlay1 := NewOverlay(OverlayProps{
-		Visible:        overlayVisible,
-		TargetID:       targetID,
-		BrowserVersion: browserVersion,
-		Tabs:           tabs,
+		SelectedIdx:    selectedIdx,
 		Filter:         filter,
 		Connected:      connected,
 		PageTitle:      pageTitle,
+		BrowserVersion: browserVersion,
+		Visible:        overlayVisible,
 		PageURL:        pageURL,
-		SelectedIdx:    selectedIdx,
+		TargetID:       targetID,
+		Tabs:           tabs,
 	})
 
 	box0 := &sumi.Input{
@@ -108,7 +114,8 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Bold: true,
 					},
 					HoverStyle: sumi.Style{
-						Dim: true,
+						FG:   sumi.Color{IsRGB: true, R: 45, G: 138, B: 78},
+						Bold: true,
 					},
 					Children: []*sumi.Input{
 						{
@@ -129,7 +136,8 @@ func NewInspector(props InspectorProps) *sumi.Component {
 						Bold: true,
 					},
 					HoverStyle: sumi.Style{
-						Dim: true,
+						FG:   sumi.Color{IsRGB: true, R: 170, G: 51, B: 51},
+						Bold: true,
 					},
 					Children: []*sumi.Input{
 						{

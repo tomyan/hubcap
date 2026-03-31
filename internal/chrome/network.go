@@ -65,31 +65,26 @@ func (c *Client) CaptureConsole(ctx context.Context, targetID string) (<-chan Co
 				if !ok {
 					return
 				}
-				// Parse the event
+				// Parse the event with full RemoteObject args.
 				var event struct {
-					Type string `json:"type"`
-					Args []struct {
-						Type  string      `json:"type"`
-						Value interface{} `json:"value"`
-					} `json:"args"`
+					Type string         `json:"type"`
+					Args []RemoteObject `json:"args"`
 				}
 				if err := json.Unmarshal(params, &event); err != nil {
 					continue
 				}
 
-				// Build message text from args
+				// Build text summary from args.
 				var text string
 				for i, arg := range event.Args {
 					if i > 0 {
 						text += " "
 					}
-					if arg.Value != nil {
-						text += fmt.Sprintf("%v", arg.Value)
-					}
+					text += formatRemoteObject(&arg)
 				}
 
 				select {
-				case output <- ConsoleMessage{Type: event.Type, Text: text}:
+				case output <- ConsoleMessage{Type: event.Type, Text: text, Args: event.Args}:
 				default:
 					// Drop if channel is full
 				}

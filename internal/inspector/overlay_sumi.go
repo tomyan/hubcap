@@ -46,6 +46,14 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 		return filtered
 	}
 
+	truncate := func(s string, max int) string {
+		runes := []rune(s)
+		if len(runes) <= max {
+			return s
+		}
+		return string(runes[:max-1]) + "…"
+	}
+
 	close := func() {
 		visible.Set(false)
 	}
@@ -260,7 +268,7 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 															Children: []*sumi.Input{
 																{
 																	Kind:    sumi.KindText,
-																	Content: sumi.Sprintf("%v", tab.URL),
+																	Content: sumi.Sprintf("%v", truncate(tab.URL, 36)),
 																},
 															},
 														},
@@ -300,7 +308,7 @@ func NewOverlay(props OverlayProps) *sumi.Component {
 															Children: []*sumi.Input{
 																{
 																	Kind:    sumi.KindText,
-																	Content: sumi.Sprintf("%v", tab.URL),
+																	Content: sumi.Sprintf("%v", truncate(tab.URL, 36)),
 																},
 															},
 														},

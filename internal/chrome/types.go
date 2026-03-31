@@ -114,8 +114,58 @@ type ExceptionInfo struct {
 
 // ConsoleMessage represents a console message from the browser.
 type ConsoleMessage struct {
-	Type string `json:"type"` // "log", "warn", "error", "info", "debug"
-	Text string `json:"text"`
+	Type string        `json:"type"` // "log", "warn", "error", "info", "debug"
+	Text string        `json:"text"`
+	Args []RemoteObject `json:"args,omitempty"` // rich argument data when available
+}
+
+// --- Runtime RemoteObject ---
+
+// RemoteObject represents a JavaScript value with optional remote reference.
+type RemoteObject struct {
+	Type                string          `json:"type"`                          // "object", "string", "number", "boolean", "undefined", "function", "symbol", "bigint"
+	Subtype             string          `json:"subtype,omitempty"`             // "array", "null", "date", "regexp", "map", "set", "promise", "error", etc.
+	ClassName           string          `json:"className,omitempty"`           // constructor name
+	Description         string          `json:"description,omitempty"`         // string representation
+	ObjectID            string          `json:"objectId,omitempty"`            // handle for getProperties (empty for primitives)
+	Value               interface{}     `json:"value,omitempty"`               // primitive value
+	UnserializableValue string          `json:"unserializableValue,omitempty"` // Infinity, -0, NaN, -Infinity, bigint literals
+	Preview             *ObjectPreview  `json:"preview,omitempty"`             // shallow property snapshot
+}
+
+// ObjectPreview is a snapshot of an object's properties taken at log time.
+type ObjectPreview struct {
+	Type       string             `json:"type"`
+	Subtype    string             `json:"subtype,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Properties []PropertyPreview  `json:"properties"`
+	Overflow   bool               `json:"overflow"` // true if truncated
+	Entries    []EntryPreview     `json:"entries,omitempty"` // for Map/Set
+}
+
+// PropertyPreview is a single property in an object preview.
+type PropertyPreview struct {
+	Name     string         `json:"name"`
+	Type     string         `json:"type"`
+	Value    string         `json:"value,omitempty"`
+	Subtype  string         `json:"subtype,omitempty"`
+	ValuePreview *ObjectPreview `json:"valuePreview,omitempty"` // nested preview for object values
+}
+
+// EntryPreview is a Map/Set entry in a preview.
+type EntryPreview struct {
+	Key   *ObjectPreview `json:"key,omitempty"`
+	Value ObjectPreview  `json:"value"`
+}
+
+// PropertyDescriptor describes a property returned by Runtime.getProperties.
+type PropertyDescriptor struct {
+	Name         string        `json:"name"`
+	Value        *RemoteObject `json:"value,omitempty"`
+	Writable     bool          `json:"writable,omitempty"`
+	Configurable bool          `json:"configurable,omitempty"`
+	Enumerable   bool          `json:"enumerable,omitempty"`
+	IsOwn        bool          `json:"isOwn,omitempty"`
 }
 
 // --- Network ---

@@ -5,9 +5,9 @@
 <style>
 .topbar { direction: row; border-bottom: single; dim: true; }
 .dot-ok { color: #50fa7b; bold: true; padding: 0 1; }
-.dot-ok:hover { dim: true; }
+.dot-ok:hover { color: #2d8a4e; bold: true; }
 .dot-err { color: #ff5555; bold: true; padding: 0 1; }
-.dot-err:hover { dim: true; }
+.dot-err:hover { color: #aa3333; bold: true; }
 .tabs { direction: row; }
 .tab { dim: true; padding: 0 1; }
 .tab:hover { color: white; }
@@ -19,6 +19,8 @@
 var entries *sumi.Signal[[]console.Entry]
 var prompt *sumi.Signal[string]
 var cursor *sumi.Signal[int]
+var promptSpans *sumi.Signal[[]console.Span]
+var onToggle func(string)
 var connected *sumi.Signal[bool]
 var overlayVisible *sumi.Signal[bool]
 var pageTitle *sumi.Signal[string]
@@ -49,7 +51,7 @@ func toggleOverlay() {
         </box>
     </box>
     <box class="panel">
-        <console.Console entries={entries} prompt={prompt} cursor={cursor} />
+        <console.Console entries={entries} prompt={prompt} cursor={cursor} promptSpans={promptSpans} onToggle={onToggle} />
     </box>
     <Overlay visible={overlayVisible} connected={connected} pageTitle={pageTitle} pageURL={pageURL} targetID={targetID} browserVersion={browserVersion} tabs={tabs} selectedIdx={selectedIdx} filter={filter} />
 </box>

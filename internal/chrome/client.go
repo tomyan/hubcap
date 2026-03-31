@@ -124,6 +124,11 @@ func (c *Client) Close() error {
 	return err
 }
 
+// AttachToTarget returns (or caches) a CDP session for the given target.
+func (c *Client) AttachToTarget(ctx context.Context, targetID string) (string, error) {
+	return c.attachToTarget(ctx, targetID)
+}
+
 func (c *Client) attachToTarget(ctx context.Context, targetID string) (string, error) {
 	// Check cache first
 	c.sessionsMu.Lock()

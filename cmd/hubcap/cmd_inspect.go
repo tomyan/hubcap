@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/tomyan/hubcap/internal/chrome"
+	"github.com/tomyan/hubcap/internal/highlight"
 	"github.com/tomyan/hubcap/internal/inspector"
 	"github.com/tomyan/sumi/runtime/edit"
 	sumi "github.com/tomyan/sumi/runtime/prelude"
@@ -89,20 +89,7 @@ func (s *inspectSession) connect(ctx context.Context) error {
 	go s.refreshTabs(ctx)
 
 	// Stream console messages until the channel closes (disconnect).
-	go func() {
-		for msg := range messages {
-			text, level := msg.Text, msg.Type
-			if s.app != nil {
-				s.app.Do(func() {
-					s.entries.Update(func(cur []console.Entry) []console.Entry {
-						return append(cur, console.Entry{Text: text, Level: level})
-					})
-				})
-			}
-		}
-		// Channel closed — connection lost.
-		s.handleDisconnect(ctx)
-	}()
+	go s.streamMessages(ctx, messages)
 
 	return nil
 }
@@ -200,19 +187,117 @@ func (s *inspectSession) switchTarget(ctx context.Context, newTargetID string) {
 	}
 
 	// Stream console messages from new target.
-	go func() {
-		for msg := range messages {
-			text, level := msg.Text, msg.Type
-			if s.app != nil {
-				s.app.Do(func() {
-					s.entries.Update(func(cur []console.Entry) []console.Entry {
-						return append(cur, console.Entry{Text: text, Level: level})
-					})
+	go s.streamMessages(ctx, messages)
+}
+
+// toggleObject expands or collapses an object by its remote objectID.
+func (s *inspectSession) toggleObject(ctx context.Context, entries *sumi.Signal[[]console.Entry], objectID string) {
+	// Check if already expanded — if so, collapse.
+	if isExpandedByID(entries.Get(), objectID) {
+		if s.app != nil {
+			s.app.Do(func() {
+				entries.Update(func(cur []console.Entry) []console.Entry {
+					toggleArgByID(cur, objectID, false, nil)
+					return cur
 				})
+			})
+		}
+		return
+	}
+
+	// Fetch properties.
+	s.mu.Lock()
+	client := s.client
+	targetID := s.activeTargetID
+	s.mu.Unlock()
+	if client == nil {
+		return
+	}
+
+	sessionID, err := client.AttachToTarget(ctx, targetID)
+	if err != nil {
+		return
+	}
+
+	props, err := client.GetProperties(ctx, sessionID, objectID, true)
+	if err != nil {
+		return
+	}
+
+	cProps := make([]console.Property, 0, len(props))
+	for _, p := range props {
+		if p.Value == nil {
+			continue
+		}
+		cProps = append(cProps, console.Property{
+			Name: p.Name,
+			Value: console.Arg{
+				Text:     chrome.FormatRemoteObject(p.Value),
+				Kind:     remoteArgKind(p.Value),
+				ObjectID: p.Value.ObjectID,
+			},
+		})
+	}
+
+	if s.app != nil {
+		s.app.Do(func() {
+			entries.Update(func(cur []console.Entry) []console.Entry {
+				toggleArgByID(cur, objectID, true, cProps)
+				return cur
+			})
+		})
+	}
+}
+
+// isExpandedByID checks if an arg with the given objectID is currently expanded.
+func isExpandedByID(entries []console.Entry, objectID string) bool {
+	for i := range entries {
+		for j := range entries[i].Args {
+			if found, expanded := findArgByID(&entries[i].Args[j], objectID); found {
+				return expanded
 			}
 		}
-		s.handleDisconnect(ctx)
-	}()
+	}
+	return false
+}
+
+func findArgByID(arg *console.Arg, objectID string) (found, expanded bool) {
+	if arg.ObjectID == objectID {
+		return true, arg.Expanded
+	}
+	for i := range arg.Properties {
+		if f, e := findArgByID(&arg.Properties[i].Value, objectID); f {
+			return f, e
+		}
+	}
+	return false, false
+}
+
+// toggleArgByID walks the entry tree and sets expanded + properties on the matching arg.
+func toggleArgByID(entries []console.Entry, objectID string, expand bool, props []console.Property) {
+	for i := range entries {
+		for j := range entries[i].Args {
+			if setArgByID(&entries[i].Args[j], objectID, expand, props) {
+				return
+			}
+		}
+	}
+}
+
+func setArgByID(arg *console.Arg, objectID string, expand bool, props []console.Property) bool {
+	if arg.ObjectID == objectID {
+		arg.Expanded = expand
+		if props != nil {
+			arg.Properties = props
+		}
+		return true
+	}
+	for i := range arg.Properties {
+		if setArgByID(&arg.Properties[i].Value, objectID, expand, props) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *inspectSession) eval(ctx context.Context, expr string) (*chrome.EvalResult, error) {
@@ -225,7 +310,21 @@ func (s *inspectSession) eval(ctx context.Context, expr string) (*chrome.EvalRes
 	}
 	result, err := client.Eval(ctx, targetID, expr)
 	if err != nil {
-		// Session errors mean the target is gone — trigger disconnect.
+		s.handleDisconnect(ctx)
+	}
+	return result, err
+}
+
+func (s *inspectSession) evalRich(ctx context.Context, expr string) (*chrome.RemoteObject, error) {
+	s.mu.Lock()
+	client := s.client
+	targetID := s.activeTargetID
+	s.mu.Unlock()
+	if client == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	result, err := client.EvalRich(ctx, targetID, expr)
+	if err != nil {
 		s.handleDisconnect(ctx)
 	}
 	return result, err
@@ -281,6 +380,61 @@ func (s *inspectSession) getTitle(ctx context.Context) string {
 	return title
 }
 
+func (s *inspectSession) streamMessages(ctx context.Context, messages <-chan chrome.ConsoleMessage) {
+	for msg := range messages {
+		text, level := msg.Text, msg.Type
+		args := toConsoleArgs(msg.Args)
+		if s.app != nil {
+			s.app.Do(func() {
+				s.entries.Update(func(cur []console.Entry) []console.Entry {
+					return append(cur, console.Entry{Text: text, Level: level, Args: args})
+				})
+			})
+		}
+	}
+	s.handleDisconnect(ctx)
+}
+
+func toConsoleArgs(remoteArgs []chrome.RemoteObject) []console.Arg {
+	if len(remoteArgs) == 0 {
+		return nil
+	}
+	args := make([]console.Arg, len(remoteArgs))
+	for i, r := range remoteArgs {
+		args[i] = console.Arg{
+			Text:     chrome.FormatRemoteObject(&r),
+			Kind:     remoteArgKind(&r),
+			ObjectID: r.ObjectID,
+		}
+	}
+	return args
+}
+
+func remoteArgKind(obj *chrome.RemoteObject) string {
+	switch obj.Type {
+	case "string":
+		return "string"
+	case "number":
+		return "number"
+	case "boolean":
+		return "boolean"
+	case "undefined":
+		return "undefined"
+	case "function":
+		return "function"
+	case "object":
+		if obj.Subtype == "null" {
+			return "null"
+		}
+		if obj.Subtype == "array" {
+			return "array"
+		}
+		return "object"
+	default:
+		return "plain"
+	}
+}
+
 func filteredTabs(allTabs []inspector.TabInfo, filter string) []inspector.TabInfo {
 	if filter == "" {
 		return allTabs
@@ -303,6 +457,7 @@ func cmdInspect(cfg *Config, args []string) int {
 	ed := &edit.State{}
 	prompt := sumi.New("")
 	cursor := sumi.New(0)
+	promptSpans := sumi.New([]console.Span{})
 	connected := sumi.New(false)
 	overlayVisible := sumi.New(false)
 	filter := sumi.New("")
@@ -338,6 +493,16 @@ func cmdInspect(cfg *Config, args []string) int {
 	syncPrompt := func() {
 		prompt.Set(ed.Value)
 		cursor.Set(ed.Cursor)
+		spans := highlight.Highlight(ed.Value)
+		cs := make([]console.Span, len(spans))
+		for i, s := range spans {
+			cs[i] = console.Span{Text: s.Text, Kind: s.Kind}
+		}
+		promptSpans.Set(cs)
+	}
+
+	onToggle := func(objectID string) {
+		go sess.toggleObject(ctx, entries, objectID)
 	}
 
 	comp := inspector.NewInspector(inspector.InspectorProps{
@@ -353,6 +518,8 @@ func cmdInspect(cfg *Config, args []string) int {
 		Tabs:           tabs,
 		SelectedIdx:    selectedIdx,
 		Filter:         filter,
+		PromptSpans:    promptSpans,
+		OnToggle:       onToggle,
 	})
 
 	var app *sumi.App
@@ -567,14 +734,46 @@ func cmdInspect(cfg *Config, args []string) int {
 }
 
 func evalAndAppendSession(sess *inspectSession, ctx context.Context, expr string, entries *sumi.Signal[[]console.Entry], app *sumi.App) {
-	appendEntry(entries, expr, "submitted", app)
-	result, err := sess.eval(ctx, expr)
+	spans := highlight.Highlight(expr)
+	cs := make([]console.Span, len(spans))
+	for i, s := range spans {
+		cs[i] = console.Span{Text: s.Text, Kind: s.Kind}
+	}
+	appendHighlightedEntry(entries, expr, cs, app)
+
+	obj, err := sess.evalRich(ctx, expr)
 	time.Sleep(50 * time.Millisecond)
 	if err != nil {
 		appendEntry(entries, "Error: "+err.Error(), "error", app)
 		return
 	}
-	appendEntry(entries, formatEvalResult(result), "result", app)
+
+	arg := console.Arg{
+		Text:     chrome.FormatRemoteObject(obj),
+		Kind:     remoteArgKind(obj),
+		ObjectID: obj.ObjectID,
+	}
+	if app != nil {
+		app.Do(func() {
+			entries.Update(func(cur []console.Entry) []console.Entry {
+				return append(cur, console.Entry{
+					Text:  arg.Text,
+					Level: "result",
+					Args:  []console.Arg{arg},
+				})
+			})
+		})
+	}
+}
+
+func appendHighlightedEntry(entries *sumi.Signal[[]console.Entry], text string, spans []console.Span, app *sumi.App) {
+	if app != nil {
+		app.Do(func() {
+			entries.Update(func(cur []console.Entry) []console.Entry {
+				return append(cur, console.Entry{Text: text, Level: "submitted", Spans: spans})
+			})
+		})
+	}
 }
 
 func appendEntry(entries *sumi.Signal[[]console.Entry], text, level string, app *sumi.App) {
@@ -587,21 +786,3 @@ func appendEntry(entries *sumi.Signal[[]console.Entry], text, level string, app 
 	}
 }
 
-func formatEvalResult(result *chrome.EvalResult) string {
-	if result == nil {
-		return "undefined"
-	}
-	switch result.Type {
-	case "undefined":
-		return "undefined"
-	case "string":
-		if s, ok := result.Value.(string); ok {
-			return fmt.Sprintf("%q", s)
-		}
-	}
-	b, err := json.Marshal(result.Value)
-	if err != nil {
-		return fmt.Sprintf("%v", result.Value)
-	}
-	return string(b)
-}

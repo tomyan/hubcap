@@ -495,6 +495,46 @@ func (c *Client) Eval(ctx context.Context, targetID string, expression string) (
 	}, nil
 }
 
+// EvalRich evaluates a JavaScript expression and returns the full RemoteObject
+// with preview data, suitable for interactive object exploration.
+func (c *Client) EvalRich(ctx context.Context, targetID string, expression string) (*RemoteObject, error) {
+	sessionID, err := c.attachToTarget(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = c.CallSession(ctx, sessionID, "Runtime.enable", nil)
+	if err != nil {
+		return nil, fmt.Errorf("enabling Runtime domain: %w", err)
+	}
+
+	evalResult, err := c.CallSession(ctx, sessionID, "Runtime.evaluate", map[string]interface{}{
+		"expression":      expression,
+		"generatePreview": true,
+		"awaitPromise":    true,
+		"replMode":        true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluating expression: %w", err)
+	}
+
+	var evalResp struct {
+		Result           RemoteObject `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails"`
+	}
+	if err := json.Unmarshal(evalResult, &evalResp); err != nil {
+		return nil, fmt.Errorf("parsing eval response: %w", err)
+	}
+
+	if evalResp.ExceptionDetails != nil {
+		return nil, fmt.Errorf("JS exception: %s", evalResp.ExceptionDetails.Text)
+	}
+
+	return &evalResp.Result, nil
+}
+
 // EvalInFrame evaluates JavaScript in a specific frame.
 func (c *Client) EvalInFrame(ctx context.Context, targetID string, frameID string, expression string) (*EvalResult, error) {
 	sessionID, err := c.attachToTarget(ctx, targetID)

@@ -49,6 +49,14 @@ func getFilteredTabs() []TabInfo {
 	return filtered
 }
 
+func truncate(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max-1]) + "…"
+}
+
 func close() {
 	visible.Set(false)
 }
@@ -78,12 +86,12 @@ func noop() {
                 {if i == selectedIdx.Get()}
                     <box class="tab tab-selected">
                         <box class="tab-title"><text>→ {tab.Title}</text></box>
-                        <box class="tab-url"><text>{tab.URL}</text></box>
+                        <box class="tab-url"><text>{truncate(tab.URL, 36)}</text></box>
                     </box>
                 {else}
                     <box class="tab">
                         <box class="tab-title"><text>  {tab.Title}</text></box>
-                        <box class="tab-url"><text>{tab.URL}</text></box>
+                        <box class="tab-url"><text>{truncate(tab.URL, 36)}</text></box>
                     </box>
                 {/if}
             {/for}
