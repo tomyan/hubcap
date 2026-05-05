@@ -49,7 +49,7 @@ func cmdGoto(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	wait := fs.Bool("wait", false, "Wait for page load to complete")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -93,7 +93,7 @@ func cmdReload(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	ignoreCache := fs.Bool("bypass-cache", false, "Bypass browser cache")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -180,7 +180,7 @@ func cmdNew(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	wait := fs.Bool("wait", false, "Wait for page load to complete")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

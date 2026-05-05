@@ -25,6 +25,10 @@ func cmdHelp(cfg *Config, args []string) int {
 	}
 
 	name := args[0]
+	// "hubcap help --help" / "-h" / "help" → docs for the help command itself.
+	if helpTokens[name] {
+		name = "help"
+	}
 	if _, ok := commands[name]; !ok {
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", name)
 		return ExitError

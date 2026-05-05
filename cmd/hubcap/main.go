@@ -109,10 +109,15 @@ func run(args []string, cfg *Config) int {
 	}
 
 	cmd := remaining[0]
-	info, ok := commands[cmd]
-	if !ok {
+	if _, ok := commands[cmd]; !ok {
 		fmt.Fprintf(cfg.Stderr, "unknown command: %s\n", cmd)
 		return ExitError
+	}
+
+	// Help requests short-circuit before any config/profile/Chrome work.
+	cmdArgs := remaining[1:]
+	if cmd != "help" && isHelpRequest(cmdArgs) {
+		return cmdHelp(cfg, []string{cmd})
 	}
 
 	// Clean up stale ephemeral sessions
@@ -134,7 +139,7 @@ func run(args []string, cfg *Config) int {
 	// 4. Re-apply explicit CLI flags on top of everything
 	reapplyExplicitFlags(cfg, &fv, explicitFlags)
 
-	return info.Run(cfg, remaining[1:])
+	return dispatchCommand(cfg, cmd, cmdArgs)
 }
 
 // applyProfile loads and applies the named profile to cfg.

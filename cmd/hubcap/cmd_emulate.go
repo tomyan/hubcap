@@ -123,7 +123,7 @@ func cmdMedia(cfg *Config, args []string) int {
 	reducedMotion := fs.String("reduced-motion", "", "prefers-reduced-motion (reduce, no-preference)")
 	forcedColors := fs.String("forced-colors", "", "forced-colors (active, none)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -190,7 +190,7 @@ func cmdCookies(cfg *Config, args []string) int {
 	exportFile := fs.String("export", "", "Export cookies to JSON file")
 	importFile := fs.String("import", "", "Import cookies from JSON file")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -343,7 +343,7 @@ func cmdStorage(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	clear := fs.Bool("clear", false, "Clear all localStorage")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -396,7 +396,7 @@ func cmdSession(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	clear := fs.Bool("clear", false, "Clear all sessionStorage")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -461,7 +461,7 @@ func cmdClipboard(cfg *Config, args []string) int {
 	write := fs.String("write", "", "Text to write to clipboard")
 	read := fs.Bool("read", false, "Read from clipboard")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -536,7 +536,7 @@ func cmdHeapSnapshot(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	output := fs.String("output", "", "Output file path")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -578,7 +578,7 @@ func cmdTrace(cfg *Config, args []string) int {
 	output := fs.String("output", "", "Output file path")
 	duration := fs.Duration("duration", 1*time.Second, "Trace duration")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -661,7 +661,7 @@ func cmdRaw(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	browser := fs.Bool("browser", false, "Send command at browser level (not to a page target)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -741,7 +741,7 @@ func cmdDialog(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	promptText := fs.String("text", "", "Text to enter for prompts")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

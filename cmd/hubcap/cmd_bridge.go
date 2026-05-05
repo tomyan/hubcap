@@ -16,7 +16,7 @@ func cmdBridge(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	file := fs.String("file", "", "Load JS from file instead of inline argument")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

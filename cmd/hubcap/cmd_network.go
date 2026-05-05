@@ -18,7 +18,7 @@ func cmdConsole(cfg *Config, args []string) int {
 	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
 	filter := fs.String("filter", "", "Filter by message type (log, warn, error, info, debug)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -78,7 +78,7 @@ func cmdErrors(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	duration := fs.Duration("duration", 0, "How long to capture (0 = until interrupted)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -137,7 +137,7 @@ func cmdNetwork(cfg *Config, args []string) int {
 	filter := fs.String("filter", "", "Filter by URL substring")
 	method := fs.String("method", "", "Filter by HTTP method (GET, POST, etc.)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -200,7 +200,7 @@ func cmdHar(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	duration := fs.Duration("duration", 5*time.Second, "How long to capture")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -240,7 +240,7 @@ func cmdIntercept(cfg *Config, args []string) int {
 	replace := fs.String("replace", "", "Text replacement in format old:new")
 	disable := fs.Bool("disable", false, "Disable interception")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -299,7 +299,7 @@ func cmdBlock(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	disable := fs.Bool("disable", false, "Disable URL blocking")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -370,7 +370,7 @@ func cmdThrottle(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	disable := fs.Bool("disable", false, "Disable network throttling")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

@@ -13,7 +13,7 @@ func cmdRetry(cfg *Config, args []string) int {
 	attempts := fs.Int("attempts", 3, "Maximum number of attempts")
 	interval := fs.Duration("interval", 1*time.Second, "Interval between attempts")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

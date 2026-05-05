@@ -50,18 +50,22 @@ type WaitTextResult struct {
 	Found bool   `json:"found"`
 }
 
-func cmdWaitText(cfg *Config, text string, args []string) int {
-	// Parse waittext-specific flags
+func cmdWaitText(cfg *Config, args []string) int {
+	const usage = "usage: hubcap waittext <text> [--timeout <duration>]"
 	fs := flag.NewFlagSet("waittext", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
+	fs.Usage = func() { fmt.Fprintln(cfg.Stderr, usage) }
 	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
 
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return ExitSuccess
-		}
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		return ExitError
 	}
+	pos := fs.Args()
+	if len(pos) < 1 {
+		fmt.Fprintln(cfg.Stderr, usage)
+		return ExitError
+	}
+	text := pos[0]
 
 	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		err := client.WaitForText(ctx, target.ID, text, *timeout)
@@ -242,18 +246,22 @@ type WaitURLResult struct {
 	URL     string `json:"url"`
 }
 
-func cmdWaitURL(cfg *Config, pattern string, args []string) int {
-	// Parse waiturl-specific flags
+func cmdWaitURL(cfg *Config, args []string) int {
+	const usage = "usage: hubcap waiturl <pattern> [--timeout <duration>]"
 	fs := flag.NewFlagSet("waiturl", flag.ContinueOnError)
 	fs.SetOutput(cfg.Stderr)
+	fs.Usage = func() { fmt.Fprintln(cfg.Stderr, usage) }
 	timeout := fs.Duration("timeout", 30*time.Second, "Max wait time")
 
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return ExitSuccess
-		}
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		return ExitError
 	}
+	pos := fs.Args()
+	if len(pos) < 1 {
+		fmt.Fprintln(cfg.Stderr, usage)
+		return ExitError
+	}
+	pattern := pos[0]
 
 	return withClientTarget(cfg, func(ctx context.Context, client *chrome.Client, target *chrome.TargetInfo) (interface{}, error) {
 		url, err := client.WaitForURL(ctx, target.ID, pattern, *timeout)

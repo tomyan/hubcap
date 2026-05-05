@@ -17,7 +17,7 @@ func cmdRecord(cfg *Config, args []string) int {
 	outputFile := fs.String("output", "", "Write commands to file (default: stdout)")
 	duration := fs.Duration("duration", 0, "Recording duration (0 = until interrupted)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

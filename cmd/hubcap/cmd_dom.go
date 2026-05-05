@@ -167,7 +167,7 @@ func cmdLayout(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	depth := fs.Int("depth", 1, "Depth of children to include (0=element only, 1=immediate children)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -266,7 +266,7 @@ func cmdHighlight(cfg *Config, args []string) int {
 	fs.SetOutput(cfg.Stderr)
 	hide := fs.Bool("hide", false, "Hide existing highlight")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}

@@ -36,7 +36,7 @@ func cmdScreenshot(cfg *Config, args []string) int {
 	full := fs.Bool("full", false, "Capture the full scrollable page")
 	base64Flag := fs.Bool("base64", false, "Return base64 data instead of writing to file")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
@@ -108,7 +108,7 @@ func cmdPDF(cfg *Config, args []string) int {
 	landscape := fs.Bool("landscape", false, "Landscape orientation")
 	background := fs.Bool("background", false, "Print background graphics")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(fs, args)); err != nil {
 		if err == flag.ErrHelp {
 			return ExitSuccess
 		}
