@@ -7,6 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -25,10 +29,33 @@ var (
 	sharedClient   *chrome.Client
 	sharedClientMu sync.Mutex
 	clientInitErr  error
+
+	// Local HTTP server used in place of https://example.com so tests don't
+	// depend on external network availability or latency. Started in TestMain.
+	testServer     *httptest.Server
+	testPageURL    string // e.g. "http://127.0.0.1:54321/"
+	testPageHost   string // e.g. "127.0.0.1" — used as cookie domain
+	testPageMarker = "Example Domain"
 )
 
 // TestMain sets up and tears down shared resources for all tests
 func TestMain(m *testing.M) {
+	// Local test page — replaces https://example.com so navigation, cookies,
+	// localStorage, and intercept tests don't reach out to the public internet.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>Test Page</title></head><body><h1>%s</h1><p>This is a local test page.</p></body></html>`, testPageMarker)
+	})
+	testServer = httptest.NewServer(mux)
+	testPageURL = testServer.URL + "/"
+	if u, err := url.Parse(testServer.URL); err == nil {
+		testPageHost, _, _ = net.SplitHostPort(u.Host)
+		if testPageHost == "" {
+			testPageHost = u.Host
+		}
+	}
+
 	// Start Chrome for this package's tests
 	var err error
 	chromeInstance, err = testutil.StartChrome(testChromePort)
@@ -49,6 +76,7 @@ func TestMain(m *testing.M) {
 
 	// Stop Chrome
 	chromeInstance.Stop()
+	testServer.Close()
 
 	os.Exit(code)
 }
@@ -353,7 +381,7 @@ func TestClient_Navigate_Success(t *testing.T) {
 	}
 	defer client.CloseTab(ctx, tabID)
 
-	result, err := client.Navigate(ctx, tabID, "https://example.com")
+	result, err := client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to navigate: %v", err)
 	}
@@ -361,8 +389,8 @@ func TestClient_Navigate_Success(t *testing.T) {
 	if result.URL == "" {
 		t.Error("expected non-empty URL")
 	}
-	if !strings.Contains(result.URL, "example.com") {
-		t.Errorf("expected URL to contain example.com, got %s", result.URL)
+	if !strings.Contains(result.URL, testPageHost) {
+		t.Errorf("expected URL to contain %s, got %s", testPageHost, result.URL)
 	}
 }
 
@@ -416,7 +444,7 @@ func TestNavigateResult_JSONSerializable(t *testing.T) {
 	}
 	defer client.CloseTab(ctx, tabID)
 
-	result, err := client.Navigate(ctx, tabID, "https://example.com")
+	result, err := client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to navigate: %v", err)
 	}
@@ -1352,7 +1380,7 @@ func TestClient_GetCookies_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate
-	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1385,8 +1413,8 @@ func TestClient_SetCookie_Success(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Create isolated tab and navigate to example.com
-	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
+	// Create isolated tab and navigate to test page
+	tabID, err := client.NewTabAndWait(ctx, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1397,7 +1425,7 @@ func TestClient_SetCookie_Success(t *testing.T) {
 	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "test_cookie",
 		Value:  "test_value",
-		Domain: "example.com",
+		Domain: testPageHost,
 	})
 	if err != nil {
 		t.Fatalf("failed to set cookie: %v", err)
@@ -1476,8 +1504,8 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Create isolated tab and navigate to example.com
-	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
+	// Create isolated tab and navigate to test page
+	tabID, err := client.NewTabAndWait(ctx, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1488,7 +1516,7 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "delete_test",
 		Value:  "test_value",
-		Domain: "example.com",
+		Domain: testPageHost,
 	})
 	if err != nil {
 		t.Fatalf("failed to set cookie: %v", err)
@@ -1511,7 +1539,7 @@ func TestClient_DeleteCookie_Success(t *testing.T) {
 	}
 
 	// Delete the cookie
-	err = client.DeleteCookie(ctx, tabID, "delete_test", "example.com")
+	err = client.DeleteCookie(ctx, tabID, "delete_test", testPageHost)
 	if err != nil {
 		t.Fatalf("failed to delete cookie: %v", err)
 	}
@@ -1543,7 +1571,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate
-	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1554,7 +1582,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "clear_test1",
 		Value:  "value1",
-		Domain: "example.com",
+		Domain: testPageHost,
 	})
 	if err != nil {
 		t.Fatalf("failed to set cookie 1: %v", err)
@@ -1562,7 +1590,7 @@ func TestClient_ClearCookies_Success(t *testing.T) {
 	err = client.SetCookie(ctx, tabID, chrome.Cookie{
 		Name:   "clear_test2",
 		Value:  "value2",
-		Domain: "example.com",
+		Domain: testPageHost,
 	})
 	if err != nil {
 		t.Fatalf("failed to set cookie 2: %v", err)
@@ -1655,7 +1683,7 @@ func TestClient_CaptureNetwork_Success(t *testing.T) {
 	// Navigate to a page to trigger network requests
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		client.Navigate(ctx, tabID, "https://example.com")
+		client.Navigate(ctx, tabID, testPageURL)
 	}()
 
 	// Wait for at least one request event
@@ -1667,7 +1695,7 @@ func TestClient_CaptureNetwork_Success(t *testing.T) {
 			if !ok {
 				t.Fatal("event channel closed unexpectedly")
 			}
-			if event.Type == "request" && strings.Contains(event.URL, "example.com") {
+			if event.Type == "request" && strings.Contains(event.URL, testPageHost) {
 				gotRequest = true
 			}
 		case <-timeout:
@@ -1853,7 +1881,7 @@ func TestClient_Reload_Success(t *testing.T) {
 	defer client.Close()
 
 	// Create isolated tab and navigate
-	tabID, err := client.NewTabAndWait(ctx, "https://example.com")
+	tabID, err := client.NewTabAndWait(ctx, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to create tab: %v", err)
 	}
@@ -1867,14 +1895,14 @@ func TestClient_Reload_Success(t *testing.T) {
 	}
 	time.Sleep(500 * time.Millisecond)
 
-	// Verify we're still on example.com by checking the title
+	// Verify we're still on the same host by checking it
 	result, err := client.Eval(ctx, tabID, `document.location.hostname`)
 	if err != nil {
 		t.Fatalf("failed to get hostname: %v", err)
 	}
 
-	if result.Value != "example.com" {
-		t.Errorf("expected hostname 'example.com', got %v", result.Value)
+	if result.Value != testPageHost {
+		t.Errorf("expected hostname %q, got %v", testPageHost, result.Value)
 	}
 }
 
@@ -1900,9 +1928,9 @@ func TestClient_GoBack_Success(t *testing.T) {
 	defer client.CloseTab(ctx, tabID)
 
 	// Navigate to second page
-	_, err = client.Navigate(ctx, tabID, "https://example.com")
+	_, err = client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
-		t.Fatalf("failed to navigate to example: %v", err)
+		t.Fatalf("failed to navigate to test page: %v", err)
 	}
 	time.Sleep(500 * time.Millisecond)
 
@@ -1935,8 +1963,8 @@ func TestClient_GetTitle_Success(t *testing.T) {
 	tabID, cleanup := createTestTab(t, client, ctx)
 	defer cleanup()
 
-	// Navigate to example.com which has a title
-	_, err := client.Navigate(ctx, tabID, "https://example.com")
+	// Navigate to test page which has a title
+	_, err := client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to navigate: %v", err)
 	}
@@ -1964,8 +1992,8 @@ func TestClient_GetURL_Success(t *testing.T) {
 	tabID, cleanup := createTestTab(t, client, ctx)
 	defer cleanup()
 
-	// Navigate to example.com
-	_, err := client.Navigate(ctx, tabID, "https://example.com")
+	// Navigate to test page
+	_, err := client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to navigate: %v", err)
 	}
@@ -1977,8 +2005,8 @@ func TestClient_GetURL_Success(t *testing.T) {
 		t.Fatalf("failed to get URL: %v", err)
 	}
 
-	if !strings.Contains(url, "example.com") {
-		t.Errorf("expected URL to contain 'example.com', got %s", url)
+	if !strings.Contains(url, testPageHost) {
+		t.Errorf("expected URL to contain %q, got %s", testPageHost, url)
 	}
 }
 
@@ -2217,7 +2245,7 @@ func TestClient_LocalStorage_Success(t *testing.T) {
 	defer cleanup()
 
 	// localStorage requires a real origin (not about:blank)
-	_, err := client.Navigate(ctx, tabID, "https://example.com")
+	_, err := client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to navigate: %v", err)
 	}
@@ -2426,8 +2454,8 @@ func TestClient_InterceptModifyResponse(t *testing.T) {
 	}
 	defer client.DisableIntercept(ctx, tabID) // Cleanup
 
-	// Navigate to example.com
-	_, err = client.Navigate(ctx, tabID, "https://example.com")
+	// Navigate to test page
+	_, err = client.Navigate(ctx, tabID, testPageURL)
 	if err != nil {
 		t.Fatalf("failed to navigate: %v", err)
 	}
